@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# destroy-site — tear down a site's AWS resources and (by default) revert the
+#                Namecheap nameserver delegation back to Namecheap's default.
+#
+# Deleting the namecheap_domain_records resource reverts the domain to default
+# nameservers. Use --keep-ns to leave the delegation in place (drops it from
+# state before destroy) so the domain keeps pointing at a now-empty zone.
+#
+# Usage: bin/destroy-site <domain> [--keep-ns] [--purge] [--yes]
+set -euo pipefail
+DF_SCRIPT_NAME="destroy-site"
+source "$(cd "$(dirname "$0")/.." && pwd)/lib/common.sh"
+df_load_env
+
+DOMAIN=""; KEEP_NS=false; PURGE=false; YES=false
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --keep-ns) KEEP_NS=true; shift ;;
+    --purge)   PURGE=true; shift ;;
+    --yes|-y)  YES=true; shift ;;
+    *) DOMAIN="$1"; shift ;;
+  esac
+done
+df_validate_domain "$DOMAIN"
+
+SITE_DIR="$(df_site_dir "$DOMAIN")"
+[[ -d "$SITE_DIR" ]] || die "No site dir for $DOMAIN"
+
+# Namecheap provider needs a client IP even for destroy.
+if [[ -z "${NAMECHEAP_CLIENT_IP:-}" ]]; then
+  NAMECHEAP_CLIENT_IP="$(df_detect_ip)"; export NAMECHEAP_CLIENT_IP
+fi
+
+echo ""
+echo "DevOpsFoundry — DESTROY $DOMAIN"
+$KEEP_NS && echo "  (keeping Namecheap NS delegation)" || echo "  (reverting Namecheap NS to default)"
+echo "─────────────────────────────────────"
+if [[ "$YES" != true ]]; then
+  read -r -p "Type the domain to confirm destroy: " c
+  [[ "$c" == "$DOMAIN" ]] || { echo "Aborted."; exit 0; }
+fi
+
+if $KEEP_NS; then
+  step "Dropping namecheap_ns from state (delegation will persist)"
+  df_tf "$DOMAIN" state rm module.namecheap_ns 2>/dev/null || warn "namecheap_ns not in state"
+fi
+
+step "terraform destroy"
+df_tf "$DOMAIN" destroy -input=false -auto-approve
+log "INFO" "Destroyed $DOMAIN (keep_ns=$KEEP_NS)"
+pass "AWS resources destroyed"
+
+if $PURGE; then
+  rm -rf "$SITE_DIR"
+  pass "Removed site dir ${SITE_DIR/$HOME/\~}"
+else
+  info "Site dir kept at ${SITE_DIR/$HOME/\~} (state now empty). Use --purge to remove."
+fi

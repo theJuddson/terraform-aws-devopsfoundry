@@ -1,0 +1,214 @@
+#!/usr/bin/env bash
+# new-app — scaffold a .devopsfoundry/ app root into a consuming repo and
+#           provision the full stack (DNS+NS delegation, cert, VPC, ECS service,
+#           optional RDS/Redis/SES). Two-phase apply like new-site; the service
+#           is provisioned at desired_count=0 — deploy-app brings it up.
+#
+# Usage:
+#   bin/new-app <domain> --config <dir> [--name slug] [--subdomain api | --apex]
+#               [--enable-db] [--enable-cache] [--enable-email]
+#               [--shared-platform SLUG] [--existing-zone ZONE]
+#               [--module-path DIR | --module-ref GITREF] [--backend-config FILE]
+#               [--sandbox] [--resume] [--yes]
+#   --apex serves the app at the bare domain (domain.com) instead of a subdomain.
+#   --shared-platform attaches to an EXISTING app's VPC/NAT/ALB/ECS cluster
+#     instead of provisioning dedicated ones, which removes the two largest
+#     fixed costs (NAT ~$33/mo, ALB ~$16/mo) at the price of a shared failure
+#     domain. A database, when enabled, is still this app's own.
+#   --existing-zone puts the app's records in an EXISTING Route53 zone (e.g.
+#     app.example.com where example.com already serves a site and mail). No zone
+#     is created and Namecheap is never called; the cert covers only the app's
+#     hostname. Apex serving and --enable-email are refused in this mode.
+#   --backend-config keeps this app's Terraform state in its own bucket instead of
+#     the shared DevOpsFoundry one (copied to <config>/backend.tfvars, which wins
+#     on every later init).
+set -euo pipefail
+DF_SCRIPT_NAME="new-app"
+source "$(cd "$(dirname "$0")/.." && pwd)/lib/common.sh"
+df_load_env
+
+DOMAIN=""; CONFIG=""; NAME=""; SUBDOMAIN="api"
+EN_DB=false; EN_CACHE=false; EN_EMAIL=false; SHARED_PLATFORM=""; EXISTING_ZONE=""
+MODULE_PATH="../../DevOpsFoundry"; MODULE_REF=""
+SANDBOX=false; RESUME=false; YES=false; BACKEND_CONFIG=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --config)       CONFIG="$2"; shift 2 ;;
+    --name)         NAME="$2"; shift 2 ;;
+    --subdomain)    SUBDOMAIN="$2"; shift 2 ;;
+    --apex)         SUBDOMAIN=""; shift ;;
+    --enable-db)    EN_DB=true; shift ;;
+    --enable-cache) EN_CACHE=true; shift ;;
+    --enable-email) EN_EMAIL=true; shift ;;
+    --shared-platform) SHARED_PLATFORM="$2"; shift 2 ;;
+    --existing-zone) EXISTING_ZONE="$2"; shift 2 ;;
+    --module-path)  MODULE_PATH="$2"; shift 2 ;;
+    --module-ref)   MODULE_REF="$2"; shift 2 ;;
+    --backend-config) BACKEND_CONFIG="$2"; shift 2 ;;
+    --sandbox)      SANDBOX=true; shift ;;
+    --resume)       RESUME=true; shift ;;
+    --yes|-y)       YES=true; shift ;;
+    -*)             die "Unknown flag: $1" ;;
+    *)              DOMAIN="$1"; shift ;;
+  esac
+done
+
+df_validate_domain "$DOMAIN"
+[[ -n "$CONFIG" ]] || die "--config <dir> is required (the app repo's .devopsfoundry directory)"
+[[ -n "$NAME" ]] || NAME="$(df_slug "$DOMAIN")"
+STATE_KEY="$(df_app_state_key "$NAME")"
+
+# Module source: git ref for CI, else a relative sibling path for local dev.
+if [[ -n "$MODULE_REF" ]]; then
+  MODULE_SOURCE="git::ssh://git@github.com/theJuddson/DevOpsFoundry//modules/full-stack?ref=$MODULE_REF"
+else
+  MODULE_SOURCE="$MODULE_PATH/modules/full-stack"
+fi
+
+if [[ -n "$EXISTING_ZONE" ]]; then
+  [[ -n "$SUBDOMAIN" && "$SUBDOMAIN" != "@" ]] || die "--existing-zone needs a subdomain (apex serving would take over the zone's own records)"
+  $EN_EMAIL && die "--enable-email is not supported with --existing-zone"
+  aws route53 list-hosted-zones-by-name --dns-name "$EXISTING_ZONE" \
+    --query "HostedZones[?Name=='${EXISTING_ZONE%.}.' && Config.PrivateZone==\`false\`].Id" --output text | grep -q hostedzone \
+    || die "No public Route53 zone named $EXISTING_ZONE in this account"
+fi
+
+# Namecheap env
+$SANDBOX && export NAMECHEAP_USE_SANDBOX=true
+[[ -n "$EXISTING_ZONE" || -n "${NAMECHEAP_API_KEY:-}" ]] || die "NAMECHEAP_API_KEY not set — copy .env.example to .env"
+if [[ -z "${NAMECHEAP_CLIENT_IP:-}" ]]; then
+  NAMECHEAP_CLIENT_IP="$(df_detect_ip)"; export NAMECHEAP_CLIENT_IP
+  [[ -n "$NAMECHEAP_CLIENT_IP" ]] || die "Could not auto-detect public IP — set NAMECHEAP_CLIENT_IP"
+  info "Using detected client IP $NAMECHEAP_CLIENT_IP (must be whitelisted at Namecheap)"
+fi
+
+echo ""
+echo "DevOpsFoundry — Provision app $DOMAIN"
+echo "  slug:        $NAME"
+if [[ -n "$SUBDOMAIN" && "$SUBDOMAIN" != "@" ]]; then echo "  service:     $SUBDOMAIN.$DOMAIN"; else echo "  service:     $DOMAIN (apex)"; fi
+echo "  config dir:  $CONFIG"
+echo "  module src:  $MODULE_SOURCE"
+echo "  toggles:     db=$EN_DB cache=$EN_CACHE email=$EN_EMAIL"
+[[ -n "$EXISTING_ZONE" ]] && echo "  DNS:         records in EXISTING zone $EXISTING_ZONE (no zone created, registrar untouched)"
+$SANDBOX && echo "  MODE:        SANDBOX (NS delegation only; AWS provisioning skipped)"
+echo "─────────────────────────────────────"
+
+render() {
+  local content; content="$(cat "$1")"
+  content="${content//__DOMAIN__/$DOMAIN}"
+  content="${content//__SLUG__/$NAME}"
+  content="${content//__SUBDOMAIN__/$SUBDOMAIN}"
+  content="${content//__STATE_KEY__/$STATE_KEY}"
+  content="${content//__MODULE_SOURCE__/$MODULE_SOURCE}"
+  content="${content//__ENABLE_DB__/$EN_DB}"
+  content="${content//__ENABLE_CACHE__/$EN_CACHE}"
+  content="${content//__ENABLE_EMAIL__/$EN_EMAIL}"
+  content="${content//__SHARED_PLATFORM__/$SHARED_PLATFORM}"
+  content="${content//__EXISTING_ZONE__/$EXISTING_ZONE}"
+  printf '%s\n' "$content" > "$2"
+}
+
+if [[ -f "$CONFIG/main.tf" ]]; then
+  $RESUME || die "App root already exists at $CONFIG (use --resume, or destroy-app first)"
+  info "Resuming existing app root"
+else
+  step "Scaffolding $CONFIG"
+  mkdir -p "$CONFIG"
+  for f in "$DF_ROOT/templates/full-stack/"*; do
+    base="$(basename "$f")"
+    case "$base" in
+      gitignore.tmpl) render "$f" "$CONFIG/.gitignore" ;;
+      *.tmpl)         render "$f" "$CONFIG/${base%.tmpl}" ;;
+      *)              cp "$f" "$CONFIG/$base" ;;
+    esac
+  done
+  pass "Scaffolded (edit $CONFIG/app.tfvars for app config)"
+fi
+
+CONFIG="$(df_resolve_config "$CONFIG")"
+TFVARS=(-var-file=app.tfvars)
+
+# State backend: an app-owned backend.tfvars (e.g. a venture's own bucket) wins over the shared one.
+if [[ -n "$BACKEND_CONFIG" ]]; then
+  [[ -f "$BACKEND_CONFIG" ]] || die "Backend config not found: $BACKEND_CONFIG"
+  [[ "$(cd "$(dirname "$BACKEND_CONFIG")" && pwd)/$(basename "$BACKEND_CONFIG")" == "$CONFIG/backend.tfvars" ]] || cp "$BACKEND_CONFIG" "$CONFIG/backend.tfvars"
+fi
+BACKEND_FILE="$DF_ROOT/backend.tfvars"
+[[ -f "$CONFIG/backend.tfvars" ]] && BACKEND_FILE="$CONFIG/backend.tfvars"
+info "State backend: $BACKEND_FILE"
+
+step "terraform init"
+df_tf_at "$CONFIG" init -input=false -backend-config="$BACKEND_FILE" >/dev/null
+pass "Initialized"
+
+if [[ "$YES" != true ]]; then
+  read -r -p "Provision $DOMAIN now? (y/N) " c; [[ "$c" == [yY] ]] || { echo "Aborted."; exit 0; }
+fi
+
+# ── Phase 1: cert -> zone + NS delegation ──────────────
+# 1a: cert first — its domain_validation_options (the keys of the zone's
+#     for_each) are unknown until the cert exists, so applying the zone in one
+#     shot would fail "Invalid for_each argument".
+step "Phase 1a — create ACM certificate"
+df_tf_at "$CONFIG" apply -input=false -auto-approve "${TFVARS[@]}" -target=module.app.module.acm_cert
+
+if [[ -n "$EXISTING_ZONE" ]]; then
+  # The zone already resolves publicly, so there is no delegation to wait for.
+  step "Existing zone $EXISTING_ZONE — validate cert, build service (desired_count=0)"
+  df_tf_at "$CONFIG" apply -input=false -auto-approve "${TFVARS[@]}" -var desired_count=0
+  log "INFO" "Provisioned app $DOMAIN in existing zone $EXISTING_ZONE (desired_count=0)"
+  pass "Provisioned (service at 0 tasks — no image yet)"
+  echo "  Service URL: $(df_tf_at "$CONFIG" output -raw service_url)"
+  echo "  ECR repo:    $(df_tf_at "$CONFIG" output -raw ecr_repository_url)"
+  echo "  Next: bin/deploy-app --config $CONFIG"
+  exit 0
+fi
+
+step "Phase 1b — Route53 zone + Namecheap nameserver delegation"
+df_tf_at "$CONFIG" apply -input=false -auto-approve "${TFVARS[@]}" \
+  -target=module.app.module.route53_zone -target=module.app.module.namecheap_ns
+log "INFO" "Phase 1 applied for app $DOMAIN"
+
+NS=()
+while IFS= read -r ns_line; do NS+=("$ns_line"); done \
+  < <(df_tf_at "$CONFIG" output -json name_servers | jq -r '.[]')
+echo "  Route53 nameservers:"; printf '    %s\n' "${NS[@]}"
+
+if $SANDBOX; then
+  warn "Sandbox mode: NS call exercised; skipping propagation wait + AWS provisioning."
+  exit 0
+fi
+
+# ── Wait for NS propagation ────────────────────────────
+step "Waiting for nameserver propagation (dig NS @8.8.8.8)"
+DEADLINE=$(( $(date +%s) + 900 ))
+propagated=false
+while [[ $(date +%s) -lt $DEADLINE ]]; do
+  current="$(dig +short NS "$DOMAIN" @8.8.8.8 2>/dev/null | tr 'A-Z' 'a-z' | sed 's/\.$//' | sort)"
+  for ns in "${NS[@]}"; do
+    if echo "$current" | grep -qx "$(echo "$ns" | tr 'A-Z' 'a-z' | sed 's/\.$//')"; then propagated=true; break; fi
+  done
+  $propagated && break
+  echo "  …not yet ($(( (DEADLINE - $(date +%s)) / 60 ))m left); retrying in 30s"
+  sleep 30
+done
+if ! $propagated; then
+  warn "Nameservers not visible after 15m — re-run when ready:"
+  echo "    bin/new-app $DOMAIN --config $CONFIG --resume --yes"
+  exit 75
+fi
+pass "Nameservers propagated"
+
+# ── Phase 2: full provision at desired_count=0 ─────────
+step "Phase 2 — validate cert, build VPC + service (desired_count=0)"
+df_tf_at "$CONFIG" apply -input=false -auto-approve "${TFVARS[@]}" -var desired_count=0
+log "INFO" "Phase 2 applied for app $DOMAIN (desired_count=0)"
+
+echo ""
+echo "─────────────────────────────────────"
+pass "Provisioned $DOMAIN (service at 0 tasks — no image yet)"
+echo "  Service URL: $(df_tf_at "$CONFIG" output -raw service_url)"
+echo "  ECR repo:    $(df_tf_at "$CONFIG" output -raw ecr_repository_url)"
+echo ""
+echo "  Next: ensure a Dockerfile exists, then:"
+echo "    bin/deploy-app --config $CONFIG"

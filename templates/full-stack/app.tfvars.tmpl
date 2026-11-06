@@ -1,0 +1,71 @@
+# ─────────────────────────────────────────────────────────────
+# App configuration for __DOMAIN__ — edit freely, commit to your repo.
+# This is the user-facing surface; main.tf just forwards these.
+# ─────────────────────────────────────────────────────────────
+
+name        = "__SLUG__"
+domain_name = "__DOMAIN__"
+subdomain   = "__SUBDOMAIN__"   # serves at <subdomain>.__DOMAIN__; set "" to serve at the apex __DOMAIN__
+aws_region  = "us-east-1"
+
+# Existing public Route53 zone to put this app's records in (e.g. a subdomain of a domain whose DNS
+# already serves a website or mail). Empty = DevOpsFoundry creates a zone for domain_name and flips the
+# domain's Namecheap nameservers to it. Set via `bin/new-app --existing-zone`.
+existing_zone_name = "__EXISTING_ZONE__"
+
+# ── Container ──────────────────────────────────────────
+container_port    = 8080
+cpu               = 512          # Fargate units (256/512/1024/2048/4096)
+memory            = 1024         # MiB
+desired_count     = 1            # new-app provisions at 0; deploy-app scales up
+health_check_path = "/health"    # ALB target-group health check + post-deploy curl
+
+# Plaintext env vars injected into the container.
+env = {
+  # LOG_LEVEL = "info"
+}
+
+# Secret env vars: ENV_NAME = "<secretsmanager-arn>"  (append ":json_key::" to
+# pull a single JSON field). DB_*/REDIS_*/MAIL_* are auto-injected when the
+# matching toggle is on — only add app-specific secrets here.
+secrets = {
+  # STRIPE_KEY = "arn:aws:secretsmanager:us-east-1:...:secret:myapp/stripe-AbCdEf"
+}
+
+# ── Shared platform ────────────────────────────────────
+# Slug of an EXISTING DevOpsFoundry app whose VPC, NAT gateway, ALB and ECS
+# cluster this app should share. Empty = dedicated infrastructure.
+#
+# Sharing removes the two largest fixed costs (NAT ~$33/mo, ALB ~$16/mo) at the
+# price of a shared failure domain: an ALB or NAT problem on the host platform
+# takes this app down too, and destroying the host stack strands this one. Right
+# for a small app, wrong for anything needing independent availability.
+# A database, when enabled, is still this app's own.
+shared_platform = "__SHARED_PLATFORM__"
+
+# Each guest app on a shared ALB needs a distinct listener-rule priority base;
+# it claims <base> and <base>+1.
+# listener_rule_priority_base = 100
+
+# ── Networking cost ────────────────────────────────────
+# A dedicated stack provisions a NAT gateway (~$33/mo) so tasks in private
+# subnets can reach ECR, Secrets Manager and CloudWatch. A service that needs
+# no other outbound internet access can drop it and run tasks in the public
+# subnets instead — inbound stays ALB-only, enforced by the security group.
+#
+# Set BOTH or neither: no NAT with tasks still in private subnets leaves them
+# with no route out, and they will fail to pull their image.
+# Ignored in shared-platform mode — the host platform already decided this.
+# enable_nat_gateway      = false
+# tasks_in_public_subnets = true
+
+# ── Backing services (toggles) ─────────────────────────
+enable_database = __ENABLE_DB__      # RDS Postgres -> injects DB_URL/DB_HOST/DB_PORT/DB_NAME + DB_USERNAME/DB_PASSWORD
+enable_cache    = __ENABLE_CACHE__   # Redis        -> injects REDIS_HOST/REDIS_PORT/REDIS_SSL_ENABLED + REDIS_PASSWORD
+enable_email    = __ENABLE_EMAIL__   # SES          -> injects MAIL_HOST/MAIL_PORT + MAIL_USERNAME/MAIL_PASSWORD
+
+# db_instance_class      = "db.t4g.micro"
+# db_allocated_storage   = 20
+# db_deletion_protection = false   # set true for production data
+# cache_node_type        = "cache.t4g.micro"
+# dmarc_rua_email        = "postmaster@__DOMAIN__"   # required if enable_email

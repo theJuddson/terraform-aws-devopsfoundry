@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Build a SOCI index for an image already in ECR and push the indexed image,
+# so Fargate can start containers before the whole image is downloaded.
+#
+#   bin/soci-index <account>.dkr.ecr.<region>.amazonaws.com/<repo>:<tag> [<dest-tag>]
+#
+# Uses SOCI index manifest v2 (`soci convert`): the result is a new image
+# whose index is bound to it, pushed as <dest-tag> (default: <tag>-soci). Point
+# the task definition at that tag.
+#
+# Needs Linux with containerd, nerdctl and soci (v0.10 or later), the AWS CLI
+# and credentials that can pull and push the repository. It does not run on
+# macOS. See docs/soci.md.
+set -euo pipefail
+
+SRC="${1:?usage: bin/soci-index <image-uri:tag> [dest-tag]}"
+REGISTRY="${SRC%%/*}"
+REPO_TAG="${SRC#*/}"
+TAG="${REPO_TAG##*:}"
+[[ "$REPO_TAG" == *:* ]] || { echo "image must include a tag" >&2; exit 2; }
+DEST="${SRC%:*}:${2:-$TAG-soci}"
+REGION="$(cut -d. -f4 <<<"$REGISTRY")"
+
+for tool in aws nerdctl soci; do
+  command -v "$tool" >/dev/null || { echo "missing: $tool" >&2; exit 1; }
+done
+[[ "$(uname -s)" == Linux ]] || { echo "SOCI conversion needs Linux with containerd" >&2; exit 1; }
+
+SUDO=""; [[ $EUID -eq 0 ]] || SUDO="sudo"
+
+aws ecr get-login-password --region "$REGION" | $SUDO nerdctl login --username AWS --password-stdin "$REGISTRY"
+
+# --all-platforms on pull and push: a multi-platform image's index also
+# references attestation manifests, and pushing only the local platform leaves
+# them missing so ECR rejects or half-stores the image.
+$SUDO nerdctl pull --all-platforms "$SRC"
+$SUDO soci convert --all-platforms "$SRC" "$DEST"
+$SUDO nerdctl push --all-platforms "$DEST"
+
+echo "pushed $DEST"

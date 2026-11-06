@@ -1,0 +1,105 @@
+# ─────────────────────────────────────────────────────────────
+# DevOpsFoundry — full-stack app root for __DOMAIN__
+# GENERATED into the consuming repo by `bin/new-app`. This file is a thin
+# provider block + a single call into the DevOpsFoundry full-stack module;
+# edit app.tfvars for app config, not here.
+# ─────────────────────────────────────────────────────────────
+
+terraform {
+  required_version = ">= 1.7.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    namecheap = {
+      source  = "namecheap/namecheap"
+      version = ">= 2.1.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.aws_region
+  default_tags {
+    tags = {
+      Project   = "devopsfoundry"
+      App       = var.domain_name
+      ManagedBy = "terraform"
+    }
+  }
+}
+
+# CloudFront/ACM certs must be in us-east-1.
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+  default_tags {
+    tags = {
+      Project   = "devopsfoundry"
+      App       = var.domain_name
+      ManagedBy = "terraform"
+    }
+  }
+}
+
+# Namecheap creds from env (NAMECHEAP_API_USER / API_KEY / USER_NAME / CLIENT_IP).
+provider "namecheap" {}
+
+module "app" {
+  source = "__MODULE_SOURCE__"
+  providers = {
+    aws           = aws
+    aws.us_east_1 = aws.us_east_1
+    namecheap     = namecheap
+  }
+
+  name         = var.name
+  domain_name  = var.domain_name
+  subdomain    = var.subdomain
+  service_name = var.service_name
+  aws_region   = var.aws_region
+
+  container_image       = var.container_image
+  container_port        = var.container_port
+  cpu                   = var.cpu
+  memory                = var.memory
+  desired_count         = var.desired_count
+  env                   = var.env
+  secrets               = var.secrets
+  health_check_path     = var.health_check_path
+  health_check_matcher  = var.health_check_matcher
+  health_check_interval = var.health_check_interval
+  health_check_timeout  = var.health_check_timeout
+
+  vpc_cidr = var.vpc_cidr
+  az_count = var.az_count
+
+  existing_zone_name          = var.existing_zone_name
+  enable_nat_gateway          = var.enable_nat_gateway
+  tasks_in_public_subnets     = var.tasks_in_public_subnets
+  shared_platform             = var.shared_platform
+  listener_rule_priority_base = var.listener_rule_priority_base
+
+  enable_database = var.enable_database
+  enable_cache    = var.enable_cache
+  enable_email    = var.enable_email
+
+  db_name                  = var.db_name
+  db_instance_class        = var.db_instance_class
+  db_allocated_storage     = var.db_allocated_storage
+  db_engine_version        = var.db_engine_version
+  db_multi_az              = var.db_multi_az
+  db_backup_retention_days = var.db_backup_retention_days
+  db_deletion_protection   = var.db_deletion_protection
+  db_skip_final_snapshot   = var.db_skip_final_snapshot
+
+  cache_node_type      = var.cache_node_type
+  cache_engine_version = var.cache_engine_version
+
+  dmarc_rua_email = var.dmarc_rua_email
+}

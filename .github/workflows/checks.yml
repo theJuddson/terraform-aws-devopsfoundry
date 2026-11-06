@@ -1,0 +1,63 @@
+name: checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    env:
+      TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.plugin-cache
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # bin/check-compat plans against an older tag
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.7"
+          terraform_wrapper: false
+
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: v0.65.0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install checkov and terraform-docs
+        run: |
+          pip install --quiet checkov==3.4.3
+          curl -sSLo /tmp/terraform-docs.tgz https://github.com/terraform-docs/terraform-docs/releases/download/v0.24.0/terraform-docs-v0.24.0-linux-amd64.tar.gz
+          tar -xzf /tmp/terraform-docs.tgz -C /usr/local/bin terraform-docs
+
+      - name: Cache providers
+        uses: actions/cache@v4
+        with:
+          path: |
+            .plugin-cache
+            ~/.tflint.d/plugins
+          key: tf-${{ hashFiles('**/versions.tf', '**/main.tf', '.tflint.hcl') }}
+          restore-keys: tf-
+
+      - name: fmt, validate, tflint, checkov
+        env:
+          GITHUB_TOKEN: ${{ github.token }} # tflint --init downloads the AWS ruleset
+        run: |
+          mkdir -p "$TF_PLUGIN_CACHE_DIR"
+          bin/check-modules
+
+      - name: Module READMEs match terraform-docs
+        run: |
+          for m in modules/*/; do m=$(basename "$m");
+            terraform-docs -c .terraform-docs.yml --output-check "modules/$m"
+          done
+
+      - name: Upgrading from v1.1.0 plans no changes (offline)
+        run: bin/check-compat v1.1.0

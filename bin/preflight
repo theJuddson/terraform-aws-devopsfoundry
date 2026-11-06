@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# preflight — verify the local toolchain + AWS + Namecheap prerequisites.
+set -euo pipefail
+DF_SCRIPT_NAME="preflight"
+source "$(cd "$(dirname "$0")/.." && pwd)/lib/common.sh"
+df_load_env
+
+# Optional: set DF_EXPECTED_AWS_ACCOUNT in .env to catch the wrong AWS_PROFILE.
+EXPECTED_ACCOUNT="${DF_EXPECTED_AWS_ACCOUNT:-}"
+fails=0
+
+echo ""
+echo "DevOpsFoundry — Preflight"
+echo "─────────────────────────────────────"
+
+# ── Tooling ────────────────────────────────────────────
+for tool in aws terraform jq dig curl git; do
+  if command -v "$tool" &>/dev/null; then pass "$tool installed"
+  else warn "$tool missing"; fails=$((fails + 1)); fi
+done
+echo "  terraform: $(terraform version -json 2>/dev/null | jq -r .terraform_version 2>/dev/null || terraform version | head -1)"
+
+# ── AWS ────────────────────────────────────────────────
+if aws sts get-caller-identity &>/dev/null; then
+  ACCT=$(aws sts get-caller-identity --query Account --output text)
+  if [[ -z "$EXPECTED_ACCOUNT" || "$ACCT" == "$EXPECTED_ACCOUNT" ]]; then pass "AWS account: $ACCT"
+  else warn "AWS account is $ACCT (expected $EXPECTED_ACCOUNT — check AWS_PROFILE)"; fi
+else
+  warn "AWS credentials invalid — run: aws configure (or set AWS_PROFILE)"; fails=$((fails + 1))
+fi
+
+# ── State backend reachability ─────────────────────────
+[[ -f "$DF_ROOT/backend.tfvars" ]] || die "No backend.tfvars. Copy backend.tfvars.example to backend.tfvars and fill in your state bucket."
+BACKEND_BUCKET=$(awk -F'"' '/^[[:space:]]*bucket[[:space:]]*=/{print $2}' "$DF_ROOT/backend.tfvars")
+if aws s3api head-bucket --bucket "$BACKEND_BUCKET" &>/dev/null; then
+  pass "State bucket reachable: $BACKEND_BUCKET"
+else
+  warn "State bucket not reachable: $BACKEND_BUCKET"; fails=$((fails + 1))
+fi
+
+# ── Namecheap ──────────────────────────────────────────
+nc_ok=true
+for v in NAMECHEAP_USER_NAME NAMECHEAP_API_USER NAMECHEAP_API_KEY; do
+  if [[ -z "${!v:-}" ]]; then warn "$v not set (see .env.example)"; nc_ok=false; fi
+done
+$nc_ok && pass "Namecheap API creds present"
+[[ "${NAMECHEAP_USE_SANDBOX:-false}" == "true" ]] && info "Namecheap SANDBOX mode is ON"
+
+# IP whitelist check — the machine's public IP must be whitelisted at Namecheap.
+PUBLIC_IP=$(df_detect_ip)
+CLIENT_IP="${NAMECHEAP_CLIENT_IP:-}"
+if [[ -n "$PUBLIC_IP" ]]; then
+  pass "Public IPv4: $PUBLIC_IP"
+  if [[ -z "$CLIENT_IP" ]]; then
+    info "NAMECHEAP_CLIENT_IP unset — scripts will auto-use $PUBLIC_IP"
+    warn "Confirm $PUBLIC_IP is whitelisted: Namecheap → Profile → Tools → API → Whitelisted IPs"
+  elif [[ "$CLIENT_IP" != "$PUBLIC_IP" ]]; then
+    warn "NAMECHEAP_CLIENT_IP ($CLIENT_IP) != detected public IP ($PUBLIC_IP) — API calls will fail unless on a static/VPN IP"
+  else
+    pass "NAMECHEAP_CLIENT_IP matches public IP"
+  fi
+else
+  warn "Could not detect public IP (offline?) — ensure NAMECHEAP_CLIENT_IP is set + whitelisted"
+fi
+
+echo "─────────────────────────────────────"
+if [[ "$fails" -eq 0 ]]; then
+  pass "Preflight OK"
+else
+  warn "$fails hard check(s) failed — resolve before provisioning"
+  exit 1
+fi

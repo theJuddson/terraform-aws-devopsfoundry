@@ -1,0 +1,19 @@
+# Secrets — never commit Namecheap/AWS creds
+.env
+
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+.terraform.lock.hcl
+
+# Logs
+logs/*.log
+
+# OS
+.DS_Store
+
+# Shared state backend settings (see backend.tfvars.example)
+/backend.tfvars

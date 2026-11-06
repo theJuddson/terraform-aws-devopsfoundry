@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# deploy — build (optional) + sync a site's static files to S3 + invalidate
+#          CloudFront. Reads sites/<domain>/site.env for BUILD_DIR/BUILD_CMD.
+#
+# Usage: bin/deploy <domain> [--yes]
+set -euo pipefail
+DF_SCRIPT_NAME="deploy"
+source "$(cd "$(dirname "$0")/.." && pwd)/lib/common.sh"
+df_load_env
+
+DOMAIN=""; YES=false
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --yes|-y) YES=true; shift ;;
+    *) DOMAIN="$1"; shift ;;
+  esac
+done
+df_validate_domain "$DOMAIN"
+
+SITE_DIR="$(df_site_dir "$DOMAIN")"
+[[ -d "$SITE_DIR" ]] || die "No site dir for $DOMAIN — run: bin/new-site $DOMAIN"
+[[ -f "$SITE_DIR/site.env" ]] || die "Missing $SITE_DIR/site.env"
+# shellcheck disable=SC1091
+source "$SITE_DIR/site.env"
+
+echo ""
+echo "DevOpsFoundry — Deploy $DOMAIN"
+echo "─────────────────────────────────────"
+
+# ── Read infra coordinates from this site's terraform state ──
+step "Reading Terraform outputs"
+BUCKET=$(df_tf "$DOMAIN" output -raw bucket 2>/dev/null)   || die "Could not read 'bucket' output — is the site provisioned?"
+DIST=$(df_tf "$DOMAIN" output -raw cloudfront_id 2>/dev/null) || die "Could not read 'cloudfront_id' output"
+URL=$(df_tf "$DOMAIN" output -raw url 2>/dev/null)         || die "Could not read 'url' output"
+pass "Bucket: $BUCKET"
+pass "Distribution: $DIST"
+
+# ── Optional build ─────────────────────────────────────
+if [[ -n "${BUILD_CMD:-}" ]]; then
+  run_dir="${SRC_DIR:-$(dirname "$BUILD_DIR")}"
+  step "Building in $run_dir: $BUILD_CMD"
+  ( cd "$run_dir" && eval "$BUILD_CMD" ) || die "Build failed"
+  pass "Build complete"
+fi
+
+[[ -d "$BUILD_DIR" ]] || die "BUILD_DIR not found: $BUILD_DIR (set it in $SITE_DIR/site.env)"
+[[ -f "$BUILD_DIR/index.html" ]] || warn "No index.html in $BUILD_DIR — SPA fallback may 404"
+SIZE=$(du -sh "$BUILD_DIR" | cut -f1)
+pass "Deploying $BUILD_DIR ($SIZE)"
+
+if [[ "$YES" != true ]]; then
+  read -r -p "Deploy to $URL? (y/N) " c; [[ "$c" == [yY] ]] || { echo "Aborted."; exit 0; }
+fi
+
+# ── Sync: hashed assets get a long immutable cache; index.html never caches ──
+step "Syncing assets"
+OUT=$(aws s3 sync "$BUILD_DIR" "s3://$BUCKET" --delete \
+  --exclude "index.html" \
+  --cache-control "max-age=31536000,public,immutable" 2>&1) \
+  || die "S3 sync failed: $OUT"
+pass "Assets synced"
+
+if [[ -f "$BUILD_DIR/index.html" ]]; then
+  step "Uploading index.html (no-cache)"
+  OUT=$(aws s3 cp "$BUILD_DIR/index.html" "s3://$BUCKET/index.html" \
+    --cache-control "no-cache,no-store,must-revalidate" \
+    --content-type "text/html" 2>&1) || die "index.html upload failed: $OUT"
+  pass "index.html uploaded"
+fi
+
+# ── Invalidate CloudFront ──────────────────────────────
+step "Invalidating CloudFront"
+INV=$(aws cloudfront create-invalidation --distribution-id "$DIST" --paths "/*" 2>&1) \
+  || die "Invalidation failed: $INV"
+pass "Invalidation: $(echo "$INV" | jq -r '.Invalidation.Id')"
+log "INFO" "Deployed $DOMAIN"
+
+echo ""
+echo "─────────────────────────────────────"
+pass "Deployed — live at $URL (CloudFront propagation ~1-2 min)"

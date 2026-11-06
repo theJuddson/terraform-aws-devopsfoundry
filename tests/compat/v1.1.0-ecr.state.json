@@ -1,0 +1,71 @@
+{
+ "version": 4,
+ "terraform_version": "1.14.7",
+ "serial": 1,
+ "lineage": "00000000-0000-0000-0000-000000000001",
+ "outputs": {},
+ "resources": [
+  {
+   "module": "module.svc",
+   "mode": "managed",
+   "type": "aws_ecr_repository",
+   "name": "app",
+   "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+   "instances": [
+    {
+     "schema_version": 0,
+     "attributes": {
+      "arn": "arn:aws:ecr:us-east-1:111111111111:repository/demo-app",
+      "force_delete": true,
+      "id": "demo-app",
+      "image_tag_mutability": "MUTABLE",
+      "name": "demo-app",
+      "registry_id": "111111111111",
+      "repository_url": "111111111111.dkr.ecr.us-east-1.amazonaws.com/demo-app",
+      "tags": {
+       "Name": "demo-app"
+      },
+      "tags_all": {
+       "Name": "demo-app"
+      },
+      "encryption_configuration": [
+       {
+        "encryption_type": "AES256",
+        "kms_key": ""
+       }
+      ],
+      "image_scanning_configuration": [
+       {
+        "scan_on_push": true
+       }
+      ],
+      "timeouts": null
+     },
+     "sensitive_attributes": []
+    }
+   ]
+  },
+  {
+   "module": "module.svc",
+   "mode": "managed",
+   "type": "aws_ecr_lifecycle_policy",
+   "name": "app",
+   "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+   "instances": [
+    {
+     "schema_version": 0,
+     "attributes": {
+      "id": "demo-app",
+      "policy": "{\"rules\":[{\"action\":{\"type\":\"expire\"},\"description\":\"Keep last 10 images\",\"rulePriority\":1,\"selection\":{\"countNumber\":10,\"countType\":\"imageCountMoreThan\",\"tagStatus\":\"any\"}}]}",
+      "registry_id": "111111111111",
+      "repository": "demo-app"
+     },
+     "sensitive_attributes": [],
+     "dependencies": [
+      "module.svc.aws_ecr_repository.app"
+     ]
+    }
+   ]
+  }
+ ]
+}

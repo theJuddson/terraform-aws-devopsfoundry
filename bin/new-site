@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+# new-site — scaffold + provision a static site (S3+CloudFront+ACM+Route53)
+#            and delegate the domain's nameservers from Namecheap, in two
+#            phases to dodge the cert-validation-vs-NS-propagation race.
+#
+# Usage:
+#   bin/new-site <domain> [--build-dir DIR] [--email --dkim KEY]
+#                         [--sandbox] [--resume] [--yes]
+set -euo pipefail
+DF_SCRIPT_NAME="new-site"
+source "$(cd "$(dirname "$0")/.." && pwd)/lib/common.sh"
+df_load_env
+
+# ── Args ───────────────────────────────────────────────
+DOMAIN=""; BUILD_DIR="./dist"; SANDBOX=false; RESUME=false; YES=false
+ENABLE_EMAIL=false; DKIM_KEY=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --build-dir) BUILD_DIR="$2"; shift 2 ;;
+    --dkim)      DKIM_KEY="$2"; shift 2 ;;
+    --email)     ENABLE_EMAIL=true; shift ;;
+    --sandbox)   SANDBOX=true; shift ;;
+    --resume)    RESUME=true; shift ;;
+    --yes|-y)    YES=true; shift ;;
+    -*)          die "Unknown flag: $1" ;;
+    *)           DOMAIN="$1"; shift ;;
+  esac
+done
+
+df_validate_domain "$DOMAIN"
+SLUG="$(df_slug "$DOMAIN")"
+SITE_DIR="$(df_site_dir "$DOMAIN")"
+STATE_KEY="$(df_state_key "$DOMAIN")"
+
+# ── Namecheap env ──────────────────────────────────────
+$SANDBOX && export NAMECHEAP_USE_SANDBOX=true
+[[ -n "${NAMECHEAP_API_KEY:-}" ]] || die "NAMECHEAP_API_KEY not set — copy .env.example to .env and fill it in"
+if [[ -z "${NAMECHEAP_CLIENT_IP:-}" ]]; then
+  NAMECHEAP_CLIENT_IP="$(df_detect_ip)"
+  [[ -n "$NAMECHEAP_CLIENT_IP" ]] || die "Could not auto-detect public IP — set NAMECHEAP_CLIENT_IP in .env"
+  export NAMECHEAP_CLIENT_IP
+  info "Using detected client IP $NAMECHEAP_CLIENT_IP (must be whitelisted at Namecheap)"
+fi
+
+echo ""
+echo "DevOpsFoundry — Provision $DOMAIN"
+echo "  slug:       $SLUG"
+echo "  site dir:   ${SITE_DIR/$HOME/\~}"
+echo "  state key:  $STATE_KEY"
+echo "  build dir:  $BUILD_DIR"
+$SANDBOX && echo "  MODE:       SANDBOX (NS delegation only; AWS provisioning skipped)"
+echo "─────────────────────────────────────"
+
+# ── Scaffold ───────────────────────────────────────────
+render() {
+  local content; content="$(cat "$1")"
+  content="${content//__DOMAIN__/$DOMAIN}"
+  content="${content//__SITE_NAME__/$SLUG}"
+  content="${content//__STATE_KEY__/$STATE_KEY}"
+  content="${content//__BUILD_DIR__/$BUILD_DIR}"
+  printf '%s\n' "$content" > "$2"
+}
+
+if [[ -d "$SITE_DIR" ]]; then
+  $RESUME || die "Site dir already exists: ${SITE_DIR/$HOME/\~} (use --resume to continue, or destroy-site first)"
+  info "Resuming existing site dir"
+else
+  step "Scaffolding $SITE_DIR"
+  mkdir -p "$SITE_DIR"
+  for f in "$DF_ROOT/templates/static/"*; do
+    base="$(basename "$f")"
+    if [[ "$base" == *.tmpl ]]; then render "$f" "$SITE_DIR/${base%.tmpl}"
+    else cp "$f" "$SITE_DIR/$base"; fi
+  done
+  # Apply optional email flags to the generated tfvars.
+  if $ENABLE_EMAIL; then
+    sed -i.bak 's/^enable_google_email = false/enable_google_email = true/' "$SITE_DIR/terraform.tfvars"
+    [[ -n "$DKIM_KEY" ]] && sed -i.bak "s|^google_dkim_key     = \"\"|google_dkim_key     = \"$DKIM_KEY\"|" "$SITE_DIR/terraform.tfvars"
+    rm -f "$SITE_DIR/terraform.tfvars.bak"
+  fi
+  pass "Scaffolded"
+fi
+
+# ── Terraform init ─────────────────────────────────────
+step "terraform init"
+df_tf "$DOMAIN" init -input=false -backend-config="$DF_ROOT/backend.tfvars" >/dev/null
+pass "Initialized"
+
+if [[ "$YES" != true ]]; then
+  read -r -p "Provision $DOMAIN now? (y/N) " c; [[ "$c" == [yY] ]] || { echo "Aborted."; exit 0; }
+fi
+
+# ── Phase 1: cert -> zone + NS delegation ──────────────
+# 1a: apply the ACM cert alone first. Its domain_validation_options (the names
+#     the zone's for_each is keyed on) are unknown until the cert exists, so a
+#     single targeted apply of the zone would fail "Invalid for_each argument".
+step "Phase 1a — create ACM certificate"
+df_tf "$DOMAIN" apply -input=false -auto-approve -target=module.acm_cert
+# 1b: now the validation-record names are known -> create zone + delegate NS.
+step "Phase 1b — Route53 zone + Namecheap nameserver delegation"
+df_tf "$DOMAIN" apply -input=false -auto-approve \
+  -target=module.route53_zone -target=module.namecheap_ns
+log "INFO" "Phase 1 applied for $DOMAIN"
+
+NS=()
+while IFS= read -r ns_line; do NS+=("$ns_line"); done \
+  < <(df_tf "$DOMAIN" output -json name_servers | jq -r '.[]')
+echo "  Route53 nameservers:"; printf '    %s\n' "${NS[@]}"
+
+if $SANDBOX; then
+  warn "Sandbox mode: skipping NS-propagation wait + AWS provisioning."
+  warn "The Namecheap (sandbox) NS call was exercised. Re-run without --sandbox against a real domain to finish."
+  exit 0
+fi
+
+# ── Wait for NS propagation (so ACM can validate) ──────
+step "Waiting for nameserver propagation (dig NS @8.8.8.8)"
+DEADLINE=$(( $(date +%s) + 900 ))   # 15 min
+propagated=false
+while [[ $(date +%s) -lt $DEADLINE ]]; do
+  current="$(dig +short NS "$DOMAIN" @8.8.8.8 2>/dev/null | tr 'A-Z' 'a-z' | sed 's/\.$//' | sort)"
+  for ns in "${NS[@]}"; do
+    if echo "$current" | grep -qx "$(echo "$ns" | tr 'A-Z' 'a-z' | sed 's/\.$//')"; then
+      propagated=true; break
+    fi
+  done
+  $propagated && break
+  echo "  …not yet ($(( (DEADLINE - $(date +%s)) / 60 ))m left); retrying in 30s"
+  sleep 30
+done
+
+if ! $propagated; then
+  warn "Nameservers not visible after 15m. Registrar updates can lag — re-run when ready:"
+  echo "    bin/new-site $DOMAIN --resume --yes"
+  exit 75   # EX_TEMPFAIL
+fi
+pass "Nameservers propagated"
+
+# ── Phase 2: cert validation + CloudFront + records ────
+step "Phase 2 — validate cert, build CloudFront, add DNS records"
+df_tf "$DOMAIN" apply -input=false -auto-approve
+log "INFO" "Phase 2 applied for $DOMAIN"
+
+echo ""
+echo "─────────────────────────────────────"
+pass "Provisioned $DOMAIN"
+echo "  URL:        $(df_tf "$DOMAIN" output -raw url)"
+echo "  Bucket:     $(df_tf "$DOMAIN" output -raw bucket)"
+echo "  CloudFront: $(df_tf "$DOMAIN" output -raw cloudfront_id)"
+echo ""
+echo "  Next: put your built files in '$BUILD_DIR' (edit $SITE_DIR/site.env if needed), then:"
+echo "    bin/deploy $DOMAIN"

@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# deploy-app — build the app image, push to ECR, roll the ECS service, wait for
+#              stability, health-check. Reads <config>/app.env for build config.
+#
+# Usage: bin/deploy-app --config <dir> [--yes]
+set -euo pipefail
+DF_SCRIPT_NAME="deploy-app"
+source "$(cd "$(dirname "$0")/.." && pwd)/lib/common.sh"
+df_load_env
+
+CONFIG=""; YES=false
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --config) CONFIG="$2"; shift 2 ;;
+    --yes|-y) YES=true; shift ;;
+    *)        die "Unknown arg: $1" ;;
+  esac
+done
+CONFIG="$(df_resolve_config "$CONFIG")"
+[[ -f "$CONFIG/app.env" ]] || die "Missing $CONFIG/app.env"
+DOCKERFILE="Dockerfile"; DOCKER_CONTEXT="."; DOCKER_BUILD_ARGS=""; VERIFY_SCRIPT=""
+# shellcheck disable=SC1091
+source "$CONFIG/app.env"
+
+REPO_ROOT="$(dirname "$CONFIG")"
+TFVARS=(-var-file=app.tfvars)
+
+echo ""
+echo "DevOpsFoundry — Deploy app"
+echo "  config: $CONFIG"
+echo "  repo:   $REPO_ROOT"
+echo "─────────────────────────────────────"
+
+step "Reading Terraform outputs"
+ECR_URL=$(df_tf_at "$CONFIG" output -raw ecr_repository_url 2>/dev/null)   || die "No ecr_repository_url — run new-app first"
+CLUSTER=$(df_tf_at "$CONFIG" output -raw ecs_cluster_name 2>/dev/null)     || die "No ecs_cluster_name output"
+SERVICE=$(df_tf_at "$CONFIG" output -raw ecs_service_name 2>/dev/null)     || die "No ecs_service_name output"
+SERVICE_URL=$(df_tf_at "$CONFIG" output -raw service_url 2>/dev/null)      || die "No service_url output"
+HEALTH_PATH=$(df_tf_at "$CONFIG" output -raw health_check_path 2>/dev/null || echo "/health")
+REGISTRY="${ECR_URL%%/*}"
+REGION="${AWS_REGION:-us-east-1}"
+pass "ECR: $ECR_URL"
+pass "ECS: $CLUSTER / $SERVICE"
+
+# Image tags: git-<sha> (immutable record) + latest (what the task def pulls).
+SHA="$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo manual)"
+TAG_SHA="$ECR_URL:git-$SHA"; TAG_LATEST="$ECR_URL:latest"
+
+[[ -f "$REPO_ROOT/$DOCKERFILE" ]] || die "Dockerfile not found: $REPO_ROOT/$DOCKERFILE (set DOCKERFILE in app.env)"
+if [[ "$YES" != true ]]; then
+  read -r -p "Build + deploy $SHA to $SERVICE_URL? (y/N) " c; [[ "$c" == [yY] ]] || { echo "Aborted."; exit 0; }
+fi
+
+step "Building image (linux/amd64)"
+# shellcheck disable=SC2086
+( cd "$REPO_ROOT" && docker build --platform linux/amd64 $DOCKER_BUILD_ARGS \
+    -f "$DOCKERFILE" -t "$TAG_SHA" -t "$TAG_LATEST" "$DOCKER_CONTEXT" ) || die "docker build failed"
+pass "Built $TAG_SHA"
+
+step "Pushing to ECR"
+aws ecr get-login-password --region "$REGION" \
+  | docker login --username AWS --password-stdin "$REGISTRY" >/dev/null || die "ECR login failed"
+docker push "$TAG_SHA"   >/dev/null || die "push (sha) failed"
+docker push "$TAG_LATEST" >/dev/null || die "push (latest) failed"
+pass "Pushed git-$SHA + latest"
+
+# Apply brings desired_count to its configured value (first deploy scales 0->N,
+# now that an image exists). No-op on subsequent deploys.
+step "terraform apply (sync desired_count + infra)"
+df_tf_at "$CONFIG" apply -input=false -auto-approve "${TFVARS[@]}"
+pass "Applied"
+
+# Roll tasks to pull the new :latest (the task-def image tag is unchanged, so
+# apply alone won't redeploy on subsequent runs).
+step "Rolling ECS service"
+aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" \
+  --force-new-deployment --region "$REGION" \
+  --query 'service.deployments[0].{status:status,rollout:rolloutState}' --output table || die "update-service failed"
+step "Waiting for service to stabilize"
+aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE" --region "$REGION" \
+  || die "Service did not stabilize — check logs: $(df_tf_at "$CONFIG" output -raw log_group 2>/dev/null)"
+pass "Service stable"
+log "INFO" "Deployed app $SERVICE ($SHA)"
+
+# Verification. A health endpoint proves the process is listening and nothing more:
+# it stays green over an empty schema, a dead database credential, a frontend whose
+# every asset 404s, and an API whose routes do not match what the client calls. All
+# four of those shipped green. Apps that set VERIFY_SCRIPT in app.env get a real
+# behavioural assertion instead, and a failure here fails the deploy.
+if [[ -n "${VERIFY_SCRIPT:-}" ]]; then
+  step "Verifying deployment ($VERIFY_SCRIPT)"
+  [[ -f "$REPO_ROOT/$VERIFY_SCRIPT" ]] || die "VERIFY_SCRIPT not found: $REPO_ROOT/$VERIFY_SCRIPT"
+  if bash "$REPO_ROOT/$VERIFY_SCRIPT" "$SERVICE_URL"; then
+    pass "Verification passed"
+  else
+    echo ""
+    warn "The rollout completed and the new image IS live — this is not a failed deploy,"
+    warn "it is a deploy that succeeded and produced a broken app. Roll back with a"
+    warn "previous git-<sha> tag, or fix forward."
+    die "Verification FAILED at $SERVICE_URL"
+  fi
+else
+  step "Health check"
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${SERVICE_URL}${HEALTH_PATH}" || echo 000)
+  if [[ "$CODE" == "200" ]]; then
+    pass "Health: 200"
+    warn "Only $HEALTH_PATH was checked — that proves the process is listening, not that"
+    warn "the app works. Set VERIFY_SCRIPT in app.env to assert real behaviour."
+  else
+    warn "Health returned $CODE at ${SERVICE_URL}${HEALTH_PATH} (DNS may still be propagating)"
+  fi
+fi
+
+echo ""
+echo "─────────────────────────────────────"
+pass "Deployed — $SERVICE_URL"

@@ -1,0 +1,8 @@
+# Per-app remote state. Bucket/table/region injected by bin/new-app via
+# `terraform init -backend-config`: this directory's backend.tfvars if present
+# (app-owned state), else DevOpsFoundry/backend.tfvars (shared bucket).
+terraform {
+  backend "s3" {
+    key = "__STATE_KEY__"
+  }
+}

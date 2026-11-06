@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Offline proof that upgrading container-service from an older tag changes no
+# infrastructure. Plans tests/compat with -refresh=false (no AWS call, fake
+# credentials) against a state holding the ECR resources as the old release
+# made them, once with the old modules and once with this checkout, and
+# requires both plans to be identical apart from the ECR address moving.
+#
+#   bin/check-compat [old-ref]   # default v1.1.0
+set -euo pipefail
+cd "$(dirname "$0")/.."
+ROOT="$PWD"
+OLD="${1:-v1.1.0}"
+WORK="$(mktemp -d)"
+trap 'git -C "$ROOT" worktree remove --force "$WORK/old" >/dev/null 2>&1 || true; rm -rf "$WORK"' EXIT
+export TF_PLUGIN_CACHE_DIR="${TF_PLUGIN_CACHE_DIR:-$HOME/.terraform.d/plugin-cache}"
+mkdir -p "$TF_PLUGIN_CACHE_DIR"
+
+git -C "$ROOT" worktree add -q --detach "$WORK/old" "$OLD"
+
+plan() { # $1 label, $2 modules dir
+  local dir="$WORK/$1"
+  mkdir -p "$dir"
+  cp tests/compat/main.tf "$dir/"
+  cp "tests/compat/$OLD-ecr.state.json" "$dir/terraform.tfstate"
+  ln -s "$2" "$dir/mod"
+  (cd "$dir" && terraform init -input=false -no-color >/dev/null \
+    && terraform plan -refresh=false -input=false -no-color -out=p.bin >/dev/null \
+    && terraform show -json p.bin) | python3 -I tests/compat/normalize.py /dev/stdin > "$WORK/$1.norm"
+}
+
+plan old "$WORK/old/modules"
+plan new "$ROOT/modules"
+
+if diff -u "$WORK/old.norm" "$WORK/new.norm"; then
+  echo "OK: $OLD -> working tree plans identically for container-service"
+else
+  echo "FAIL: plans differ"; exit 1
+fi
+grep -q '"no-op"' "$WORK/new.norm" || { echo "FAIL: ECR resources not carried over"; exit 1; }
