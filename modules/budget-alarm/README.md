@@ -6,7 +6,7 @@ by a cost allocation tag.
 
 ```hcl
 module "budget" {
-  source          = "git::https://github.com/theJuddson/DevOpsFoundry//modules/budget-alarm?ref=v1.2.0"
+  source          = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/budget-alarm?ref=v1.2.1"
   name            = "my-app-monthly"
   monthly_limit   = 300
   email_addresses = ["ops@example.com"]

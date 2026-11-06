@@ -10,7 +10,7 @@ put and delete), plus decrypt and generate-data-key on the bucket's key. Attach 
 
 ```hcl
 module "bucket" {
-  source                 = "git::https://github.com/theJuddson/DevOpsFoundry//modules/object-store?ref=v1.2.0"
+  source                 = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.2.1"
   bucket_name            = "my-app-data-123456789012"
   kms_key_arn            = module.key.key_arn        # optional; see modules/kms-key
   policy_prefix          = "uploads"

@@ -3,6 +3,14 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.2.1
+
+- The repository is renamed `terraform-aws-devopsfoundry` for the Terraform Registry
+  (`theJuddson/devopsfoundry/aws//modules/<name>`). GitHub redirects the old URL; update pins when convenient.
+- An empty root module, which the registry requires.
+- README leads with the modules; the CLI is documented as clone-and-run.
+- `bin/new-app --module-ref` writes the new repository URL.
+
 ## v1.2.0
 
 - Apache-2.0 license, NOTICE, SECURITY, CONTRIBUTING, provenance notes.
