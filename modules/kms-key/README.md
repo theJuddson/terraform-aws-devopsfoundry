@@ -7,7 +7,7 @@ app does, within the limits of that policy.
 
 ```hcl
 module "key" {
-  source            = "git::https://github.com/theJuddson/DevOpsFoundry//modules/kms-key?ref=v1.2.0"
+  source            = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/kms-key?ref=v1.2.1"
   alias             = "my-app"
   key_user_arns     = [aws_iam_role.app.arn]
   runtime_tag_value = "my-app"   # turns on runtime_policy_json

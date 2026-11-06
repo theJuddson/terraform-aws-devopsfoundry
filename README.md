@@ -1,18 +1,74 @@
 # DevOpsFoundry
 
-Zero-to-live website provisioning across **AWS** and **Namecheap** in one flow.
+Terraform modules for AWS, plus an optional command-line tool that takes a domain from nothing to a live site or
+container app.
 
-Give it a domain and a build directory; it stands up S3 + CloudFront + ACM +
-Route53, **automatically points the domain's Namecheap nameservers at the new
-Route53 zone**, validates the TLS cert, and deploys your static build — no manual
-nameserver editing in the Namecheap UI.
+- **The modules** are the main product. Use them from your own Terraform: a private S3 bucket, a KMS key with
+  per-tenant key policies, EFS with run-time access points, a Fargate runner for one-off jobs, an ECR repository,
+  an SSM-only EC2 host, a budget alarm, and the pieces of a full web stack (VPC, Fargate service behind an HTTPS
+  ALB, RDS Postgres, Redis, SES, Route53, ACM, CloudFront).
+- **The CLI** (`bin/`) is an opinionated flow on top of those modules: Route53 zone, automatic Namecheap nameserver
+  delegation, certificate, then a static site or a Fargate app. Clone the repository and run it from there.
 
-DNS model: a Route53 hosted zone per site holds every record (apex/www aliases,
-ACM validation, optional Google Workspace MX/DKIM); the Namecheap official
-Terraform provider only flips the domain's custom nameservers to that zone, so the
-delegation that is usually a manual step in the registrar's UI is automated.
+## Modules
 
-## At a glance
+Pin a release. From the Terraform Registry:
+
+```hcl
+module "bucket" {
+  source  = "theJuddson/devopsfoundry/aws//modules/object-store"
+  version = "~> 1.2"
+  # ...
+}
+```
+
+or straight from git, over HTTPS or SSH:
+
+```hcl
+source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.2.1"
+source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.2.1"
+```
+
+Each module's README lists its inputs and outputs, and the building blocks have a runnable example under
+`examples/`.
+
+| Module | What it makes |
+| --- | --- |
+| **Building blocks** | |
+| [object-store](modules/object-store) | Private S3 bucket: SSE-KMS, versioning, TLS-only policy, lifecycle rules, a policy granting one prefix |
+| [kms-key](modules/kms-key) | Customer managed key with alias and key policy, plus a policy letting an app create and use its own tagged keys |
+| [shared-filesystem](modules/shared-filesystem) | EFS with mount targets and an NFS-only security group, plus a policy for access points made at run time |
+| [task-runner](modules/task-runner) | Fargate and Fargate Spot cluster for one-off `RunTask` jobs, with roles, logs and a controller policy |
+| [ecr-repository](modules/ecr-repository) | ECR repository with scan on push and a lifecycle policy |
+| [ec2-host](modules/ec2-host) | SSM-only EC2 instance with a data volume that survives replacement, and scheduled snapshots |
+| [budget-alarm](modules/budget-alarm) | Monthly AWS Budgets alarm to email or SNS |
+| **Web stack** | |
+| [networking](modules/networking) | VPC, public and private subnets, optional NAT gateway, security groups |
+| [container-service](modules/container-service) | Fargate service behind an HTTPS ALB, with its ECR repository, logs and Route53 alias |
+| [database](modules/database) | RDS PostgreSQL with an AWS-managed master password |
+| [cache](modules/cache) | ElastiCache Redis, encrypted, with an auth token |
+| [email](modules/email) | SES domain identity, DKIM, DMARC and SMTP credentials |
+| [shared-platform](modules/shared-platform) | Finds another stack's VPC, ALB and cluster so a small app can share them |
+| [full-stack](modules/full-stack) | All of the above composed, as `bin/new-app` uses it |
+| **DNS and static sites** | |
+| [route53-zone](modules/route53-zone) | Hosted zone and ACM validation records |
+| [acm-cert](modules/acm-cert) | Certificate for the apex and wildcard (us-east-1) |
+| [static-site](modules/static-site) | Private S3 bucket behind CloudFront with Origin Access Control |
+| [route53-records](modules/route53-records) | CloudFront aliases and optional Google Workspace mail records |
+| [namecheap-ns](modules/namecheap-ns) | Points a Namecheap domain's nameservers at Route53 |
+
+## The CLI: clone and run
+
+The scripts run from a checkout of this repository:
+
+```bash
+git clone https://github.com/theJuddson/terraform-aws-devopsfoundry DevOpsFoundry
+cd DevOpsFoundry
+```
+
+They read `.env` and `backend.tfvars` from the checkout's root (both gitignored). Keep the folder name
+`DevOpsFoundry`: scaffolds made without `--module-ref` find the modules at the sibling path
+`../../DevOpsFoundry/modules/full-stack`.
 
 Two tracks. A **static site** — S3 + CloudFront, generated into `sites/<domain>/`.
 A **containerized app** — ECS Fargate behind an HTTPS ALB, configured from the app
@@ -29,27 +85,12 @@ shares state with anything else.
 | `bin/deploy-app --config <dir>` | Build image → ECR → apply → roll service → verify |
 | `bin/destroy-app --config <dir>` | Tear down the app stack |
 
-**Modules.** Static: `route53-zone` (zone + ACM validation records) · `acm-cert`
-(apex + wildcard, forced us-east-1) · `static-site` (private S3, OAC-only, +
-CloudFront) · `route53-records` (aliases, optional Google Workspace MX/DKIM) ·
-`namecheap-ns` (flips the domain's custom nameservers).
-App: `networking` (VPC, subnets, optional NAT, SGs) · `container-service`
-(Fargate + HTTPS ALB) · `database` (RDS Postgres, AWS-managed master password) ·
-`cache` (ElastiCache Redis, encrypted, generated auth token) · `email` (SES
-identity + DKIM + DMARC + SMTP IAM user) · `shared-platform` (attach to an
-existing stack) · `full-stack` (composes them).
-Building blocks (no `bin/` flow; call them from your own Terraform, each has a README and an example under
-`examples/`): `object-store` (private S3, SSE-KMS, TLS-only, lifecycle, prefix grant) · `kms-key` (customer
-managed key + run-time per-tenant key policy) · `shared-filesystem` (EFS + run-time access point policy) ·
-`task-runner` (Fargate/Fargate Spot cluster for one-off `RunTask` jobs + controller policy) · `ecr-repository` ·
-`ec2-host` (SSM-only instance, data volume that survives replacement, DLM snapshots) · `budget-alarm`.
-
 Both `new-site` and `new-app` run in **two phases** to dodge the
 cert-validation-vs-NS-propagation race — delegate first, poll `dig` until it
 propagates, then validate ACM and build the rest. `--resume --yes` picks up a
 timed-out phase 2.
 
-## Prerequisites
+### Prerequisites
 
 Local tooling: `terraform` (>=1.7), `aws` CLI (authenticated to the account that will hold the stacks),
 `jq`, `dig` (`brew install bind`), `curl`, `git`.
@@ -70,7 +111,7 @@ Local tooling: `terraform` (>=1.7), `aws` CLI (authenticated to the account that
 No production account yet? Set `NAMECHEAP_USE_SANDBOX=true` (or `--sandbox`) to
 exercise the Namecheap path against the free sandbox with no eligibility gate.
 
-## Usage
+### Usage
 
 ```bash
 bin/preflight                                   # check toolchain + AWS + Namecheap + IP whitelist
@@ -88,34 +129,13 @@ propagation race on a fresh domain:
 If propagation is slow and step 2 times out, resume with
 `bin/new-site example.com --resume --yes`.
 
-### Email
+#### Email
 
 `bin/new-site example.com --email --dkim "<google-dkim-key>"` adds Google
 Workspace MX + DKIM records (or edit `enable_google_email` / `google_dkim_key`
 in the generated `sites/<domain>/terraform.tfvars`).
 
-## Layout
-
-```
-modules/        static:  acm-cert · route53-zone · route53-records · static-site · namecheap-ns
-                app:     networking · container-service · database · cache · email · full-stack
-                blocks:  object-store · kms-key · shared-filesystem · task-runner · ecr-repository · ec2-host · budget-alarm
-examples/       one root per building-block module (validated in CI, never applied)
-tests/          offline compatibility and validation fixtures for bin/check-*
-templates/static/      site-root stamped into sites/<domain>/ by new-site
-templates/full-stack/  app-root stamped into a repo's .devopsfoundry/ by new-app
-sites/<domain>/        generated static Terraform root (own remote-state key) + site.env
-bin/            sites: preflight · new-site · deploy · destroy-site
-                apps:  new-app · deploy-app · destroy-app
-                repo:  check-modules (fmt/validate/tflint/checkov) · check-compat (offline no-change proof) · soci-index
-lib/common.sh   shared shell helpers (logging, slug, tf wrappers)
-backend.tfvars.example  shared S3 state backend; copy to backend.tfvars (key is per-site / per-app)
-```
-
-State: one Terraform root per site, keyed `devopsfoundry/<domain>/terraform.tfstate`
-in the shared bucket, so sites never share state.
-
-## Apps (full-stack container services)
+### Apps (full-stack container services)
 
 DevOpsFoundry also provisions a **framework-neutral container service** (ECS Fargate
 behind an HTTPS ALB) with optional RDS Postgres, Redis, and SES — for a backend app
@@ -161,7 +181,7 @@ override any of them.
 App modules: `networking`, `shared-platform`, `container-service`, `database`, `cache`,
 `email`, composed by `full-stack`. State key: `devopsfoundry/app/<slug>/terraform.tfstate`.
 
-### Existing DNS zone (subdomain of a live domain)
+#### Existing DNS zone (subdomain of a live domain)
 
 `--existing-zone <zone>` hosts the app at `<subdomain>.<zone>` inside a Route53 zone that already serves
 something else (a website, mail). No zone is created and Namecheap is never called; the ACM cert covers only
@@ -173,13 +193,13 @@ bin/new-app example.com --subdomain app --existing-zone example.com \
   --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.2.0
 ```
 
-### App-owned state
+#### App-owned state
 
 `--backend-config <file>` keeps the app's Terraform state in its own S3 bucket (for example a
 `<project>-terraform-state-<account>` bucket) instead of the shared one. The file is copied to
 `.devopsfoundry/backend.tfvars` and used on every later init.
 
-### Verifying a deploy
+#### Verifying a deploy
 
 By default `deploy-app` finishes with a `health_check_path` request and warns that
 a 200 there proves only that the process is listening. It is worth being precise
@@ -200,7 +220,7 @@ this is not a failed deploy, it is a deploy that succeeded and produced a broken
 app. Fix forward, or roll back by re-tagging a previous `git-<sha>` image (every
 deploy pushes both `git-<sha>` and `latest`; the task definition pulls `latest`).
 
-### Shared platform (cheap mode)
+#### Shared platform (cheap mode)
 
 A dedicated stack carries roughly **$50/month of fixed cost before serving a
 single request** — a NAT gateway (~$33) and an ALB (~$16). For a small app that
@@ -237,7 +257,7 @@ anything that needs independent availability.
 
 **Ordering:** never `destroy-app` a platform that still has guests attached.
 
-### Dropping the NAT gateway
+#### Dropping the NAT gateway
 
 Shared platform removes the NAT gateway by borrowing someone else's. A dedicated
 stack can drop it outright instead — a service that only reaches AWS APIs and its
@@ -254,33 +274,41 @@ in private subnets leaves them with no route out. Ignored in shared-platform mod
 where the host platform's networking already decided this. Neither variable is in
 the generated `app.tfvars`; add them.
 
-### Checks
+#### CI later
+
+The `bin/` scripts are non-interactive with `--yes` and authenticate via the ambient
+AWS profile/OIDC, so the flow lifts into GitHub Actions when ready — point the module
+`source` at a pinned `--module-ref` and run `new-app --resume --yes` / `deploy-app --yes`.
+
+## Repository layout
+
+```
+modules/        static:  acm-cert · route53-zone · route53-records · static-site · namecheap-ns
+                app:     networking · container-service · database · cache · email · full-stack
+                blocks:  object-store · kms-key · shared-filesystem · task-runner · ecr-repository · ec2-host · budget-alarm
+main.tf         empty root module (the Terraform Registry requires one; use the submodules)
+examples/       one root per building-block module (validated in CI, never applied)
+tests/          offline compatibility and validation fixtures for bin/check-*
+templates/static/      site-root stamped into sites/<domain>/ by new-site
+templates/full-stack/  app-root stamped into a repo's .devopsfoundry/ by new-app
+sites/<domain>/        generated static Terraform root (own remote-state key) + site.env
+bin/            sites: preflight · new-site · deploy · destroy-site
+                apps:  new-app · deploy-app · destroy-app
+                repo:  check-modules (fmt/validate/tflint/checkov) · check-compat (offline no-change proof) · soci-index
+lib/common.sh   shared shell helpers (logging, slug, tf wrappers)
+backend.tfvars.example  shared S3 state backend; copy to backend.tfvars (key is per-site / per-app)
+```
+
+State: one Terraform root per site, keyed `devopsfoundry/<domain>/terraform.tfstate`
+in the shared bucket, so sites never share state.
+
+## Checks
 
 `bin/check-modules` runs `terraform fmt -check`, `terraform validate`, tflint and checkov over every module and
 example, and `bin/check-compat` proves offline that upgrading container-service from v1.2.0 (and from the earlier private
 v1.1.0 state layout) plans no change.
 Neither calls AWS. Both run on every pull request (`.github/workflows/checks.yml`). Accepted checkov findings are
 listed in [docs/checkov-accepted.md](docs/checkov-accepted.md).
-
-### CI later
-
-The `bin/` scripts are non-interactive with `--yes` and authenticate via the ambient
-AWS profile/OIDC, so the flow lifts into GitHub Actions when ready — point the module
-`source` at a pinned `--module-ref` and run `new-app --resume --yes` / `deploy-app --yes`.
-
-## Using the modules
-
-Pin a release tag. Over HTTPS (no SSH key needed):
-
-```hcl
-module "bucket" {
-  source = "git::https://github.com/theJuddson/DevOpsFoundry//modules/object-store?ref=v1.2.0"
-  # ...
-}
-```
-
-or over SSH: `git::ssh://git@github.com/theJuddson/DevOpsFoundry//modules/object-store?ref=v1.2.0`.
-`bin/new-app --module-ref <tag>` writes the SSH form. Each module's README lists its inputs and outputs.
 
 ## Contributing, security, license
 

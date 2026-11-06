@@ -7,7 +7,7 @@ is no SSH key and the security group has no inbound rules; you reach the instanc
 
 ```hcl
 module "host" {
-  source        = "git::https://github.com/theJuddson/DevOpsFoundry//modules/ec2-host?ref=v1.2.0"
+  source        = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/ec2-host?ref=v1.2.1"
   name          = "my-worker"
   subnet_id     = module.networking.private_subnet_ids[0]
   instance_type = "t4g.large"

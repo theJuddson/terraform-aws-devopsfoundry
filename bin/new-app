@@ -60,7 +60,7 @@ STATE_KEY="$(df_app_state_key "$NAME")"
 
 # Module source: git ref for CI, else a relative sibling path for local dev.
 if [[ -n "$MODULE_REF" ]]; then
-  MODULE_SOURCE="git::ssh://git@github.com/theJuddson/DevOpsFoundry//modules/full-stack?ref=$MODULE_REF"
+  MODULE_SOURCE="git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/full-stack?ref=$MODULE_REF"
 else
   MODULE_SOURCE="$MODULE_PATH/modules/full-stack"
 fi

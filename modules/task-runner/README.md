@@ -19,7 +19,7 @@ The module makes:
 
 ```hcl
 module "runner" {
-  source     = "git::https://github.com/theJuddson/DevOpsFoundry//modules/task-runner?ref=v1.2.0"
+  source     = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/task-runner?ref=v1.2.1"
   name       = "my-jobs"
   vpc_id     = module.networking.vpc_id
   subnet_ids = module.networking.private_subnet_ids

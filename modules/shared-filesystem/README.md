@@ -7,7 +7,7 @@ not through a mount target, and squashes root unless `allow_root_access` is true
 
 ```hcl
 module "files" {
-  source                    = "git::https://github.com/theJuddson/DevOpsFoundry//modules/shared-filesystem?ref=v1.2.0"
+  source                    = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/shared-filesystem?ref=v1.2.1"
   name                      = "my-app-files"
   vpc_id                    = module.networking.vpc_id
   subnet_ids                = module.networking.private_subnet_ids
