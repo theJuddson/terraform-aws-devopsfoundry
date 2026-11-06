@@ -19,7 +19,7 @@ graph checks), then run:
 
 ```sh
 bin/check-modules             # fmt, validate, tflint, checkov; no AWS calls
-bin/check-compat v1.1.0       # offline proof that container-service plans no change
+bin/check-compat v1.2.0       # offline proof that container-service plans no change
 terraform-docs -c .terraform-docs.yml modules/<name>   # refresh a module's README tables
 ```
 

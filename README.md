@@ -257,7 +257,8 @@ the generated `app.tfvars`; add them.
 ### Checks
 
 `bin/check-modules` runs `terraform fmt -check`, `terraform validate`, tflint and checkov over every module and
-example, and `bin/check-compat` proves offline that upgrading container-service from v1.1.0 plans no change.
+example, and `bin/check-compat` proves offline that upgrading container-service from v1.2.0 (and from the earlier private
+v1.1.0 state layout) plans no change.
 Neither calls AWS. Both run on every pull request (`.github/workflows/checks.yml`). Accepted checkov findings are
 listed in [docs/checkov-accepted.md](docs/checkov-accepted.md).
 

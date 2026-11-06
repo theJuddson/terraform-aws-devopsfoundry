@@ -1,6 +1,7 @@
 # Changelog
 
-All notable changes. Versions are git tags; pin modules with `?ref=<tag>`.
+All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
+the earlier versions below were private and their tags are not in this repository.
 
 ## v1.2.0
 
