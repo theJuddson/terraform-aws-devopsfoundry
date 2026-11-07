@@ -35,27 +35,27 @@ Each module's README lists its inputs and outputs, and the building blocks have 
 | Module | What it makes |
 | --- | --- |
 | **Building blocks** | |
-| [object-store](modules/object-store) | Private S3 bucket: SSE-KMS, versioning, TLS-only policy, lifecycle rules, a policy granting one prefix |
-| [kms-key](modules/kms-key) | Customer managed key with alias and key policy, plus a policy letting an app create and use its own tagged keys |
-| [shared-filesystem](modules/shared-filesystem) | EFS with mount targets and an NFS-only security group, plus a policy for access points made at run time |
-| [task-runner](modules/task-runner) | Fargate and Fargate Spot cluster for one-off `RunTask` jobs, with roles, logs and a controller policy |
-| [ecr-repository](modules/ecr-repository) | ECR repository with scan on push and a lifecycle policy |
-| [ec2-host](modules/ec2-host) | SSM-only EC2 instance with a data volume that survives replacement, and scheduled snapshots |
-| [budget-alarm](modules/budget-alarm) | Monthly AWS Budgets alarm to email or SNS |
+| [object-store](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/object-store) | Private S3 bucket: SSE-KMS, versioning, TLS-only policy, lifecycle rules, a policy granting one prefix |
+| [kms-key](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/kms-key) | Customer managed key with alias and key policy, plus a policy letting an app create and use its own tagged keys |
+| [shared-filesystem](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/shared-filesystem) | EFS with mount targets and an NFS-only security group, plus a policy for access points made at run time |
+| [task-runner](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/task-runner) | Fargate and Fargate Spot cluster for one-off `RunTask` jobs, with roles, logs and a controller policy |
+| [ecr-repository](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/ecr-repository) | ECR repository with scan on push and a lifecycle policy |
+| [ec2-host](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/ec2-host) | SSM-only EC2 instance with a data volume that survives replacement, and scheduled snapshots |
+| [budget-alarm](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/budget-alarm) | Monthly AWS Budgets alarm to email or SNS |
 | **Web stack** | |
-| [networking](modules/networking) | VPC, public and private subnets, optional NAT gateway, security groups |
-| [container-service](modules/container-service) | Fargate service behind an HTTPS ALB, with its ECR repository, logs and Route53 alias |
-| [database](modules/database) | RDS PostgreSQL with an AWS-managed master password |
-| [cache](modules/cache) | ElastiCache Redis, encrypted, with an auth token |
-| [email](modules/email) | SES domain identity, DKIM, DMARC and SMTP credentials |
-| [shared-platform](modules/shared-platform) | Finds another stack's VPC, ALB and cluster so a small app can share them |
-| [full-stack](modules/full-stack) | All of the above composed, as `bin/new-app` uses it |
+| [networking](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/networking) | VPC, public and private subnets, optional NAT gateway, security groups |
+| [container-service](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/container-service) | Fargate service behind an HTTPS ALB, with its ECR repository, logs and Route53 alias |
+| [database](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/database) | RDS PostgreSQL with an AWS-managed master password |
+| [cache](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/cache) | ElastiCache Redis, encrypted, with an auth token |
+| [email](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/email) | SES domain identity, DKIM, DMARC and SMTP credentials |
+| [shared-platform](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/shared-platform) | Finds another stack's VPC, ALB and cluster so a small app can share them |
+| [full-stack](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/full-stack) | All of the above composed, as `bin/new-app` uses it |
 | **DNS and static sites** | |
-| [route53-zone](modules/route53-zone) | Hosted zone and ACM validation records |
-| [acm-cert](modules/acm-cert) | Certificate for the apex and wildcard (us-east-1) |
-| [static-site](modules/static-site) | Private S3 bucket behind CloudFront with Origin Access Control |
-| [route53-records](modules/route53-records) | CloudFront aliases and optional Google Workspace mail records |
-| [namecheap-ns](modules/namecheap-ns) | Points a Namecheap domain's nameservers at Route53 |
+| [route53-zone](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/route53-zone) | Hosted zone and ACM validation records |
+| [acm-cert](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/acm-cert) | Certificate for the apex and wildcard (us-east-1) |
+| [static-site](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/static-site) | Private S3 bucket behind CloudFront with Origin Access Control |
+| [route53-records](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/route53-records) | CloudFront aliases and optional Google Workspace mail records |
+| [namecheap-ns](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/namecheap-ns) | Points a Namecheap domain's nameservers at Route53 |
 
 ## The CLI: clone and run
 
@@ -308,9 +308,9 @@ in the shared bucket, so sites never share state.
 example, and `bin/check-compat` proves offline that upgrading container-service from v1.2.0 (and from the earlier private
 v1.1.0 state layout) plans no change.
 Neither calls AWS. Both run on every pull request (`.github/workflows/checks.yml`). Accepted checkov findings are
-listed in [docs/checkov-accepted.md](docs/checkov-accepted.md).
+listed in [docs/checkov-accepted.md](https://github.com/theJuddson/terraform-aws-devopsfoundry/blob/main/docs/checkov-accepted.md).
 
 ## Contributing, security, license
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) and [CHANGELOG.md](CHANGELOG.md).
-Licensed under the [Apache License 2.0](LICENSE). Where the code comes from: [docs/PROVENANCE.md](docs/PROVENANCE.md).
+See [CONTRIBUTING.md](https://github.com/theJuddson/terraform-aws-devopsfoundry/blob/main/CONTRIBUTING.md), [SECURITY.md](https://github.com/theJuddson/terraform-aws-devopsfoundry/blob/main/SECURITY.md) and [CHANGELOG.md](https://github.com/theJuddson/terraform-aws-devopsfoundry/blob/main/CHANGELOG.md).
+Licensed under the [Apache License 2.0](https://github.com/theJuddson/terraform-aws-devopsfoundry/blob/main/LICENSE). Where the code comes from: [docs/PROVENANCE.md](https://github.com/theJuddson/terraform-aws-devopsfoundry/blob/main/docs/PROVENANCE.md).
