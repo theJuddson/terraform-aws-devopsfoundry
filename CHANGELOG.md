@@ -3,6 +3,10 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.2.2
+
+- README links to modules and docs are absolute GitHub URLs, so they work on the Terraform Registry page.
+
 ## v1.2.1
 
 - The repository is renamed `terraform-aws-devopsfoundry` for the Terraform Registry
