@@ -5,14 +5,18 @@ ElastiCache Redis: a single encrypted node with a generated auth token. `full-st
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 
-No requirements.
+| Name | Version |
+| ---- | ------- |
+| terraform | >= 1.7.0 |
+| aws | >= 5.0 |
+| random | >= 3.0 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| aws | n/a |
-| random | n/a |
+| aws | >= 5.0 |
+| random | >= 3.0 |
 
 ## Modules
 

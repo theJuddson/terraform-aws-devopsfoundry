@@ -5,13 +5,16 @@ A containerized service on ECS Fargate behind an HTTPS ALB, framework-neutral: y
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 
-No requirements.
+| Name | Version |
+| ---- | ------- |
+| terraform | >= 1.7.0 |
+| aws | >= 5.60 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| aws | n/a |
+| aws | >= 5.60 |
 
 ## Modules
 

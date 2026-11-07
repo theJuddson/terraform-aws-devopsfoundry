@@ -2,9 +2,12 @@
 # credentials stored in a module-owned Secrets Manager secret. An app-specific
 # SNS->webhook subscription is left to the caller (the topic is exposed when enable_notifications=true).
 terraform {
+  required_version = ">= 1.7.0"
+
   required_providers {
     aws = {
-      source = "hashicorp/aws"
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
     }
   }
 }

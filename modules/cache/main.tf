@@ -2,12 +2,16 @@
 # The composite stores auth_token in a
 # Secrets Manager secret and wires REDIS_PASSWORD into the task.
 terraform {
+  required_version = ">= 1.7.0"
+
   required_providers {
     aws = {
-      source = "hashicorp/aws"
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
     }
     random = {
-      source = "hashicorp/random"
+      source  = "hashicorp/random"
+      version = ">= 3.0"
     }
   }
 }
@@ -35,7 +39,7 @@ resource "aws_elasticache_replication_group" "main" {
   node_type                  = var.node_type
   num_cache_clusters         = 1
   port                       = var.cache_port
-  parameter_group_name       = var.parameter_group_name
+  parameter_group_name       = var.parameter_group_name # tflint-ignore: aws_elasticache_replication_group_default_parameter_group # default.redis7 is intended; callers may pass their own
   subnet_group_name          = aws_elasticache_subnet_group.main.name
   security_group_ids         = [var.redis_security_group_id]
   at_rest_encryption_enabled = true

@@ -5,13 +5,16 @@ RDS PostgreSQL with an AWS-managed master password in Secrets Manager. Defaults 
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 
-No requirements.
+| Name | Version |
+| ---- | ------- |
+| terraform | >= 1.7.0 |
+| aws | >= 5.0 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| aws | n/a |
+| aws | >= 5.0 |
 
 ## Modules
 

@@ -5,14 +5,19 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 
-No requirements.
+| Name | Version |
+| ---- | ------- |
+| terraform | >= 1.7.0 |
+| aws | >= 5.60 |
+| namecheap | >= 2.1.0 |
+| random | >= 3.0 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| aws | n/a |
-| aws.us\_east\_1 | n/a |
+| aws | >= 5.60 |
+| aws.us\_east\_1 | >= 5.60 |
 
 ## Modules
 

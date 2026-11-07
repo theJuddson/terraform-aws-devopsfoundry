@@ -5,13 +5,16 @@ CloudFront alias records for the apex and www, and optional Google Workspace MX 
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 
-No requirements.
+| Name | Version |
+| ---- | ------- |
+| terraform | >= 1.7.0 |
+| aws | >= 5.0 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| aws | n/a |
+| aws | >= 5.0 |
 
 ## Modules
 
