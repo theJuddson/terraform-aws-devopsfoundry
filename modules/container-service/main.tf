@@ -5,9 +5,12 @@
 # ECS cluster/service/task-def, and an A-alias to the ALB at either
 # <subdomain>.<domain> or the apex <domain> (when subdomain is empty/"@").
 terraform {
+  required_version = ">= 1.7.0"
+
   required_providers {
     aws = {
-      source = "hashicorp/aws"
+      source  = "hashicorp/aws"
+      version = ">= 5.60"
     }
   }
 }
@@ -29,8 +32,7 @@ locals {
   # app's stack and are read-only here. This app still owns its target group,
   # task definition, service, and the listener rule/certificate that route its
   # host name — so the host platform's state never sees drift.
-  shared_alb     = !var.create_alb
-  shared_cluster = !var.create_cluster
+  shared_alb = !var.create_alb
 
   alb_dns_name       = var.create_alb ? aws_lb.main[0].dns_name : var.existing_alb_dns_name
   alb_zone_id        = var.create_alb ? aws_lb.main[0].zone_id : var.existing_alb_zone_id

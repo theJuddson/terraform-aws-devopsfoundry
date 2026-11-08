@@ -5,13 +5,16 @@ A VPC with public and private subnets, an optional single NAT gateway, and secur
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 
-No requirements.
+| Name | Version |
+| ---- | ------- |
+| terraform | >= 1.7.0 |
+| aws | >= 5.0 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| aws | n/a |
+| aws | >= 5.0 |
 
 ## Modules
 

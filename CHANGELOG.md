@@ -3,6 +3,13 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.2.4
+
+- Every module declares `required_version = ">= 1.7.0"` and minimum provider versions. The twelve modules that had
+  none now state the floor they already needed: aws `>= 5.0` (`>= 5.60` for `container-service` and `full-stack`,
+  which already required it through `ecr-repository`), namecheap `>= 2.1.0`, random `>= 3.0`. No resource changes.
+- tflint warnings now fail CI for every module, not only the ones added in v1.2.0.
+
 ## v1.2.3
 
 - README links to modules and docs are absolute GitHub URLs, so they work on the Terraform Registry page.

@@ -2,9 +2,12 @@
 # Separate from route53-zone because these depend on the CloudFront
 # distribution, which can't exist until the cert is validated.
 terraform {
+  required_version = ">= 1.7.0"
+
   required_providers {
     aws = {
-      source = "hashicorp/aws"
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
     }
   }
 }

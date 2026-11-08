@@ -9,16 +9,21 @@
 # With existing_zone_name set there is no zone/NS phase: records go into that
 # zone and the registrar is never touched.
 terraform {
+  required_version = ">= 1.7.0"
+
   required_providers {
     aws = {
       source                = "hashicorp/aws"
+      version               = ">= 5.60"
       configuration_aliases = [aws, aws.us_east_1]
     }
     namecheap = {
-      source = "namecheap/namecheap"
+      source  = "namecheap/namecheap"
+      version = ">= 2.1.0"
     }
     random = {
-      source = "hashicorp/random"
+      source  = "hashicorp/random"
+      version = ">= 3.0"
     }
   }
 }

@@ -19,7 +19,6 @@ else
 fi
 
 fail=0
-LEGACY_MODULES="acm-cert cache container-service database email full-stack namecheap-ns networking route53-records route53-zone shared-platform static-site"
 step() { printf '\n== %s: %s\n' "$1" "$2"; }
 
 terraform fmt -check -recursive modules examples tests || { echo "terraform fmt -check failed (run: terraform fmt -recursive modules examples tests)"; fail=1; }
@@ -39,13 +38,7 @@ for d in "${dirs[@]}"; do
     fail=1
   fi
   step tflint "$d"
-  if [[ " $LEGACY_MODULES " == *" $(basename "$d") "* && "$d" == modules/* ]]; then
-    # Modules from v1.1.0 and earlier: report, don't fail (fixing them would
-    # touch modules whose behavior must not change).
-    tflint --config "$ROOT/.tflint.hcl" --chdir "$d" --format compact --minimum-failure-severity=error || fail=1
-  else
-    tflint --config "$ROOT/.tflint.hcl" --chdir "$d" --format compact || fail=1
-  fi
+  tflint --config "$ROOT/.tflint.hcl" --chdir "$d" --format compact || fail=1
 done
 
 # .checkov.baseline holds the findings the v1.1.0 modules already had (see

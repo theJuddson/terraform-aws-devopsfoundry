@@ -2,9 +2,12 @@
 # for CloudFront, so the caller passes an aliased us-east-1 provider:
 #   module "acm_cert" { providers = { aws = aws.us_east_1 } ... }
 terraform {
+  required_version = ">= 1.7.0"
+
   required_providers {
     aws = {
-      source = "hashicorp/aws"
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
     }
   }
 }

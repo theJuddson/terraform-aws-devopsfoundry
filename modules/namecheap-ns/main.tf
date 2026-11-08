@@ -9,9 +9,12 @@
 # Provider creds come from the env (NAMECHEAP_API_USER / API_KEY / USER_NAME /
 # CLIENT_IP / USE_SANDBOX); the provider is configured in the site root.
 terraform {
+  required_version = ">= 1.7.0"
+
   required_providers {
     namecheap = {
-      source = "namecheap/namecheap"
+      source  = "namecheap/namecheap"
+      version = ">= 2.1.0"
     }
   }
 }

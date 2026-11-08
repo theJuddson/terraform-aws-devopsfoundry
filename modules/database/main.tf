@@ -2,9 +2,12 @@
 # Generic names + teardown-friendly
 # defaults (deletion protection off, skip final snapshot) for the generic tool.
 terraform {
+  required_version = ">= 1.7.0"
+
   required_providers {
     aws = {
-      source = "hashicorp/aws"
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
     }
   }
 }

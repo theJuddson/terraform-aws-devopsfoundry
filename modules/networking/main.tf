@@ -3,9 +3,12 @@
 # prefix and a parameterized container port, with RDS/Redis SGs gated on the
 # database/cache toggles.
 terraform {
+  required_version = ">= 1.7.0"
+
   required_providers {
     aws = {
-      source = "hashicorp/aws"
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
     }
   }
 }

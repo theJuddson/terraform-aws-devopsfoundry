@@ -4,9 +4,12 @@
 # BEFORE any CloudFront/cert-validation exists. Alias + email records live in
 # the separate route53-records module, which depends on CloudFront.
 terraform {
+  required_version = ">= 1.7.0"
+
   required_providers {
     aws = {
-      source = "hashicorp/aws"
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
     }
   }
 }

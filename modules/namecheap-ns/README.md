@@ -5,13 +5,16 @@ Points a Namecheap domain's custom nameservers at a Route53 hosted zone. It sets
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 
-No requirements.
+| Name | Version |
+| ---- | ------- |
+| terraform | >= 1.7.0 |
+| namecheap | >= 2.1.0 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| namecheap | n/a |
+| namecheap | >= 2.1.0 |
 
 ## Modules
 
