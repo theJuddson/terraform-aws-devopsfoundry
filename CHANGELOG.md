@@ -3,6 +3,12 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.2.6
+
+- `container-service`, `kms-key`, `shared-filesystem` and `task-runner` no longer use `data.aws_region.current.name`,
+  which aws provider 6.x deprecates. They read the region in a way that works on both 5.x and 6.x, so the minimum
+  provider versions are unchanged. No resource changes.
+
 ## v1.2.5
 
 - `full-stack` gains `manage_nameservers` (default `true`, no change for existing callers). Set it `false` once the
@@ -13,12 +19,6 @@ the earlier versions below were private and their tags are not in this repositor
   ```sh
   terraform state rm 'module.app.module.namecheap_ns[0].namecheap_domain_records.ns'
   ```
-
-## v1.2.5
-
-- `container-service`, `kms-key`, `shared-filesystem` and `task-runner` no longer use `data.aws_region.current.name`,
-  which aws provider 6.x deprecates. They read the region in a way that works on both 5.x and 6.x, so the minimum
-  provider versions are unchanged. No resource changes.
 
 ## v1.2.4
 
