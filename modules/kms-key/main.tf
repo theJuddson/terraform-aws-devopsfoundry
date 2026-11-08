@@ -5,12 +5,14 @@
 
 data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
+# The region attribute is "region" on aws provider 6.x and "name" on 5.x (deprecated
+# in 6.x). Reading it by key works on both without a deprecation warning.
 data "aws_region" "current" {}
 
 locals {
   account_id   = data.aws_caller_identity.current.account_id
   partition    = data.aws_partition.current.partition
-  region       = data.aws_region.current.name
+  region       = lookup(data.aws_region.current, "region", lookup(data.aws_region.current, "name", null))
   account_root = "arn:${local.partition}:iam::${local.account_id}:root"
   key_arns     = "arn:${local.partition}:kms:${local.region}:${local.account_id}:key/*"
   alias_arns   = "arn:${local.partition}:kms:${local.region}:${local.account_id}:alias/${var.runtime_alias_prefix}/*"
