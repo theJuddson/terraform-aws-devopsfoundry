@@ -57,6 +57,6 @@ is a candidate for an opt-in variable in a later release.
 
 ## tflint
 
-The modules from v1.1.0 have tflint warnings (no `required_version`, no provider version constraint, one unused
-local in container-service). `bin/check-modules` prints them but fails only on errors for those modules; every
-other module must be free of warnings.
+Every module must be free of tflint warnings and notices; `bin/check-modules` fails on any. The modules from v1.1.0
+had warnings until v1.2.4 added their version constraints. One notice is ignored inline, with its reason:
+`cache` uses AWS's default `default.redis7` parameter group on purpose.

@@ -3,6 +3,11 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.2.8
+
+- Documentation only. Module READMEs show the Terraform Registry source with `version = "~> 1.2"` instead of a git
+  source pinned to v1.2.1, and the main README's git examples pin v1.2.7. No module changes.
+
 ## v1.2.7
 
 - Inputs that used to fail only at apply, or publish a broken record, now fail at plan:
