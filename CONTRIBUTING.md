@@ -18,10 +18,14 @@ Install terraform, tflint, terraform-docs and checkov (`pip install checkov==3.4
 graph checks), then run:
 
 ```sh
-bin/check-modules             # fmt, validate, tflint, checkov; no AWS calls
+bin/check-modules             # fmt, validate, tflint, terraform test, checkov; no AWS calls
 bin/check-compat v1.2.0       # offline proof that container-service plans no change
 terraform-docs -c .terraform-docs.yml modules/<name>   # refresh a module's README tables
 ```
+
+Module tests live in `modules/<name>/tests/*.tftest.hcl`. They only plan, against mocked providers, and check what each
+input and mode creates or rejects; `modules/full-stack/tests/modes.tftest.hcl` shows the pattern. A change to a module's
+behaviour should come with a test that fails without it. Run one module's tests with `terraform test` in its directory.
 
 CI runs the same checks on every pull request. New checkov findings must be fixed or suppressed in the code with a
 `#checkov:skip=<id>:<reason>` comment and added to `docs/checkov-accepted.md`.

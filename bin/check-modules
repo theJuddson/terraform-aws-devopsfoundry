@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Static checks for every Terraform module and example: fmt, validate, tflint,
-# checkov. Makes no AWS call (validate runs with -backend=false). Used by CI.
+# terraform test (mocked providers), checkov. Makes no AWS call (validate runs
+# with -backend=false; tests plan against mocks). Used by CI.
 #
 #   bin/check-modules                 # everything
 #   bin/check-modules modules/kms-key # one or more directories
@@ -39,6 +40,15 @@ for d in "${dirs[@]}"; do
   fi
   step tflint "$d"
   tflint --config "$ROOT/.tflint.hcl" --chdir "$d" --format compact || fail=1
+done
+
+# Plan-only tests against mocked providers (modules/<name>/tests/*.tftest.hcl).
+for d in "${dirs[@]}"; do
+  compgen -G "$d/tests/*.tftest.hcl" >/dev/null || continue
+  step test "$d"
+  if ! (cd "$d" && terraform init -backend=false -input=false -no-color >/dev/null && terraform test -no-color); then
+    fail=1
+  fi
 done
 
 # .checkov.baseline holds the findings the v1.1.0 modules already had (see
