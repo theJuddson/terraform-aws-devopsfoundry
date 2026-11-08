@@ -1,0 +1,53 @@
+name: release
+
+# Pushing a vMAJOR.MINOR.PATCH tag creates its GitHub Release, with the notes
+# taken from that version's CHANGELOG.md section. Run it by hand with a tag to
+# add a Release for an existing tag that has none.
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to create the Release for, e.g. v1.2.5
+        required: true
+
+permissions:
+  contents: write # create the Release
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the tag and main, to check one is on the other
+
+      - name: Tag is a release tag on main
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::not a release tag: $TAG"; exit 1; }
+          git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || { echo "::error::no tag $TAG"; exit 1; }
+          git merge-base --is-ancestor "refs/tags/$TAG" origin/main \
+            || { echo "::error::$TAG is not on main"; exit 1; }
+
+      - name: Notes from CHANGELOG.md at the tag
+        run: |
+          # The script comes from this checkout (older tags predate it); the
+          # CHANGELOG comes from the tag.
+          git show "refs/tags/$TAG:CHANGELOG.md" > "$RUNNER_TEMP/CHANGELOG.md"
+          bin/release-notes "$TAG" "$RUNNER_TEMP/CHANGELOG.md" > "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md"
+
+      - name: Create the Release
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; leaving it unchanged."
+          else
+            gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
+          fi
