@@ -29,6 +29,7 @@ CI runs the same checks on every pull request. New checkov findings must be fixe
 ## Commits and releases
 
 One logical change per commit. Releases are git tags (`vMAJOR.MINOR.PATCH`) made after the pull request is merged;
-add an entry to `CHANGELOG.md` in the same pull request.
+add an entry to `CHANGELOG.md` in the same pull request. Pushing the tag creates the GitHub Release, with that
+entry as its notes (`.github/workflows/release.yml`); preview them with `bin/release-notes <tag>`.
 
 By contributing you agree that your contribution is licensed under the Apache License 2.0.

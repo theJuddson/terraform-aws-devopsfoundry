@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Prints the CHANGELOG.md section for a release tag, without its heading. Used by
+# .github/workflows/release.yml for the GitHub Release notes. Fails if the
+# section is missing or empty.
+#
+#   bin/release-notes v1.2.6                 # from ./CHANGELOG.md
+#   bin/release-notes v1.2.6 path/CHANGELOG  # from another copy
+set -euo pipefail
+tag="${1:?usage: bin/release-notes vMAJOR.MINOR.PATCH [changelog]}"
+changelog="${2:-$(dirname "$0")/../CHANGELOG.md}"
+[[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "not a release tag: $tag" >&2; exit 1; }
+
+notes="$(awk -v h="## $tag" '
+  $0 == h          { found = 1; next }
+  found && /^## /  { exit }
+  found            { print }
+' "$changelog" | sed -e '/./,$!d' | awk '
+  # Rejoin the CHANGELOG hard wraps: GitHub release notes keep single line breaks.
+  /^ *```/                                  { fence = !fence; flush(); print; next }
+  !fence && prev != "" && /^  +[^ -]/ && prev !~ /^ *```/ {
+                                              sub(/^ +/, ""); prev = prev " " $0; next }
+                                            { flush(); prev = $0; have = 1 }
+  END                                       { flush() }
+  function flush() { if (have) print prev; prev = ""; have = 0 }
+')"   # drop leading blank lines, then unwrap
+
+[[ -n "${notes//[[:space:]]/}" ]] || { echo "$changelog has no entry for $tag" >&2; exit 1; }
+printf '%s\n' "$notes"
