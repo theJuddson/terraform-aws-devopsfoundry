@@ -3,6 +3,17 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.2.7
+
+- Inputs that used to fail only at apply, or publish a broken record, now fail at plan:
+  - `email`: `dmarc_policy` must be `none`, `quarantine` or `reject` (any case), `dmarc_rua_email` must be an email
+    address, and `mail_from_subdomain` must be empty or DNS labels.
+  - `kms-key`: `deletion_window_in_days` must be a whole number from 7 to 30, `rotation_period_in_days` from 90 to 2560.
+  - `container-service`: `create_alb = false` needs `existing_alb_dns_name`, `existing_alb_zone_id` and
+    `existing_https_listener_arn`; `create_cluster = false` needs `existing_cluster_arn` and `existing_cluster_name`.
+- No resource changes for valid inputs. A plan that now fails had a value AWS would reject or that produced an invalid
+  DMARC record.
+
 ## v1.2.6
 
 - `container-service`, `kms-key`, `shared-filesystem` and `task-runner` no longer use `data.aws_region.current.name`,
