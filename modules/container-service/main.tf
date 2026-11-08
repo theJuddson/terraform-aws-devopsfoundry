@@ -15,9 +15,12 @@ terraform {
   }
 }
 
+# The region attribute is "region" on aws provider 6.x and "name" on 5.x (deprecated
+# in 6.x). Reading it by key works on both without a deprecation warning.
 data "aws_region" "current" {}
 
 locals {
+  region      = lookup(data.aws_region.current, "region", lookup(data.aws_region.current, "name", null))
   name_prefix = var.name
   # Empty (or "@") subdomain serves the app at the apex domain itself.
   apex         = var.subdomain == "" || var.subdomain == "@"
@@ -226,7 +229,7 @@ resource "aws_ecs_task_definition" "app" {
       logDriver = "awslogs"
       options = {
         awslogs-group         = aws_cloudwatch_log_group.app.name
-        awslogs-region        = data.aws_region.current.name
+        awslogs-region        = local.region
         awslogs-stream-prefix = var.service_name
       }
     }

@@ -5,11 +5,14 @@
 
 data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
+# The region attribute is "region" on aws provider 6.x and "name" on 5.x (deprecated
+# in 6.x). Reading it by key works on both without a deprecation warning.
 data "aws_region" "current" {}
 
 locals {
+  region     = lookup(data.aws_region.current, "region", lookup(data.aws_region.current, "name", null))
   account_id = data.aws_caller_identity.current.account_id
-  arn_base   = "arn:${data.aws_partition.current.partition}:elasticfilesystem:${data.aws_region.current.name}:${local.account_id}"
+  arn_base   = "arn:${data.aws_partition.current.partition}:elasticfilesystem:${local.region}:${local.account_id}"
   tag_value  = coalesce(var.runtime_tag_value, var.name)
   request    = "aws:RequestTag/${var.runtime_tag_key}"
   resource   = "aws:ResourceTag/${var.runtime_tag_key}"
@@ -236,9 +239,9 @@ data "aws_iam_policy_document" "runtime" {
       sid     = "MountTargetNetworkInterfaces"
       actions = ["ec2:CreateNetworkInterface"]
       resources = [
-        "arn:${data.aws_partition.current.partition}:ec2:${data.aws_region.current.name}:${local.account_id}:network-interface/*",
-        "arn:${data.aws_partition.current.partition}:ec2:${data.aws_region.current.name}:${local.account_id}:subnet/*",
-        "arn:${data.aws_partition.current.partition}:ec2:${data.aws_region.current.name}:${local.account_id}:security-group/*",
+        "arn:${data.aws_partition.current.partition}:ec2:${local.region}:${local.account_id}:network-interface/*",
+        "arn:${data.aws_partition.current.partition}:ec2:${local.region}:${local.account_id}:subnet/*",
+        "arn:${data.aws_partition.current.partition}:ec2:${local.region}:${local.account_id}:security-group/*",
       ]
     }
   }

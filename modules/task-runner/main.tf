@@ -6,12 +6,14 @@
 
 data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
+# The region attribute is "region" on aws provider 6.x and "name" on 5.x (deprecated
+# in 6.x). Reading it by key works on both without a deprecation warning.
 data "aws_region" "current" {}
 
 locals {
   account_id = data.aws_caller_identity.current.account_id
   partition  = data.aws_partition.current.partition
-  region     = data.aws_region.current.name
+  region     = lookup(data.aws_region.current, "region", lookup(data.aws_region.current, "name", null))
   ecs_arn    = "arn:${local.partition}:ecs:${local.region}:${local.account_id}"
 
   efs_file_system_ids = distinct([for v in var.efs_volumes : v.file_system_id])
