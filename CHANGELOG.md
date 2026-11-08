@@ -3,6 +3,17 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.2.5
+
+- `full-stack` gains `manage_nameservers` (default `true`, no change for existing callers). Set it `false` once the
+  Namecheap delegation is in place, so plans and deploys stop calling the Namecheap API and no longer need a
+  whitelisted IP. The `namecheap` provider must still be passed in and its env vars set, but it makes no API calls.
+  On an existing stack, run this once before the first apply with it `false`, or Terraform deletes the delegation:
+
+  ```sh
+  terraform state rm 'module.app.module.namecheap_ns[0].namecheap_domain_records.ns'
+  ```
+
 ## v1.2.4
 
 - Every module declares `required_version = ">= 1.7.0"` and minimum provider versions. The twelve modules that had
