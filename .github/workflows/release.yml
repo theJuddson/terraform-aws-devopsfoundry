@@ -49,5 +49,10 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists; leaving it unchanged."
           else
-            gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
+            # Only the highest version is "Latest", so backfilling an older tag
+            # doesn't take the badge from the current release.
+            highest=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -1)
+            latest=false; [[ "$TAG" == "$highest" ]] && latest=true
+            gh release create "$TAG" --verify-tag --title "$TAG" --latest="$latest" \
+              --notes-file "$RUNNER_TEMP/notes.md"
           fi
