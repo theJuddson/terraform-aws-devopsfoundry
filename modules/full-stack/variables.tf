@@ -212,3 +212,16 @@ variable "existing_zone_name" {
   type        = string
   default     = ""
 }
+
+variable "manage_nameservers" {
+  description = <<-EOT
+    Whether Terraform manages the domain's Namecheap nameserver delegation to the Route53 zone (ignored when
+    existing_zone_name is set). The delegation is set once and never changes, but managing it makes every plan
+    call the Namecheap API, which only answers whitelisted IPs. Set false after the first apply so deploys
+    never need Namecheap. On an existing stack, first run
+    `terraform state rm 'module.<name>.module.namecheap_ns[0].namecheap_domain_records.ns'`; without it,
+    Terraform deletes the delegation. (A `removed` block can't do this: the module block is still declared.)
+  EOT
+  type        = bool
+  default     = true
+}

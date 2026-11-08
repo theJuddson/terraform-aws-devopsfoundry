@@ -95,7 +95,7 @@ module "route53_zone" {
 
 module "namecheap_ns" {
   source      = "../namecheap-ns"
-  count       = local.use_existing_zone ? 0 : 1
+  count       = local.use_existing_zone || !var.manage_nameservers ? 0 : 1
   domain_name = var.domain_name
   nameservers = module.route53_zone[0].name_servers
 }
