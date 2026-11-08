@@ -8,7 +8,8 @@ still holds images.
 
 ```hcl
 module "ecr" {
-  source               = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/ecr-repository?ref=v1.2.1"
+  source               = "theJuddson/devopsfoundry/aws//modules/ecr-repository"
+  version              = "~> 1.2"
   name                 = "my-job"
   untagged_expire_days = 7
 }
