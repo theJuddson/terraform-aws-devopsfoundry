@@ -13,12 +13,20 @@ variable "deletion_window_in_days" {
   description = "Waiting period between scheduling deletion and the key being deleted (7-30)."
   type        = number
   default     = 30
+  validation {
+    condition     = floor(var.deletion_window_in_days) == var.deletion_window_in_days && var.deletion_window_in_days >= 7 && var.deletion_window_in_days <= 30
+    error_message = "deletion_window_in_days must be a whole number from 7 to 30."
+  }
 }
 
 variable "rotation_period_in_days" {
   description = "Days between automatic rotations of the key material (90-2560). Rotation is always on."
   type        = number
   default     = 365
+  validation {
+    condition     = floor(var.rotation_period_in_days) == var.rotation_period_in_days && var.rotation_period_in_days >= 90 && var.rotation_period_in_days <= 2560
+    error_message = "rotation_period_in_days must be a whole number from 90 to 2560."
+  }
 }
 
 variable "key_administrator_arns" {

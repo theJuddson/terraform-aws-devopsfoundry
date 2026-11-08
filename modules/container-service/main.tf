@@ -278,6 +278,13 @@ resource "aws_ecs_service" "app" {
   # `aws ecs update-service --force-new-deployment`, so ignore task_definition
   # churn from out-of-band image pushes is not needed (tag string is stable).
   depends_on = [aws_lb_listener.https, aws_lb_listener_rule.host_forward]
+
+  lifecycle {
+    precondition {
+      condition     = var.create_cluster || (var.existing_cluster_arn != "" && var.existing_cluster_name != "")
+      error_message = "create_cluster = false needs existing_cluster_arn and existing_cluster_name."
+    }
+  }
 }
 
 # ── Route53 alias (service FQDN -> ALB; apex alias when subdomain empty) ──
@@ -289,6 +296,15 @@ resource "aws_route53_record" "service" {
     name                   = local.alb_dns_name
     zone_id                = local.alb_zone_id
     evaluate_target_health = true
+  }
+
+  lifecycle {
+    precondition {
+      condition = var.create_alb || (
+        var.existing_alb_dns_name != "" && var.existing_alb_zone_id != "" && var.existing_https_listener_arn != ""
+      )
+      error_message = "create_alb = false needs existing_alb_dns_name, existing_alb_zone_id and existing_https_listener_arn."
+    }
   }
 }
 
