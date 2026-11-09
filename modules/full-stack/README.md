@@ -66,6 +66,7 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | db\_engine\_version | n/a | `string` | `"16.11"` | no |
 | db\_iam\_database\_authentication\_enabled | n/a | `bool` | `false` | no |
 | db\_instance\_class | n/a | `string` | `"db.t4g.micro"` | no |
+| db\_log\_min\_duration\_ms | Log Postgres statements slower than this many ms (0 = all, null = off). Takes effect after the instance's next reboot. | `number` | `null` | no |
 | db\_monitoring\_interval | Enhanced monitoring interval in seconds (0 = off). | `number` | `0` | no |
 | db\_multi\_az | n/a | `bool` | `false` | no |
 | db\_name | ── Database tuning ──────────────────────────────────── | `string` | `"appdb"` | no |

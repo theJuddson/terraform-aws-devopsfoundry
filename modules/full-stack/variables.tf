@@ -159,6 +159,11 @@ variable "db_iam_database_authentication_enabled" {
   type    = bool
   default = false
 }
+variable "db_log_min_duration_ms" {
+  description = "Log Postgres statements slower than this many ms (0 = all, null = off). Takes effect after the instance's next reboot."
+  type        = number
+  default     = null
+}
 
 # ── Cache tuning ───────────────────────────────────────
 variable "cache_node_type" {

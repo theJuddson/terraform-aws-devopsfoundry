@@ -79,6 +79,7 @@ enable_email    = __ENABLE_EMAIL__   # SES          -> injects MAIL_HOST/MAIL_PO
 # alb_deletion_protection         = true   # turn off again before destroy-app
 # db_performance_insights_enabled = true   # free 7-day retention
 # db_monitoring_interval          = 60     # enhanced monitoring, seconds
+# db_log_min_duration_ms          = 500    # log queries slower than 500 ms (after a reboot)
 # cache_num_cache_clusters        = 2      # Redis replica + Multi-AZ failover
 
 # ── WAF on the ALB (opt-in) ────────────────────────────

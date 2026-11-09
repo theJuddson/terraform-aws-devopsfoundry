@@ -153,6 +153,11 @@ variable "db_iam_database_authentication_enabled" {
   type    = bool
   default = false
 }
+variable "db_log_min_duration_ms" {
+  description = "Log Postgres statements slower than this many ms (null = off)"
+  type        = number
+  default     = null
+}
 variable "cache_num_cache_clusters" {
   description = "Redis nodes; 2 or more adds replicas with Multi-AZ failover"
   type        = number

@@ -191,6 +191,7 @@ module "database" {
   performance_insights_enabled        = var.db_performance_insights_enabled
   monitoring_interval                 = var.db_monitoring_interval
   iam_database_authentication_enabled = var.db_iam_database_authentication_enabled
+  log_min_duration_ms                 = var.db_log_min_duration_ms
 }
 
 module "cache" {
