@@ -18,6 +18,10 @@ mock_provider "aws" {
   mock_data "aws_subnets" {
     defaults = { ids = ["subnet-a", "subnet-b"] }
   }
+  # A host built with a NAT gateway: its private subnets route 0.0.0.0/0 out.
+  mock_data "aws_route_table" {
+    defaults = { routes = [{ cidr_block = "0.0.0.0/0", nat_gateway_id = "nat-mock" }] }
+  }
 }
 
 variables {
@@ -164,4 +168,58 @@ run "database_and_cache_get_app_owned_security_groups" {
     condition     = length(aws_security_group_rule.redis_ingress_from_api) == 1 && aws_security_group_rule.redis_ingress_from_api[0].from_port == 6380 && aws_security_group_rule.redis_ingress_from_api[0].to_port == 6380
     error_message = "The cache must admit cache_port from this app's tasks."
   }
+}
+
+run "host_with_nat_lets_tasks_run_in_private_subnets" {
+  command = plan
+
+  assert {
+    condition     = output.private_subnets_have_egress
+    error_message = "Private subnets with a 0.0.0.0/0 route must count as having egress."
+  }
+  assert {
+    condition     = toset(keys(data.aws_route_table.private)) == toset(["subnet-a", "subnet-b"])
+    error_message = "Every private subnet's route table must be checked, not just one."
+  }
+}
+
+# A host built with enable_nat_gateway = false: no default route in its private subnets.
+run "host_without_nat_rejects_tasks_in_private_subnets" {
+  command = plan
+
+  override_data {
+    target = data.aws_route_table.private
+    values = { routes = [] }
+  }
+
+  expect_failures = [aws_security_group.api]
+}
+
+run "host_without_nat_accepts_tasks_in_public_subnets" {
+  command = plan
+
+  variables {
+    tasks_in_public_subnets = true
+  }
+
+  override_data {
+    target = data.aws_route_table.private
+    values = { routes = [] }
+  }
+
+  assert {
+    condition     = output.private_subnets_have_egress == false
+    error_message = "Private subnets without a default route must be reported as having no egress."
+  }
+}
+
+run "a_local_route_alone_is_not_egress" {
+  command = plan
+
+  override_data {
+    target = data.aws_route_table.private
+    values = { routes = [{ cidr_block = "10.0.0.0/16", gateway_id = "local" }] }
+  }
+
+  expect_failures = [aws_security_group.api]
 }

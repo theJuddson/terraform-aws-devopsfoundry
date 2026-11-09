@@ -47,3 +47,9 @@ variable "https_listener_port" {
   type        = number
   default     = 443
 }
+
+variable "tasks_in_public_subnets" {
+  description = "Whether this app's tasks run in the public subnets (container-service's setting of the same name). When false, the plan fails if the platform's private subnets have no route to the internet."
+  type        = bool
+  default     = false
+}

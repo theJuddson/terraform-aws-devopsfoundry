@@ -95,7 +95,7 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | service\_name | Short container/service name | `string` | `"app"` | no |
 | shared\_platform | Slug of an EXISTING DevOpsFoundry app whose VPC, NAT gateway, ALB and ECS<br/>cluster this app should share (e.g. "other-app-com"). Empty (the default)<br/>provisions dedicated infrastructure.<br/><br/>Sharing removes the two largest fixed costs — NAT (~$33/mo) and ALB<br/>(~$16/mo) — at the price of a shared failure domain with the host platform.<br/>A database, when enabled, is still this app's own. | `string` | `""` | no |
 | subdomain | Subdomain fronting the service (api -> api.example.com). Empty or "@" serves at the apex (example.com). | `string` | `"api"` | no |
-| tasks\_in\_public\_subnets | Run ECS tasks in public subnets with public IPs (no NAT needed). Inbound stays ALB-only. | `bool` | `false` | no |
+| tasks\_in\_public\_subnets | Run ECS tasks in public subnets with public IPs (no NAT needed). Inbound stays ALB-only. In shared-platform mode this must match the host: true if the host has no NAT gateway (the plan fails otherwise). | `bool` | `false` | no |
 | vpc\_cidr | ── Networking ───────────────────────────────────────── | `string` | `"10.0.0.0/16"` | no |
 | waf\_count\_only | Count WAF matches without blocking. Start here on a live ALB, then set false to enforce. | `bool` | `false` | no |
 | waf\_managed\_rule\_groups | AWS managed rule groups to apply, in order. | `list(string)` | <pre>[<br/>  "AWSManagedRulesAmazonIpReputationList",<br/>  "AWSManagedRulesCommonRuleSet",<br/>  "AWSManagedRulesKnownBadInputsRuleSet"<br/>]</pre> | no |

@@ -55,7 +55,9 @@ shared_platform = "__SHARED_PLATFORM__"
 #
 # Set BOTH or neither: no NAT with tasks still in private subnets leaves them
 # with no route out, and they will fail to pull their image.
-# Ignored in shared-platform mode — the host platform already decided this.
+# In shared-platform mode enable_nat_gateway is ignored (the host platform
+# decided it), but tasks_in_public_subnets must match the host: if the host has
+# no NAT, set it true here too. The plan fails with that advice otherwise.
 # enable_nat_gateway      = false
 # tasks_in_public_subnets = true
 

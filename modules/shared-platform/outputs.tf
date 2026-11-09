@@ -60,3 +60,8 @@ output "ecs_cluster_arn" {
 output "ecs_cluster_name" {
   value = data.aws_ecs_cluster.platform.cluster_name
 }
+
+output "private_subnets_have_egress" {
+  description = "Whether every private subnet has a default route (a NAT gateway or other egress). False on a platform built with enable_nat_gateway = false."
+  value       = local.private_subnets_have_egress
+}

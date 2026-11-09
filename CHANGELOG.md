@@ -3,6 +3,17 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.3.1
+
+- Fix (#34): a guest app on a shared platform built without a NAT gateway put its tasks in the host's private
+  subnets, which have no route out, so they never started and `deploy-app` failed only after its 20-minute timeout.
+  The plan now fails instead, saying to set `tasks_in_public_subnets = true` as the host does (or give the host a
+  NAT gateway).
+  - `shared-platform` checks the host's private route tables for a default route, takes a new
+    `tasks_in_public_subnets` input (default `false`) and outputs `private_subnets_have_egress`.
+  - `full-stack` passes `tasks_in_public_subnets` to it.
+- No change for guests on a host with a NAT gateway. Deploying a guest now also needs `ec2:DescribeRouteTables`.
+
 ## v1.3.0
 
 - New opt-in settings, all off by default, so existing plans are unchanged:

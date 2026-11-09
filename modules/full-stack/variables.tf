@@ -228,7 +228,7 @@ variable "enable_nat_gateway" {
 }
 
 variable "tasks_in_public_subnets" {
-  description = "Run ECS tasks in public subnets with public IPs (no NAT needed). Inbound stays ALB-only."
+  description = "Run ECS tasks in public subnets with public IPs (no NAT needed). Inbound stays ALB-only. In shared-platform mode this must match the host: true if the host has no NAT gateway (the plan fails otherwise)."
   type        = bool
   default     = false
 }
