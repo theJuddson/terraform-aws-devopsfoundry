@@ -44,8 +44,17 @@ A containerized service on ECS Fargate behind an HTTPS ALB, framework-neutral: y
 | [aws_lb_target_group.app](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_target_group) | resource |
 | [aws_route53_record.service](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
 | [aws_route53_record.www](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
+| [aws_s3_bucket.alb_logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket) | resource |
+| [aws_s3_bucket_lifecycle_configuration.alb_logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_lifecycle_configuration) | resource |
+| [aws_s3_bucket_ownership_controls.alb_logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_ownership_controls) | resource |
+| [aws_s3_bucket_policy.alb_logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_policy) | resource |
+| [aws_s3_bucket_public_access_block.alb_logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_public_access_block) | resource |
+| [aws_s3_bucket_server_side_encryption_configuration.alb_logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_server_side_encryption_configuration) | resource |
 | [aws_wafv2_web_acl.alb](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/wafv2_web_acl) | resource |
 | [aws_wafv2_web_acl_association.alb](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/wafv2_web_acl_association) | resource |
+| [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
+| [aws_elb_service_account.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/elb_service_account) | data source |
+| [aws_iam_policy_document.alb_logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.ecs_tasks_assume](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.task_execution_secrets](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_region.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/region) | data source |
@@ -63,6 +72,9 @@ A containerized service on ECS Fargate behind an HTTPS ALB, framework-neutral: y
 | public\_subnet\_ids | n/a | `list(string)` | n/a | yes |
 | vpc\_id | ── Networking wiring ────────────────────────────────── | `string` | n/a | yes |
 | zone\_id | Route53 hosted zone ID for the domain | `string` | n/a | yes |
+| alb\_access\_logs | Write ALB access logs to S3. Creates a private, SSE-S3 encrypted bucket <name>-alb-logs-<account> unless alb\_access\_logs\_bucket names one. Ignored when create\_alb = false. | `bool` | `false` | no |
+| alb\_access\_logs\_bucket | Existing bucket for the ALB access logs, which must already allow ELB log delivery (see AWS's ALB access logs guide). Empty (default) = create one. | `string` | `""` | no |
+| alb\_access\_logs\_retention\_days | Days to keep access logs in the bucket this module creates. | `number` | `90` | no |
 | alb\_deletion\_protection | Block deleting the ALB until this is set back to false. Leave off if you tear stacks down with destroy-app. Ignored when create\_alb = false. | `bool` | `false` | no |
 | container\_image | Image URI. Empty -> the module's own ECR repo :latest tag. | `string` | `""` | no |
 | container\_insights | Turn on CloudWatch Container Insights for the cluster (billed per metric). Ignored when create\_cluster = false. | `bool` | `false` | no |

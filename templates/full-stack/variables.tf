@@ -153,6 +153,11 @@ variable "db_iam_database_authentication_enabled" {
   type    = bool
   default = false
 }
+variable "alb_access_logs" {
+  description = "ALB access logs to a private S3 bucket (storage billed; 90-day expiry). Ignored in shared-platform mode."
+  type        = bool
+  default     = false
+}
 variable "kms_key_arn" {
   description = "Customer managed KMS key for Redis, secrets and logs (null = AWS-managed keys)"
   type        = string

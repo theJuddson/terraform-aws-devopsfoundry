@@ -278,3 +278,26 @@ variable "secrets_kms_key_arns" {
   type        = list(string)
   default     = []
 }
+
+variable "alb_access_logs" {
+  description = "Write ALB access logs to S3. Creates a private, SSE-S3 encrypted bucket <name>-alb-logs-<account> unless alb_access_logs_bucket names one. Ignored when create_alb = false."
+  type        = bool
+  default     = false
+}
+
+variable "alb_access_logs_bucket" {
+  description = "Existing bucket for the ALB access logs, which must already allow ELB log delivery (see AWS's ALB access logs guide). Empty (default) = create one."
+  type        = string
+  default     = ""
+}
+
+variable "alb_access_logs_retention_days" {
+  description = "Days to keep access logs in the bucket this module creates."
+  type        = number
+  default     = 90
+
+  validation {
+    condition     = var.alb_access_logs_retention_days >= 1 && floor(var.alb_access_logs_retention_days) == var.alb_access_logs_retention_days
+    error_message = "alb_access_logs_retention_days must be a whole number of days, 1 or more."
+  }
+}

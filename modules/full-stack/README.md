@@ -49,6 +49,9 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | ---- | ----------- | ---- | ------- | :------: |
 | domain\_name | Apex domain registered at Namecheap | `string` | n/a | yes |
 | name | Resource-name prefix / app slug (e.g. myapp-com) | `string` | n/a | yes |
+| alb\_access\_logs | Write ALB access logs to S3 (a private bucket <name>-alb-logs-<account>, unless alb\_access\_logs\_bucket names one). Ignored in shared-platform mode. | `bool` | `false` | no |
+| alb\_access\_logs\_bucket | Existing bucket for the access logs; it must already allow ELB log delivery. Empty = create one. | `string` | `""` | no |
+| alb\_access\_logs\_retention\_days | n/a | `number` | `90` | no |
 | alb\_deletion\_protection | Block deleting the ALB; turn off again before destroy-app. Ignored in shared-platform mode. | `bool` | `false` | no |
 | aws\_region | n/a | `string` | `"us-east-1"` | no |
 | az\_count | n/a | `number` | `2` | no |

@@ -273,6 +273,20 @@ variable "container_insights" {
   type        = bool
   default     = false
 }
+variable "alb_access_logs" {
+  description = "Write ALB access logs to S3 (a private bucket <name>-alb-logs-<account>, unless alb_access_logs_bucket names one). Ignored in shared-platform mode."
+  type        = bool
+  default     = false
+}
+variable "alb_access_logs_bucket" {
+  description = "Existing bucket for the access logs; it must already allow ELB log delivery. Empty = create one."
+  type        = string
+  default     = ""
+}
+variable "alb_access_logs_retention_days" {
+  type    = number
+  default = 90
+}
 variable "alb_deletion_protection" {
   description = "Block deleting the ALB; turn off again before destroy-app. Ignored in shared-platform mode."
   type        = bool

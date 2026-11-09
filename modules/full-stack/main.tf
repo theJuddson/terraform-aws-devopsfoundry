@@ -274,7 +274,11 @@ module "container_service" {
   container_insights      = var.container_insights
   alb_deletion_protection = var.alb_deletion_protection
   log_kms_key_arn         = var.kms_key_arn
-  secrets_kms_key_arns    = var.kms_key_arn == null ? [] : [var.kms_key_arn]
+
+  alb_access_logs                = var.alb_access_logs
+  alb_access_logs_bucket         = var.alb_access_logs_bucket
+  alb_access_logs_retention_days = var.alb_access_logs_retention_days
+  secrets_kms_key_arns           = var.kms_key_arn == null ? [] : [var.kms_key_arn]
 
   create_waf              = var.create_waf
   waf_web_acl_arn         = var.waf_web_acl_arn
