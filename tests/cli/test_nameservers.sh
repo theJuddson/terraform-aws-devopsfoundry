@@ -107,7 +107,7 @@ t_new_app_releases_after_provisioning() {
   rm -rf "$TMP/app/.devopsfoundry"   # new-app scaffolds it
   NAMECHEAP_API_KEY=x NAMECHEAP_CLIENT_IP=203.0.113.9 \
     "$DF/bin/new-app" example.com --config "$TMP/app/.devopsfoundry" --yes || fail "new-app should succeed"
-  assert_before " apply .*-var desired_count=0" "state rm $ADDR_RE"
+  assert_before " apply .*phase-2" "state rm $ADDR_RE"
   [[ "$(bash -c "source $DF/lib/common.sh; df_tfvar $TMP/app/.devopsfoundry/app.tfvars manage_nameservers")" == "false" ]] || fail "new-app must leave manage_nameservers = false"
 }
 

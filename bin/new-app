@@ -9,7 +9,13 @@
 #               [--enable-db] [--enable-cache] [--enable-email]
 #               [--shared-platform SLUG] [--existing-zone ZONE]
 #               [--module-path DIR | --module-ref GITREF] [--backend-config FILE]
-#               [--sandbox] [--resume] [--yes]
+#               [--sandbox] [--resume] [--plan-only] [--yes]
+#   Each phase is planned first and its summary shown; without --yes you are
+#   asked before it applies, and exactly the reviewed plan is applied.
+#   --plan-only plans and applies nothing. On a new app only phase 1a can be
+#   planned exactly (later phases need the certificate it creates); with
+#   --resume after phase 1a, the rest can be too. Plans are kept under
+#   <config>/.terraform/devopsfoundry-plans (they contain secrets; never commit them).
 #   --apex serves the app at the bare domain (domain.com) instead of a subdomain.
 #   --shared-platform attaches to an EXISTING app's VPC/NAT/ALB/ECS cluster
 #     instead of provisioning dedicated ones, which removes the two largest
@@ -30,7 +36,7 @@ df_load_env
 DOMAIN=""; CONFIG=""; NAME=""; SUBDOMAIN="api"
 EN_DB=false; EN_CACHE=false; EN_EMAIL=false; SHARED_PLATFORM=""; EXISTING_ZONE=""
 MODULE_PATH="../../DevOpsFoundry"; MODULE_REF=""
-SANDBOX=false; RESUME=false; YES=false; BACKEND_CONFIG=""
+SANDBOX=false; RESUME=false; YES=false; PLAN_ONLY=false; BACKEND_CONFIG=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --config)       CONFIG="$2"; shift 2 ;;
@@ -47,6 +53,7 @@ while [[ $# -gt 0 ]]; do
     --backend-config) BACKEND_CONFIG="$2"; shift 2 ;;
     --sandbox)      SANDBOX=true; shift ;;
     --resume)       RESUME=true; shift ;;
+    --plan-only)    PLAN_ONLY=true; shift ;;
     --yes|-y)       YES=true; shift ;;
     -*)             die "Unknown flag: $1" ;;
     *)              DOMAIN="$1"; shift ;;
@@ -141,21 +148,44 @@ step "terraform init"
 df_tf_init "$CONFIG" -input=false -backend-config="$BACKEND_FILE" || die "terraform init failed"
 pass "Initialized"
 
-if [[ "$YES" != true ]]; then
-  read -r -p "Provision $DOMAIN now? (y/N) " c; [[ "$c" == [yY] ]] || { echo "Aborted."; exit 0; }
-fi
+# Plan a phase, show what it changes, ask (unless --yes), then apply exactly
+# that plan. With --plan-only, stop after showing it.
+PLAN_DIR="$CONFIG/.terraform/devopsfoundry-plans"
+phase() { # phase <label> <plan args...>
+  local label="$1"; shift
+  local file out
+  file="$PLAN_DIR/$(df_slug "$label").tfplan"
+  mkdir -p "$PLAN_DIR"
+  step "$label"
+  if ! out=$(df_tf_at "$CONFIG" plan -input=false -out="$file" "$@" 2>&1); then
+    if $PLAN_ONLY && grep -q "Invalid for_each argument" <<<"$out"; then
+      warn "$label can't be planned yet: it depends on the certificate phase 1a creates."
+      echo "  Apply phase 1a first (run without --plan-only and stop after it), then: --resume --plan-only"
+      exit 0
+    fi
+    echo "$out" >&2; die "Planning failed: $label"
+  fi
+  df_plan_summary "$CONFIG" "$file"
+  if $PLAN_ONLY; then info "Saved $file (contains secrets; don't commit it)"; return 0; fi
+  if [[ "$YES" != true ]]; then
+    printf 'Apply this? (y/N) ' >&2   # read -p shows nothing when answers are piped in
+    read -r c || c=""
+    [[ "$c" == [yY] ]] || { rm -f "$file"; echo "Stopped before: $label. Continue later with --resume."; exit 0; }
+  fi
+  df_tf_at "$CONFIG" apply -input=false "$file"
+  rm -f "$file"
+}
 
 # ── Phase 1: cert -> zone + NS delegation ──────────────
 # 1a: cert first — its domain_validation_options (the keys of the zone's
 #     for_each) are unknown until the cert exists, so applying the zone in one
 #     shot would fail "Invalid for_each argument".
-step "Phase 1a — create ACM certificate"
-df_tf_at "$CONFIG" apply -input=false -auto-approve "${TFVARS[@]}" -target=module.app.module.acm_cert
+phase "Phase 1a — ACM certificate" "${TFVARS[@]}" -target=module.app.module.acm_cert
 
 if [[ -n "$EXISTING_ZONE" ]]; then
   # The zone already resolves publicly, so there is no delegation to wait for.
-  step "Existing zone $EXISTING_ZONE — validate cert, build service (desired_count=0)"
-  df_tf_at "$CONFIG" apply -input=false -auto-approve "${TFVARS[@]}" -var desired_count=0
+  phase "Existing zone $EXISTING_ZONE — validate cert, build service (desired_count=0)" "${TFVARS[@]}" -var desired_count=0
+  $PLAN_ONLY && { pass "Plan only: nothing applied"; exit 0; }
   log "INFO" "Provisioned app $DOMAIN in existing zone $EXISTING_ZONE (desired_count=0)"
   pass "Provisioned (service at 0 tasks — no image yet)"
   echo "  Service URL: $(df_tf_at "$CONFIG" output -raw service_url)"
@@ -164,9 +194,14 @@ if [[ -n "$EXISTING_ZONE" ]]; then
   exit 0
 fi
 
-step "Phase 1b — Route53 zone + Namecheap nameserver delegation"
-df_tf_at "$CONFIG" apply -input=false -auto-approve "${TFVARS[@]}" \
+phase "Phase 1b — Route53 zone + Namecheap nameserver delegation" "${TFVARS[@]}" \
   -target=module.app.module.route53_zone -target=module.app.module.namecheap_ns
+if $PLAN_ONLY; then
+  # Phase 2 is the whole stack; planned now, it also covers what 1b would create.
+  phase "Phase 2 — validate cert, build VPC + service (desired_count=0)" "${TFVARS[@]}" -var desired_count=0
+  pass "Plan only: nothing applied"
+  exit 0
+fi
 log "INFO" "Phase 1 applied for app $DOMAIN"
 
 NS=()
@@ -200,8 +235,7 @@ fi
 pass "Nameservers propagated"
 
 # ── Phase 2: full provision at desired_count=0 ─────────
-step "Phase 2 — validate cert, build VPC + service (desired_count=0)"
-df_tf_at "$CONFIG" apply -input=false -auto-approve "${TFVARS[@]}" -var desired_count=0
+phase "Phase 2 — validate cert, build VPC + service (desired_count=0)" "${TFVARS[@]}" -var desired_count=0
 log "INFO" "Phase 2 applied for app $DOMAIN (desired_count=0)"
 
 # The certificate validated, so the delegation is live: stop managing it, so

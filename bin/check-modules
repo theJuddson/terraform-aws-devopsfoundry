@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Static checks for every Terraform module and example: fmt, validate, tflint,
-# terraform test (mocked providers), the bin/ script tests (stubbed commands), checkov. Makes no AWS call (validate runs
-# with -backend=false; tests plan against mocks). Used by CI.
+# terraform test (mocked providers), the bin/ script tests (stubbed commands),
+# checkov. Makes no AWS call (validate runs with -backend=false; tests plan
+# against mocks). Used by CI.
 #
 #   bin/check-modules                 # everything
 #   bin/check-modules modules/kms-key # one or more directories

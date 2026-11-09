@@ -162,3 +162,18 @@ df_check_secrets() {
   done
   return $bad
 }
+
+# Summarize a saved plan: counts as Terraform reports them, then one line per
+# resource that changes. Usage: df_plan_summary <dir> <planfile>
+df_plan_summary() {
+  df_tf_at "$1" show -json "$2" | jq -r '
+    [.resource_changes[]? | select(.change.actions != ["no-op"] and .change.actions != ["read"])] as $c
+    | ($c | map(select(.change.actions | index("create"))) | length) as $add
+    | ($c | map(select(.change.actions == ["update"])) | length) as $chg
+    | ($c | map(select(.change.actions | index("delete"))) | length) as $del
+    | "  Plan: \($add) to add, \($chg) to change, \($del) to destroy.",
+      ($c[] | "    " + (if (.change.actions | length) == 2 then "-/+"
+                         elif .change.actions == ["create"] then "  +"
+                         elif .change.actions == ["update"] then "  ~"
+                         else "  -" end) + " " + .address)'
+}
