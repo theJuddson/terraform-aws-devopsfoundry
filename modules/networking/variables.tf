@@ -85,3 +85,14 @@ variable "flow_log_retention_days" {
     error_message = "flow_log_retention_days must be a retention period CloudWatch Logs accepts, e.g. 7, 14, 30, 90 or 365."
   }
 }
+
+variable "flow_log_kms_key_arn" {
+  description = "Customer managed KMS key for the flow log group. null (default) = CloudWatch's default encryption. The key policy must allow logs.<region>.amazonaws.com."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.flow_log_kms_key_arn == null || can(regex("^arn:aws[a-z-]*:kms:[a-z0-9-]+:[0-9]{12}:key/", var.flow_log_kms_key_arn))
+    error_message = "flow_log_kms_key_arn must be a KMS key ARN (arn:aws:kms:<region>:<account>:key/<id>), not an alias."
+  }
+}

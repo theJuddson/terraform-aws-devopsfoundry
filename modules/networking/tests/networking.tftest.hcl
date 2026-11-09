@@ -224,3 +224,17 @@ run "flow_log_retention_must_be_a_cloudwatch_period" {
 
   expect_failures = [var.flow_log_retention_days]
 }
+
+run "flow_log_group_customer_managed_key" {
+  command = plan
+
+  variables {
+    enable_flow_logs     = true
+    flow_log_kms_key_arn = "arn:aws:kms:us-east-1:111111111111:key/11111111-2222-3333-4444-555555555555"
+  }
+
+  assert {
+    condition     = aws_cloudwatch_log_group.flow_logs[0].kms_key_id == "arn:aws:kms:us-east-1:111111111111:key/11111111-2222-3333-4444-555555555555"
+    error_message = "flow_log_kms_key_arn must encrypt the flow log group."
+  }
+}

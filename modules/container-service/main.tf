@@ -79,6 +79,7 @@ module "ecr" {
 resource "aws_cloudwatch_log_group" "app" {
   name              = "/ecs/${local.name_prefix}-${var.service_name}"
   retention_in_days = var.log_retention_days
+  kms_key_id        = var.log_kms_key_arn
   tags              = { Name = "${local.name_prefix}-${var.service_name}-logs" }
 }
 
@@ -114,6 +115,14 @@ data "aws_iam_policy_document" "task_execution_secrets" {
   statement {
     actions   = ["secretsmanager:GetSecretValue"]
     resources = local.secret_arns
+  }
+  # Secrets encrypted with a customer managed key can only be read with it.
+  dynamic "statement" {
+    for_each = length(var.secrets_kms_key_arns) > 0 ? [1] : []
+    content {
+      actions   = ["kms:Decrypt"]
+      resources = var.secrets_kms_key_arns
+    }
   }
 }
 

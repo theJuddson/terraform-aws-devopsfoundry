@@ -83,9 +83,11 @@ A containerized service on ECS Fargate behind an HTTPS ALB, framework-neutral: y
 | health\_check\_path | ── Health check ─────────────────────────────────────── | `string` | `"/health"` | no |
 | health\_check\_timeout | n/a | `number` | `5` | no |
 | listener\_rule\_priority\_base | First listener-rule priority to claim on a shared ALB. This app uses<br/><base> for its host-header forward and <base>+1 for the www redirect, so<br/>each guest app on the same listener needs a distinct base. Ignored when<br/>create\_alb = true. | `number` | `100` | no |
+| log\_kms\_key\_arn | Customer managed KMS key for the app's CloudWatch log group. null (default) = CloudWatch's default encryption. The key policy must allow logs.<region>.amazonaws.com (see AWS's CloudWatch Logs encryption guide). | `string` | `null` | no |
 | log\_retention\_days | n/a | `number` | `14` | no |
 | memory | Fargate task memory (MiB) | `number` | `1024` | no |
 | secrets | Secret env vars: ENV\_NAME -> Secrets Manager valueFrom ARN (supports :json\_key:: selector) | `map(string)` | `{}` | no |
+| secrets\_kms\_key\_arns | Customer managed KMS keys that encrypt any of `secrets`. The task execution role gets kms:Decrypt on them, which it needs to read those secrets at start. | `list(string)` | `[]` | no |
 | service\_name | Container/service short name (used in ECR repo, log group, container name) | `string` | `"app"` | no |
 | subdomain | Subdomain that fronts the service (api -> api.example.com). Empty or "@" serves at the apex (example.com). | `string` | `"api"` | no |
 | tasks\_in\_public\_subnets | Run ECS tasks in the public subnets with public IPs, so the VPC needs no NAT<br/>gateway. Pair with networking's `enable_nat_gateway = false`.<br/><br/>Safe because the task security group admits inbound traffic only from the<br/>ALB. Do not enable if anything downstream allowlists this app's outbound IP —<br/>egress moves from the NAT's stable Elastic IP to per-task ephemeral IPs. | `bool` | `false` | no |

@@ -261,3 +261,20 @@ variable "waf_rule_overrides" {
   type        = map(list(string))
   default     = {}
 }
+
+variable "log_kms_key_arn" {
+  description = "Customer managed KMS key for the app's CloudWatch log group. null (default) = CloudWatch's default encryption. The key policy must allow logs.<region>.amazonaws.com (see AWS's CloudWatch Logs encryption guide)."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.log_kms_key_arn == null || can(regex("^arn:aws[a-z-]*:kms:[a-z0-9-]+:[0-9]{12}:key/", var.log_kms_key_arn))
+    error_message = "log_kms_key_arn must be a KMS key ARN (arn:aws:kms:<region>:<account>:key/<id>), not an alias."
+  }
+}
+
+variable "secrets_kms_key_arns" {
+  description = "Customer managed KMS keys that encrypt any of `secrets`. The task execution role gets kms:Decrypt on them, which it needs to read those secrets at start."
+  type        = list(string)
+  default     = []
+}

@@ -158,6 +158,7 @@ module "networking" {
   enable_flow_logs        = var.enable_flow_logs
   flow_log_traffic_type   = var.flow_log_traffic_type
   flow_log_retention_days = var.flow_log_retention_days
+  flow_log_kms_key_arn    = var.kms_key_arn
 }
 
 # ── Optional backing services ─────────────────────────
@@ -203,6 +204,7 @@ module "cache" {
   node_type               = var.cache_node_type
   engine_version          = var.cache_engine_version
   num_cache_clusters      = var.cache_num_cache_clusters
+  kms_key_arn             = var.kms_key_arn
 }
 
 # Composite owns the Redis auth secret (cache module only generates the token).
@@ -210,6 +212,7 @@ resource "aws_secretsmanager_secret" "redis_auth" {
   count                   = var.enable_cache ? 1 : 0
   name                    = "${var.name}/redis/auth"
   recovery_window_in_days = 7
+  kms_key_id              = var.kms_key_arn
 }
 
 resource "aws_secretsmanager_secret_version" "redis_auth" {
@@ -228,6 +231,7 @@ module "email" {
   dmarc_rua_email     = var.dmarc_rua_email
   dmarc_policy        = var.dmarc_policy
   mail_from_subdomain = var.mail_from_subdomain
+  kms_key_arn         = var.kms_key_arn
 }
 
 # ── The service ───────────────────────────────────────
@@ -269,6 +273,8 @@ module "container_service" {
   tasks_in_public_subnets = var.tasks_in_public_subnets
   container_insights      = var.container_insights
   alb_deletion_protection = var.alb_deletion_protection
+  log_kms_key_arn         = var.kms_key_arn
+  secrets_kms_key_arns    = var.kms_key_arn == null ? [] : [var.kms_key_arn]
 
   create_waf              = var.create_waf
   waf_web_acl_arn         = var.waf_web_acl_arn

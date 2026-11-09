@@ -227,3 +227,17 @@ run "guest_on_a_host_without_nat_can_run_tasks_in_public_subnets" {
     error_message = "The guest must see that the host's private subnets have no route out."
   }
 }
+
+run "kms_key_encrypts_the_redis_auth_secret" {
+  command = plan
+
+  variables {
+    enable_cache = true
+    kms_key_arn  = "arn:aws:kms:us-east-1:111111111111:key/11111111-2222-3333-4444-555555555555"
+  }
+
+  assert {
+    condition     = aws_secretsmanager_secret.redis_auth[0].kms_key_id == "arn:aws:kms:us-east-1:111111111111:key/11111111-2222-3333-4444-555555555555"
+    error_message = "kms_key_arn must encrypt the Redis auth secret full-stack owns."
+  }
+}

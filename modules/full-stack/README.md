@@ -88,6 +88,7 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | health\_check\_matcher | n/a | `string` | `"200"` | no |
 | health\_check\_path | n/a | `string` | `"/health"` | no |
 | health\_check\_timeout | n/a | `number` | `5` | no |
+| kms\_key\_arn | One customer managed KMS key for the stack's Redis data, the Redis auth and SMTP secrets, the app's logs and the flow logs. null (default) = AWS-managed keys. The key policy must allow logs.<region>.amazonaws.com; tasks get kms:Decrypt automatically. Setting it on an existing cache REPLACES the cache. | `string` | `null` | no |
 | listener\_rule\_priority\_base | First ALB listener-rule priority to claim in shared mode; each guest app needs a distinct base | `number` | `100` | no |
 | mail\_from\_subdomain | Custom MAIL FROM subdomain label for SPF alignment (e.g. 'mail'). Empty = SES default. | `string` | `""` | no |
 | manage\_nameservers | Whether Terraform manages the domain's Namecheap nameserver delegation to the Route53 zone (ignored when<br/>existing\_zone\_name is set). The delegation is set once and never changes, but managing it makes every plan<br/>call the Namecheap API, which only answers whitelisted IPs. Set false after the first apply so deploys<br/>never need Namecheap. On an existing stack, first run<br/>`terraform state rm 'module.<name>.module.namecheap_ns[0].namecheap_domain_records.ns'`; without it,<br/>Terraform deletes the delegation. (A `removed` block can't do this: the module block is still declared.) | `bool` | `true` | no |

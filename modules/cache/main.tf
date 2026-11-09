@@ -43,6 +43,7 @@ resource "aws_elasticache_replication_group" "main" {
   subnet_group_name          = aws_elasticache_subnet_group.main.name
   security_group_ids         = [var.redis_security_group_id]
   at_rest_encryption_enabled = true
+  kms_key_id                 = var.kms_key_arn
   transit_encryption_enabled = true
   auth_token                 = random_password.auth_token.result
   automatic_failover_enabled = var.num_cache_clusters > 1

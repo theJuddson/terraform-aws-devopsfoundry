@@ -57,6 +57,7 @@ No modules.
 | aws\_region | Region (the SES SMTP endpoint is region-scoped) | `string` | `"us-east-1"` | no |
 | dmarc\_policy | DMARC policy applied to the domain + subdomains: none \| quarantine \| reject | `string` | `"none"` | no |
 | enable\_notifications | Create an SNS topic wired to SES Bounce/Complaint (subscription left to the caller) | `bool` | `false` | no |
+| kms\_key\_arn | Customer managed KMS key for the SMTP credentials secret. null (default) = the AWS-managed key. Whatever reads the secret also needs kms:Decrypt on it. | `string` | `null` | no |
 | mail\_from\_subdomain | Label for a custom MAIL FROM subdomain (e.g. 'mail' -> mail.<sender\_domain>), giving SPF alignment. Empty = SES default (amazonses.com), DKIM-only DMARC alignment. | `string` | `""` | no |
 
 ## Outputs

@@ -109,3 +109,25 @@ run "mail_from_subdomain_rejects_trailing_dot" {
 
   expect_failures = [var.mail_from_subdomain]
 }
+
+run "smtp_secret_uses_aws_managed_key_by_default" {
+  command = plan
+
+  assert {
+    condition     = aws_secretsmanager_secret.smtp.kms_key_id == null
+    error_message = "Without kms_key_arn the SMTP secret must use the AWS-managed key."
+  }
+}
+
+run "smtp_secret_uses_customer_managed_key_when_given" {
+  command = plan
+
+  variables {
+    kms_key_arn = "arn:aws:kms:us-east-1:111111111111:key/11111111-2222-3333-4444-555555555555"
+  }
+
+  assert {
+    condition     = aws_secretsmanager_secret.smtp.kms_key_id == "arn:aws:kms:us-east-1:111111111111:key/11111111-2222-3333-4444-555555555555"
+    error_message = "kms_key_arn must encrypt the SMTP credentials secret."
+  }
+}

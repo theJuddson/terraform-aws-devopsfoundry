@@ -114,6 +114,7 @@ resource "aws_iam_user_policy" "ses_send" {
 resource "aws_secretsmanager_secret" "smtp" {
   name                    = "${local.name_prefix}/ses/smtp"
   recovery_window_in_days = 7
+  kms_key_id              = var.kms_key_arn
 }
 
 resource "aws_secretsmanager_secret_version" "smtp" {

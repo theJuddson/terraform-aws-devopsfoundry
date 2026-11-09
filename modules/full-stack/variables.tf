@@ -311,3 +311,14 @@ variable "waf_rule_overrides" {
   type        = map(list(string))
   default     = {}
 }
+
+variable "kms_key_arn" {
+  description = "One customer managed KMS key for the stack's Redis data, the Redis auth and SMTP secrets, the app's logs and the flow logs. null (default) = AWS-managed keys. The key policy must allow logs.<region>.amazonaws.com; tasks get kms:Decrypt automatically. Setting it on an existing cache REPLACES the cache."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.kms_key_arn == null || can(regex("^arn:aws[a-z-]*:kms:[a-z0-9-]+:[0-9]{12}:key/", var.kms_key_arn))
+    error_message = "kms_key_arn must be a KMS key ARN (arn:aws:kms:<region>:<account>:key/<id>), not an alias."
+  }
+}

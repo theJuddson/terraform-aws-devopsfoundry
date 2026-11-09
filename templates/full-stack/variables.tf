@@ -153,6 +153,11 @@ variable "db_iam_database_authentication_enabled" {
   type    = bool
   default = false
 }
+variable "kms_key_arn" {
+  description = "Customer managed KMS key for Redis, secrets and logs (null = AWS-managed keys)"
+  type        = string
+  default     = null
+}
 variable "db_log_min_duration_ms" {
   description = "Log Postgres statements slower than this many ms (null = off)"
   type        = number
