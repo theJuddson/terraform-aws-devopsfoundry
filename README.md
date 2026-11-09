@@ -160,6 +160,12 @@ the record leaves the state, then `manage_nameservers = false`), so `deploy-app`
 whitelisted IP. For an app made before this, run `bin/release-nameservers --config <dir>` once. `destroy-app` still
 reverts the delegation; it re-adopts the record first.
 
+**CPU architecture.** Tasks run on X86_64 by default. Set `cpu_architecture = "ARM64"` in `app.tfvars` to run on
+Graviton (about 20% cheaper per vCPU-hour); `deploy-app` then builds `linux/arm64` images, which on Apple Silicon
+means native builds instead of slow, sometimes crashing amd64 emulation. Native dependencies must support arm64. Either
+way, build steps that don't depend on the target platform (installing and compiling JavaScript, for example) can run
+natively with `FROM --platform=$BUILDPLATFORM node:22 AS build` in a multi-stage Dockerfile.
+
 The service is fronted at `<subdomain>.<domain>` (default subdomain `api`). Pass
 `--apex` (or set `subdomain = ""` in `app.tfvars`) to serve at the **bare domain**
 itself — the ACM cert covers the apex, and Route53 aliases the apex A record to the ALB.

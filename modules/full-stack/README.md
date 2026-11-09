@@ -63,6 +63,7 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | container\_insights | CloudWatch Container Insights on the app's cluster (billed per metric). Ignored in shared-platform mode. | `bool` | `false` | no |
 | container\_port | n/a | `number` | `8080` | no |
 | cpu | n/a | `number` | `512` | no |
+| cpu\_architecture | `X86_64` (default) or `ARM64` (Graviton: about 20% cheaper, and native builds on Apple Silicon). deploy-app builds the image for it. | `string` | `"X86_64"` | no |
 | create\_waf | Create a WAF web ACL (per-IP rate limit + AWS managed rules) on the ALB. About $5/month + $1/rule + $0.60 per million requests. | `bool` | `false` | no |
 | db\_allocated\_storage | n/a | `number` | `20` | no |
 | db\_backup\_retention\_days | n/a | `number` | `1` | no |
@@ -116,6 +117,7 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 
 | Name | Description |
 | ---- | ----------- |
+| cpu\_architecture | CPU architecture the app's tasks run on; deploy-app builds the image for it |
 | db\_address | RDS endpoint address (null without enable\_database) |
 | db\_master\_secret\_arn | Secrets Manager ARN of the RDS-managed master credential (rotates every 7 days by default) |
 | db\_name | n/a |

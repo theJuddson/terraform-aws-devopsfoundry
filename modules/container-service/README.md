@@ -80,6 +80,7 @@ A containerized service on ECS Fargate behind an HTTPS ALB, framework-neutral: y
 | container\_insights | Turn on CloudWatch Container Insights for the cluster (billed per metric). Ignored when create\_cluster = false. | `bool` | `false` | no |
 | container\_port | n/a | `number` | `8080` | no |
 | cpu | Fargate task CPU units (256/512/1024/...) | `number` | `512` | no |
+| cpu\_architecture | `X86_64` (default) or `ARM64` (Graviton, about 20% cheaper per vCPU-hour). The image must be built for it; deploy-app reads the cpu\_architecture output to do that. Changing it replaces the task definition (a normal rolling deploy). | `string` | `"X86_64"` | no |
 | create\_alb | Create a dedicated ALB. False = attach to an existing one via existing\_*. | `bool` | `true` | no |
 | create\_cluster | Create a dedicated ECS cluster. False = run in an existing one. | `bool` | `true` | no |
 | create\_waf | Create a regional WAF web ACL and attach it to the ALB: a per-IP rate limit<br/>plus the AWS managed rule groups in waf\_managed\_rule\_groups. Costs about<br/>$5/month per web ACL + $1/month per rule + $0.60 per million requests.<br/>Ignored when create\_alb = false. | `bool` | `false` | no |
@@ -114,6 +115,7 @@ A containerized service on ECS Fargate behind an HTTPS ALB, framework-neutral: y
 | Name | Description |
 | ---- | ----------- |
 | alb\_dns\_name | The ALB serving this app — dedicated or shared |
+| cpu\_architecture | CPU architecture the tasks run on (X86\_64 or ARM64); build images for it |
 | ecr\_repository\_url | n/a |
 | ecs\_cluster\_name | n/a |
 | ecs\_service\_name | n/a |

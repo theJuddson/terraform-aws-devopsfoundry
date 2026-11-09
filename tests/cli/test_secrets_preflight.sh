@@ -10,7 +10,7 @@ ARN_DELETED='arn:aws:secretsmanager:eu-west-1:123456789012:secret:demo/deleted-A
 make_deployable() { # make_deployable <secrets block lines>
   APP="$TMP/app/.devopsfoundry"; mkdir -p "$APP"; touch "$APP/main.tf" "$APP/app.env" "$TMP/app/Dockerfile"
   printf 'domain_name = "example.com"\n%s\n' "$1" > "$APP/app.tfvars"
-  stub terraform 'case "$*" in *"output -raw ecr_repository_url"*) echo 123456789012.dkr.ecr.us-east-1.amazonaws.com/demo ;; *"output -raw"*) echo x ;; esac; exit 0'
+  stub terraform 'case "$*" in *"output -raw cpu_architecture"*) echo X86_64 ;; *"output -raw ecr_repository_url"*) echo 123456789012.dkr.ecr.us-east-1.amazonaws.com/demo ;; *"output -raw"*) echo x ;; esac; exit 0'
   stub aws "
 case \"\$*\" in
   *'describe-secret --secret-id $ARN_MISSING'*) echo 'ResourceNotFoundException' >&2; exit 254 ;;

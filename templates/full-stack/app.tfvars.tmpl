@@ -24,6 +24,8 @@ container_port    = 8080
 cpu               = 512          # Fargate units (256/512/1024/2048/4096)
 memory            = 1024         # MiB
 desired_count     = 1            # new-app provisions at 0; deploy-app scales up
+# cpu_architecture = "ARM64"     # Graviton: ~20% cheaper, and builds natively on Apple Silicon
+#                                # (no amd64 emulation). Native modules must support arm64.
 health_check_path = "/health"    # ALB target-group health check + post-deploy curl
 
 # Plaintext env vars injected into the container.

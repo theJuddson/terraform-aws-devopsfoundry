@@ -31,6 +31,11 @@ variable "memory" {
   type    = number
   default = 1024
 }
+variable "cpu_architecture" {
+  description = "X86_64 or ARM64 (Graviton); deploy-app builds the image to match"
+  type        = string
+  default     = "X86_64"
+}
 variable "desired_count" {
   type    = number
   default = 1

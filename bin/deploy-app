@@ -37,6 +37,13 @@ CLUSTER=$(df_tf_at "$CONFIG" output -raw ecs_cluster_name 2>/dev/null)     || di
 SERVICE=$(df_tf_at "$CONFIG" output -raw ecs_service_name 2>/dev/null)     || die "No ecs_service_name output"
 SERVICE_URL=$(df_tf_at "$CONFIG" output -raw service_url 2>/dev/null)      || die "No service_url output"
 HEALTH_PATH=$(df_tf_at "$CONFIG" output -raw health_check_path 2>/dev/null || echo "/health")
+# App roots from before the cpu_architecture output always ran X86_64.
+ARCH=$(df_tf_at "$CONFIG" output -raw cpu_architecture 2>/dev/null || echo X86_64)
+case "$ARCH" in
+  ARM64)  PLATFORM=linux/arm64 ;;
+  X86_64) PLATFORM=linux/amd64 ;;
+  *)      die "Unexpected cpu_architecture output: $ARCH" ;;
+esac
 REGISTRY="${ECR_URL%%/*}"
 REGION="${AWS_REGION:-us-east-1}"
 pass "ECR: $ECR_URL"
@@ -69,9 +76,9 @@ if [[ "$YES" != true ]]; then
   read -r -p "Build + deploy $SHA to $SERVICE_URL? (y/N) " c; [[ "$c" == [yY] ]] || { echo "Aborted."; exit 0; }
 fi
 
-step "Building image (linux/amd64)"
+step "Building image ($PLATFORM)"
 # shellcheck disable=SC2086
-( cd "$REPO_ROOT" && docker build --platform linux/amd64 $DOCKER_BUILD_ARGS \
+( cd "$REPO_ROOT" && docker build --platform "$PLATFORM" $DOCKER_BUILD_ARGS \
     -f "$DOCKERFILE" -t "$TAG_SHA" -t "$TAG_LATEST" "$DOCKER_CONTEXT" ) || die "docker build failed"
 pass "Built $TAG_SHA"
 

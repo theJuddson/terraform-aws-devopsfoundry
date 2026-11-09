@@ -69,6 +69,7 @@ module "app" {
   cpu                   = var.cpu
   memory                = var.memory
   desired_count         = var.desired_count
+  cpu_architecture      = var.cpu_architecture
   env                   = var.env
   secrets               = var.secrets
   health_check_path     = var.health_check_path

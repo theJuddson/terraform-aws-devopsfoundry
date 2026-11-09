@@ -21,6 +21,7 @@ case \"\$*\" in
                    [[ -f '$TMP/state-rm-fails' ]] && exit 1
                    grep -vxF '$ADDR' '$TMP/state' > '$TMP/state.new'; mv '$TMP/state.new' '$TMP/state' ;;
   *'output -json name_servers'*) echo '$R53_NS' ;;
+  *'output -raw cpu_architecture'*) echo X86_64 ;;
   *'output -raw'*) echo 'https://api.example.com' ;;
 esac
 exit 0"

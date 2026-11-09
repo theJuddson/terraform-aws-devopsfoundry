@@ -301,3 +301,14 @@ variable "alb_access_logs_retention_days" {
     error_message = "alb_access_logs_retention_days must be a whole number of days, 1 or more."
   }
 }
+
+variable "cpu_architecture" {
+  description = "`X86_64` (default) or `ARM64` (Graviton, about 20% cheaper per vCPU-hour). The image must be built for it; deploy-app reads the cpu_architecture output to do that. Changing it replaces the task definition (a normal rolling deploy)."
+  type        = string
+  default     = "X86_64"
+
+  validation {
+    condition     = contains(["X86_64", "ARM64"], var.cpu_architecture)
+    error_message = "cpu_architecture must be X86_64 or ARM64."
+  }
+}
