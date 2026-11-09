@@ -187,3 +187,77 @@ variable "alb_deletion_protection" {
   type        = bool
   default     = false
 }
+
+# ── WAF (opt-in) ──────────────────────────────────────
+# Both are ignored when create_alb = false: a shared ALB's web ACL belongs to
+# the platform that owns the ALB, so guest apps inherit it.
+variable "create_waf" {
+  description = <<-EOT
+    Create a regional WAF web ACL and attach it to the ALB: a per-IP rate limit
+    plus the AWS managed rule groups in waf_managed_rule_groups. Costs about
+    $5/month per web ACL + $1/month per rule + $0.60 per million requests.
+    Ignored when create_alb = false.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "waf_web_acl_arn" {
+  description = "Attach this existing regional web ACL to the ALB instead of creating one. Mutually exclusive with create_waf. Ignored when create_alb = false."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.waf_web_acl_arn == "" || can(regex("^arn:aws[a-z-]*:wafv2:[a-z0-9-]+:[0-9]{12}:regional/webacl/", var.waf_web_acl_arn))
+    error_message = "waf_web_acl_arn must be a regional WAFv2 web ACL ARN (arn:aws:wafv2:<region>:<account>:regional/webacl/...)."
+  }
+}
+
+variable "waf_count_only" {
+  description = <<-EOT
+    Run every WAF rule in count mode: matches are counted in CloudWatch metrics
+    and sampled requests, nothing is blocked. Start here on a live ALB, check the
+    counts, then set false to enforce.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "waf_rate_limit" {
+  description = <<-EOT
+    Requests per client IP per 5 minutes before the rate rule blocks that IP
+    (AWS minimum 10). Counts every host on the ALB together, so size it for the
+    busiest legitimate client, e.g. an office behind one NAT using several apps.
+  EOT
+  type        = number
+  default     = 2000
+
+  validation {
+    condition     = var.waf_rate_limit >= 10 && var.waf_rate_limit <= 2000000000
+    error_message = "waf_rate_limit must be between 10 and 2,000,000,000 (AWS limits)."
+  }
+}
+
+variable "waf_managed_rule_groups" {
+  description = <<-EOT
+    AWS managed rule groups (vendor AWS) to apply, in order. The defaults are
+    free of extra subscription charges: the core rule set (OWASP-style checks),
+    known bad inputs (e.g. Log4Shell) and Amazon's IP reputation list.
+  EOT
+  type        = list(string)
+  default = [
+    "AWSManagedRulesAmazonIpReputationList",
+    "AWSManagedRulesCommonRuleSet",
+    "AWSManagedRulesKnownBadInputsRuleSet",
+  ]
+}
+
+variable "waf_rule_overrides" {
+  description = <<-EOT
+    Individual managed rules to run in count mode instead of blocking, keyed by
+    rule group, e.g. { AWSManagedRulesCommonRuleSet = ["SizeRestrictions_BODY"] }
+    when an app legitimately accepts request bodies over 8 KB.
+  EOT
+  type        = map(list(string))
+  default     = {}
+}

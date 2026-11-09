@@ -32,7 +32,7 @@ The defaults still match v1.1.0, so checkov keeps reporting these for the defaul
 | email | CKV_AWS_273, CKV_AWS_40 | IAM user with an inline policy | SES SMTP credentials can only be derived from an IAM user's access key; the policy allows `ses:SendRawEmail` only |
 | email, full-stack | CKV2_AWS_57 | SMTP password and Redis auth token not rotated automatically | The app reads them at start; rotation needs an app restart plan first |
 | email | CKV_AWS_149 | SMTP secret encrypted with the AWS-managed key | Still encrypted at rest |
-| container-service | CKV2_AWS_28 | ALB without WAF | WAF costs about $5/month per ACL plus rules; add per app |
+| container-service | CKV2_AWS_28 | ALB without WAF | WAF costs about $5/month per ACL plus rules; opt in with `create_waf = true` or attach one with `waf_web_acl_arn` (v1.3.0) |
 | networking | CKV2_AWS_11, CKV2_AWS_12 | No VPC flow logs; default security group not emptied | Flow logs cost; opt in with `enable_flow_logs = true` (v1.3.0). Nothing uses the default group |
 | route53-zone | CKV2_AWS_38, CKV2_AWS_39 | No DNSSEC signing, no query logging | DNSSEC needs a KMS key in us-east-1 and registrar DS records |
 | networking | CKV_AWS_394 | Availability zones not pinned by zone ID | Changing it would re-plan subnets for existing stacks |
@@ -57,6 +57,8 @@ The defaults still match v1.1.0, so checkov keeps reporting these for the defaul
 | ecr-repository | CKV_AWS_136 | AES-256 by default; pass `kms_key_arn` for a customer managed key |
 | networking | CKV_AWS_158, CKV_AWS_338 | The opt-in flow log group uses the CloudWatch default key and `flow_log_retention_days` |
 | ecr-repository | CKV_AWS_51 | Tags are immutable by default; `container-service` keeps `MUTABLE` for its `:latest` deploy flow |
+| container-service | CKV2_AWS_31 | The opt-in WAF doesn't log requests (billed per GB); CloudWatch metrics and sampled requests are on |
+| container-service | CKV_AWS_192 | The WAF's managed rule groups are a variable; the default list includes `AWSManagedRulesKnownBadInputsRuleSet`, which blocks Log4j lookups |
 
 ## tflint
 

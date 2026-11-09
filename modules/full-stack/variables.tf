@@ -273,3 +273,36 @@ variable "alb_deletion_protection" {
   type        = bool
   default     = false
 }
+
+# ── WAF on the ALB (opt-in) ─────────────────────────────
+# Ignored in shared-platform mode: guest apps inherit the host platform's web ACL.
+variable "create_waf" {
+  description = "Create a WAF web ACL (per-IP rate limit + AWS managed rules) on the ALB. About $5/month + $1/rule + $0.60 per million requests."
+  type        = bool
+  default     = false
+}
+variable "waf_web_acl_arn" {
+  description = "Attach an existing regional web ACL to the ALB instead of creating one. Mutually exclusive with create_waf."
+  type        = string
+  default     = ""
+}
+variable "waf_count_only" {
+  description = "Count WAF matches without blocking. Start here on a live ALB, then set false to enforce."
+  type        = bool
+  default     = false
+}
+variable "waf_rate_limit" {
+  description = "Requests per client IP per 5 minutes before the rate rule blocks it, across every host on the ALB."
+  type        = number
+  default     = 2000
+}
+variable "waf_managed_rule_groups" {
+  description = "AWS managed rule groups to apply, in order."
+  type        = list(string)
+  default     = ["AWSManagedRulesAmazonIpReputationList", "AWSManagedRulesCommonRuleSet", "AWSManagedRulesKnownBadInputsRuleSet"]
+}
+variable "waf_rule_overrides" {
+  description = "Managed rules to count instead of block, keyed by rule group, e.g. { AWSManagedRulesCommonRuleSet = [\"SizeRestrictions_BODY\"] }."
+  type        = map(list(string))
+  default     = {}
+}

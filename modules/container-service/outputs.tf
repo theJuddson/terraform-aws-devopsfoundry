@@ -31,3 +31,8 @@ output "task_role_arn" {
   description = "IAM role assumed by the app container (attach extra policies here)"
   value       = aws_iam_role.task.arn
 }
+
+output "waf_web_acl_arn" {
+  description = "The web ACL attached to this app's ALB: created (create_waf), supplied (waf_web_acl_arn), or empty"
+  value       = local.waf_web_acl_arn
+}

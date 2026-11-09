@@ -110,5 +110,12 @@ module "app" {
   db_iam_database_authentication_enabled = var.db_iam_database_authentication_enabled
   cache_num_cache_clusters               = var.cache_num_cache_clusters
 
+  # Opt-in WAF on the ALB (needs the module at v1.3.0 or later; ignored in shared-platform mode)
+  create_waf         = var.create_waf
+  waf_web_acl_arn    = var.waf_web_acl_arn
+  waf_count_only     = var.waf_count_only
+  waf_rate_limit     = var.waf_rate_limit
+  waf_rule_overrides = var.waf_rule_overrides
+
   dmarc_rua_email = var.dmarc_rua_email
 }

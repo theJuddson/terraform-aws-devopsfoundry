@@ -44,6 +44,8 @@ A containerized service on ECS Fargate behind an HTTPS ALB, framework-neutral: y
 | [aws_lb_target_group.app](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_target_group) | resource |
 | [aws_route53_record.service](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
 | [aws_route53_record.www](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
+| [aws_wafv2_web_acl.alb](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/wafv2_web_acl) | resource |
+| [aws_wafv2_web_acl_association.alb](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/wafv2_web_acl_association) | resource |
 | [aws_iam_policy_document.ecs_tasks_assume](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.task_execution_secrets](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_region.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/region) | data source |
@@ -68,6 +70,7 @@ A containerized service on ECS Fargate behind an HTTPS ALB, framework-neutral: y
 | cpu | Fargate task CPU units (256/512/1024/...) | `number` | `512` | no |
 | create\_alb | Create a dedicated ALB. False = attach to an existing one via existing\_*. | `bool` | `true` | no |
 | create\_cluster | Create a dedicated ECS cluster. False = run in an existing one. | `bool` | `true` | no |
+| create\_waf | Create a regional WAF web ACL and attach it to the ALB: a per-IP rate limit<br/>plus the AWS managed rule groups in waf\_managed\_rule\_groups. Costs about<br/>$5/month per web ACL + $1/month per rule + $0.60 per million requests.<br/>Ignored when create\_alb = false. | `bool` | `false` | no |
 | desired\_count | Running task count. new-app provisions at 0; deploy-app scales up. | `number` | `1` | no |
 | env | Plaintext environment variables injected into the container | `map(string)` | `{}` | no |
 | existing\_alb\_dns\_name | DNS name of the shared ALB (required when create\_alb = false) | `string` | `""` | no |
@@ -86,6 +89,11 @@ A containerized service on ECS Fargate behind an HTTPS ALB, framework-neutral: y
 | service\_name | Container/service short name (used in ECR repo, log group, container name) | `string` | `"app"` | no |
 | subdomain | Subdomain that fronts the service (api -> api.example.com). Empty or "@" serves at the apex (example.com). | `string` | `"api"` | no |
 | tasks\_in\_public\_subnets | Run ECS tasks in the public subnets with public IPs, so the VPC needs no NAT<br/>gateway. Pair with networking's `enable_nat_gateway = false`.<br/><br/>Safe because the task security group admits inbound traffic only from the<br/>ALB. Do not enable if anything downstream allowlists this app's outbound IP —<br/>egress moves from the NAT's stable Elastic IP to per-task ephemeral IPs. | `bool` | `false` | no |
+| waf\_count\_only | Run every WAF rule in count mode: matches are counted in CloudWatch metrics<br/>and sampled requests, nothing is blocked. Start here on a live ALB, check the<br/>counts, then set false to enforce. | `bool` | `false` | no |
+| waf\_managed\_rule\_groups | AWS managed rule groups (vendor AWS) to apply, in order. The defaults are<br/>free of extra subscription charges: the core rule set (OWASP-style checks),<br/>known bad inputs (e.g. Log4Shell) and Amazon's IP reputation list. | `list(string)` | <pre>[<br/>  "AWSManagedRulesAmazonIpReputationList",<br/>  "AWSManagedRulesCommonRuleSet",<br/>  "AWSManagedRulesKnownBadInputsRuleSet"<br/>]</pre> | no |
+| waf\_rate\_limit | Requests per client IP per 5 minutes before the rate rule blocks that IP<br/>(AWS minimum 10). Counts every host on the ALB together, so size it for the<br/>busiest legitimate client, e.g. an office behind one NAT using several apps. | `number` | `2000` | no |
+| waf\_rule\_overrides | Individual managed rules to run in count mode instead of blocking, keyed by<br/>rule group, e.g. { AWSManagedRulesCommonRuleSet = ["SizeRestrictions\_BODY"] }<br/>when an app legitimately accepts request bodies over 8 KB. | `map(list(string))` | `{}` | no |
+| waf\_web\_acl\_arn | Attach this existing regional web ACL to the ALB instead of creating one. Mutually exclusive with create\_waf. Ignored when create\_alb = false. | `string` | `""` | no |
 
 ## Outputs
 
@@ -99,4 +107,5 @@ A containerized service on ECS Fargate behind an HTTPS ALB, framework-neutral: y
 | service\_fqdn | n/a |
 | service\_url | n/a |
 | task\_role\_arn | IAM role assumed by the app container (attach extra policies here) |
+| waf\_web\_acl\_arn | The web ACL attached to this app's ALB: created (create\_waf), supplied (waf\_web\_acl\_arn), or empty |
 <!-- END_TF_DOCS -->

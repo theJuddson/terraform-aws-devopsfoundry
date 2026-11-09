@@ -159,6 +159,37 @@ variable "cache_num_cache_clusters" {
   default     = 1
 }
 
+# ── Opt-in WAF on the ALB ─────────────────────────────
+variable "create_waf" {
+  description = "WAF web ACL on the ALB: per-IP rate limit + AWS managed rules (~$5/month + $1/rule + $0.60/M requests). Ignored in shared-platform mode."
+  type        = bool
+  default     = false
+}
+
+variable "waf_web_acl_arn" {
+  description = "Attach an existing regional web ACL instead of creating one. Mutually exclusive with create_waf."
+  type        = string
+  default     = ""
+}
+
+variable "waf_count_only" {
+  description = "Count WAF matches without blocking; set false to enforce once the counts look right."
+  type        = bool
+  default     = false
+}
+
+variable "waf_rate_limit" {
+  description = "Requests per client IP per 5 minutes before it's blocked, across every host on the ALB."
+  type        = number
+  default     = 2000
+}
+
+variable "waf_rule_overrides" {
+  description = "Managed rules to count instead of block, keyed by rule group."
+  type        = map(list(string))
+  default     = {}
+}
+
 variable "dmarc_rua_email" {
   type    = string
   default = ""
