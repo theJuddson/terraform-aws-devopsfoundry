@@ -69,3 +69,11 @@ enable_email    = __ENABLE_EMAIL__   # SES          -> injects MAIL_HOST/MAIL_PO
 # db_deletion_protection = false   # set true for production data
 # cache_node_type        = "cache.t4g.micro"
 # dmarc_rua_email        = "postmaster@__DOMAIN__"   # required if enable_email
+
+# ── Observability and protection (all off; each is billed) ──
+# enable_flow_logs                = true   # VPC flow logs to CloudWatch, per GB
+# container_insights              = true   # ECS Container Insights, per metric
+# alb_deletion_protection         = true   # turn off again before destroy-app
+# db_performance_insights_enabled = true   # free 7-day retention
+# db_monitoring_interval          = 60     # enhanced monitoring, seconds
+# cache_num_cache_clusters        = 2      # Redis replica + Multi-AZ failover

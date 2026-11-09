@@ -101,5 +101,14 @@ module "app" {
   cache_node_type      = var.cache_node_type
   cache_engine_version = var.cache_engine_version
 
+  # Opt-in observability and protection (needs the module at v1.3.0 or later)
+  enable_flow_logs                       = var.enable_flow_logs
+  container_insights                     = var.container_insights
+  alb_deletion_protection                = var.alb_deletion_protection
+  db_performance_insights_enabled        = var.db_performance_insights_enabled
+  db_monitoring_interval                 = var.db_monitoring_interval
+  db_iam_database_authentication_enabled = var.db_iam_database_authentication_enabled
+  cache_num_cache_clusters               = var.cache_num_cache_clusters
+
   dmarc_rua_email = var.dmarc_rua_email
 }
