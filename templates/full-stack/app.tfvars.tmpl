@@ -33,7 +33,9 @@ env = {
 
 # Secret env vars: ENV_NAME = "<secretsmanager-arn>"  (append ":json_key::" to
 # pull a single JSON field). DB_*/REDIS_*/MAIL_* are auto-injected when the
-# matching toggle is on — only add app-specific secrets here.
+# matching toggle is on — only add app-specific secrets here. Store one with
+# `bin/put-secret myapp/stripe --env STRIPE_KEY` (hidden prompt; prints the line
+# to add). deploy-app checks each one exists and has a value before deploying.
 secrets = {
   # STRIPE_KEY = "arn:aws:secretsmanager:us-east-1:...:secret:myapp/stripe-AbCdEf"
 }

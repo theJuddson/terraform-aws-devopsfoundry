@@ -85,6 +85,7 @@ shares state with anything else.
 | `bin/destroy-site <domain>` | Tear down; reverts nameservers to Namecheap default |
 | `bin/new-app <domain> --config <dir>` | Zone + NS + ACM + VPC + Fargate stack at `desired_count = 0` |
 | `bin/deploy-app --config <dir>` | Build image → ECR → apply → roll service → verify |
+| `bin/put-secret <name> --env ENV_NAME` | Store an app secret from a hidden prompt or stdin (never argv or history); prints the `app.tfvars` line |
 | `bin/release-nameservers --config <dir>` | Stop managing a live Namecheap delegation in Terraform, so deploys never call Namecheap (`new-app` runs it) |
 | `bin/destroy-app --config <dir>` | Tear down the app stack; reverts the delegation unless `--keep-ns` |
 
