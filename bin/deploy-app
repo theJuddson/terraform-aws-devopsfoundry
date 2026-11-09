@@ -54,6 +54,16 @@ if [[ "$(df_tfvar "$CONFIG/app.tfvars" manage_nameservers)" == "false" ]] \
   die "app.tfvars sets manage_nameservers = false but the Namecheap record is still in state; this apply would delete the delegation. Run: bin/release-nameservers --config $CONFIG"
 fi
 
+# A secret the task can't read fails the rollout only after ECS gives up (about
+# 20 minutes), so check them before building anything.
+SECRET_ARNS=()
+while IFS= read -r a; do [[ -n "$a" ]] && SECRET_ARNS+=("$a"); done < <(df_tfvars_secret_arns "$CONFIG/app.tfvars")
+if [[ ${#SECRET_ARNS[@]} -gt 0 ]]; then
+  step "Checking the ${#SECRET_ARNS[@]} secret(s) in app.tfvars"
+  df_check_secrets "${SECRET_ARNS[@]}" || die "Fix the secrets above before deploying (bin/put-secret stores one)"
+  pass "Secrets present"
+fi
+
 [[ -f "$REPO_ROOT/$DOCKERFILE" ]] || die "Dockerfile not found: $REPO_ROOT/$DOCKERFILE (set DOCKERFILE in app.env)"
 if [[ "$YES" != true ]]; then
   read -r -p "Build + deploy $SHA to $SERVICE_URL? (y/N) " c; [[ "$c" == [yY] ]] || { echo "Aborted."; exit 0; }

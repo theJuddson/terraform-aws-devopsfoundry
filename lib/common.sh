@@ -129,3 +129,36 @@ df_set_tfvar() {
       if (!set) print k " = " v
     }' "$file" > "$tmp" && mv "$tmp" "$file"
 }
+
+# Secrets Manager ARNs referenced on uncommented lines of a .tfvars file, one
+# per line, without any ":json-key:stage:version" selector.
+df_tfvars_secret_arns() {
+  grep -vE '^[[:space:]]*#' "$1" \
+    | grep -oE 'arn:aws[a-z-]*:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:[A-Za-z0-9/_+=.@-]+' \
+    | sort -u
+}
+
+# Check each secret exists, isn't scheduled for deletion and has a non-empty
+# current value. Prints one line per problem and returns 1 if there are any.
+# Values are never printed: only their length is asked for.
+df_check_secrets() {
+  local arn region bad=0 deleted len
+  for arn in "$@"; do
+    region="$(cut -d: -f4 <<<"$arn")"
+    if ! deleted="$(aws secretsmanager describe-secret --secret-id "$arn" --region "$region" \
+          --query 'DeletedDate' --output text 2>/dev/null)"; then
+      echo "  missing:   $arn"; bad=1; continue
+    fi
+    if [[ -n "$deleted" && "$deleted" != "None" ]]; then
+      echo "  deleted:   $arn (scheduled for deletion; restore it with aws secretsmanager restore-secret)"; bad=1; continue
+    fi
+    len="$(aws secretsmanager get-secret-value --secret-id "$arn" --region "$region" \
+          --query 'length(SecretString || SecretBinary || `""`)' --output text 2>/dev/null)" || len=""
+    if [[ -z "$len" ]]; then
+      echo "  no value:  $arn (no current version, or no permission to read it)"; bad=1
+    elif [[ "$len" == "0" ]]; then
+      echo "  empty:     $arn"; bad=1
+    fi
+  done
+  return $bad
+}
