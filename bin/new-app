@@ -204,6 +204,12 @@ step "Phase 2 — validate cert, build VPC + service (desired_count=0)"
 df_tf_at "$CONFIG" apply -input=false -auto-approve "${TFVARS[@]}" -var desired_count=0
 log "INFO" "Phase 2 applied for app $DOMAIN (desired_count=0)"
 
+# The certificate validated, so the delegation is live: stop managing it, so
+# later deploys never need the Namecheap API (or a whitelisted IP).
+step "Handing off Namecheap (the delegation stays; Terraform stops managing it)"
+"$DF_ROOT/bin/release-nameservers" --config "$CONFIG" --yes \
+  || warn "Could not release yet; deploys will need Namecheap access until you run: bin/release-nameservers --config $CONFIG"
+
 echo ""
 echo "─────────────────────────────────────"
 pass "Provisioned $DOMAIN (service at 0 tasks — no image yet)"

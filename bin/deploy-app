@@ -46,6 +46,14 @@ pass "ECS: $CLUSTER / $SERVICE"
 SHA="$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo manual)"
 TAG_SHA="$ECR_URL:git-$SHA"; TAG_LATEST="$ECR_URL:latest"
 
+# manage_nameservers = false with the Namecheap record still in state would make
+# this deploy's apply DELETE the domain's delegation. bin/release-nameservers
+# removes the record first; catch a hand edit that skipped it.
+if [[ "$(df_tfvar "$CONFIG/app.tfvars" manage_nameservers)" == "false" ]] \
+  && df_tf_at "$CONFIG" state list 2>/dev/null | grep -qxF 'module.app.module.namecheap_ns[0].namecheap_domain_records.ns'; then
+  die "app.tfvars sets manage_nameservers = false but the Namecheap record is still in state; this apply would delete the delegation. Run: bin/release-nameservers --config $CONFIG"
+fi
+
 [[ -f "$REPO_ROOT/$DOCKERFILE" ]] || die "Dockerfile not found: $REPO_ROOT/$DOCKERFILE (set DOCKERFILE in app.env)"
 if [[ "$YES" != true ]]; then
   read -r -p "Build + deploy $SHA to $SERVICE_URL? (y/N) " c; [[ "$c" == [yY] ]] || { echo "Aborted."; exit 0; }

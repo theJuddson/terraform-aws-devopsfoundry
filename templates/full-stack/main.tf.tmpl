@@ -80,6 +80,7 @@ module "app" {
   az_count = var.az_count
 
   existing_zone_name          = var.existing_zone_name
+  manage_nameservers          = var.manage_nameservers
   enable_nat_gateway          = var.enable_nat_gateway
   tasks_in_public_subnets     = var.tasks_in_public_subnets
   shared_platform             = var.shared_platform

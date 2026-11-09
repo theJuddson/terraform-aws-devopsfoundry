@@ -85,7 +85,8 @@ shares state with anything else.
 | `bin/destroy-site <domain>` | Tear down; reverts nameservers to Namecheap default |
 | `bin/new-app <domain> --config <dir>` | Zone + NS + ACM + VPC + Fargate stack at `desired_count = 0` |
 | `bin/deploy-app --config <dir>` | Build image → ECR → apply → roll service → verify |
-| `bin/destroy-app --config <dir>` | Tear down the app stack |
+| `bin/release-nameservers --config <dir>` | Stop managing a live Namecheap delegation in Terraform, so deploys never call Namecheap (`new-app` runs it) |
+| `bin/destroy-app --config <dir>` | Tear down the app stack; reverts the delegation unless `--keep-ns` |
 
 Both `new-site` and `new-app` run in **two phases** to dodge the
 cert-validation-vs-NS-propagation race — delegate first, poll `dig` until it
@@ -152,6 +153,11 @@ bin/new-app example.com --config ../MyApp/.devopsfoundry --enable-db --apex   # 
 bin/deploy-app  --config ../MyApp/.devopsfoundry
 bin/destroy-app --config ../MyApp/.devopsfoundry
 ```
+
+Once the domain is delegated, `new-app` stops managing the Namecheap record in Terraform (`bin/release-nameservers`:
+the record leaves the state, then `manage_nameservers = false`), so `deploy-app` never needs the Namecheap API or a
+whitelisted IP. For an app made before this, run `bin/release-nameservers --config <dir>` once. `destroy-app` still
+reverts the delegation; it re-adopts the record first.
 
 The service is fronted at `<subdomain>.<domain>` (default subdomain `api`). Pass
 `--apex` (or set `subdomain = ""` in `app.tfvars`) to serve at the **bare domain**

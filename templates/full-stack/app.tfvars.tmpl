@@ -13,6 +13,12 @@ aws_region  = "us-east-1"
 # domain's Namecheap nameservers to it. Set via `bin/new-app --existing-zone`.
 existing_zone_name = "__EXISTING_ZONE__"
 
+# Namecheap delegation: new-app runs bin/release-nameservers once the domain is
+# live, which removes the record from state and sets this to false, so deploys
+# never call Namecheap. Don't set it false by hand: without the state step,
+# the next apply would delete the delegation.
+# manage_nameservers = true
+
 # ── Container ──────────────────────────────────────────
 container_port    = 8080
 cpu               = 512          # Fargate units (256/512/1024/2048/4096)

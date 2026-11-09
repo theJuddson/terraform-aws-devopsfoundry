@@ -244,6 +244,12 @@ variable "tasks_in_public_subnets" {
   default     = false
 }
 
+variable "manage_nameservers" {
+  description = "Whether Terraform manages the Namecheap delegation. new-app sets false once it is live (bin/release-nameservers); never set it false by hand."
+  type        = bool
+  default     = true
+}
+
 variable "existing_zone_name" {
   description = "Existing Route53 zone to add this app's records to; empty = create a zone and delegate NS"
   type        = string

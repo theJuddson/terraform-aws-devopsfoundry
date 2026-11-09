@@ -1,0 +1,135 @@
+# shellcheck shell=bash
+# Namecheap hand-off (#35): bin/release-nameservers, the tfvars helpers, the
+# deploy-app guard, and new-app running the release after provisioning.
+
+ADDR='module.app.module.namecheap_ns[0].namecheap_domain_records.ns'
+ADDR_RE='module\.app\.module\.namecheap_ns\[0\]\.namecheap_domain_records\.ns'
+R53_NS='["ns-1.awsdns-01.org","ns-2.awsdns-02.net"]'
+
+# An app root as new-app leaves it, with state and DNS answers chosen per test.
+make_app() { # make_app <state-has-record:true|false> <public NS lines>
+  APP="$TMP/app/.devopsfoundry"; mkdir -p "$APP"
+  touch "$APP/main.tf"
+  sed -e 's/__DOMAIN__/example.com/g' -e 's/__SUBDOMAIN__/api/g' -e 's/__EXISTING_ZONE__//g' \
+      -e 's/__ENABLE_[A-Z]*__/false/g' "$DF/templates/full-stack/app.tfvars.tmpl" > "$APP/app.tfvars"
+  { echo 'module.app.module.route53_zone[0].aws_route53_zone.main'; $1 && echo "$ADDR"; } > "$TMP/state"
+  printf '%s\n' "$2" > "$TMP/dig"
+  stub terraform "
+case \"\$*\" in
+  *' state list'*) cat '$TMP/state' ;;
+  *' state rm '*)  echo \"tfvars at state rm: \$(grep -c '^manage_nameservers = false' '$APP/app.tfvars')\" >> \"\$CALLS\"
+                   [[ -f '$TMP/state-rm-fails' ]] && exit 1
+                   grep -vxF '$ADDR' '$TMP/state' > '$TMP/state.new'; mv '$TMP/state.new' '$TMP/state' ;;
+  *'output -json name_servers'*) echo '$R53_NS' ;;
+  *'output -raw'*) echo 'https://api.example.com' ;;
+esac
+exit 0"
+  stub dig "cat '$TMP/dig'"
+}
+
+t_tfvar_reads_live_values_only() {
+  printf '# manage_nameservers = true\ndomain_name = "example.com"  # apex\nflag=false\n' > "$TMP/x.tfvars"
+  local lib="$DF/lib/common.sh"
+  [[ "$(bash -c "source $lib; df_tfvar $TMP/x.tfvars domain_name")" == "example.com" ]] || fail "quoted value with comment"
+  [[ "$(bash -c "source $lib; df_tfvar $TMP/x.tfvars flag")" == "false" ]] || fail "unspaced value"
+  [[ -z "$(bash -c "source $lib; df_tfvar $TMP/x.tfvars manage_nameservers")" ]] || fail "a commented line must not count"
+}
+
+t_set_tfvar_uncomments_replaces_or_appends() {
+  local lib="$DF/lib/common.sh"
+  printf 'a = 1\n# manage_nameservers = true\nb = 2\n' > "$TMP/x.tfvars"
+  bash -c "source $lib; df_set_tfvar $TMP/x.tfvars manage_nameservers false"
+  [[ "$(cat "$TMP/x.tfvars")" == $'a = 1\nmanage_nameservers = false\nb = 2' ]] || fail "should uncomment in place: $(cat "$TMP/x.tfvars")"
+  bash -c "source $lib; df_set_tfvar $TMP/x.tfvars manage_nameservers true"
+  [[ "$(grep -c manage_nameservers "$TMP/x.tfvars")" == 1 && "$(bash -c "source $lib; df_tfvar $TMP/x.tfvars manage_nameservers")" == true ]] || fail "should replace, not duplicate"
+  bash -c "source $lib; df_set_tfvar $TMP/x.tfvars c 3"
+  [[ "$(tail -1 "$TMP/x.tfvars")" == "c = 3" ]] || fail "should append a new key"
+}
+
+t_release_removes_state_before_flipping_the_variable() {
+  make_app true $'ns-1.awsdns-01.org.\nns-2.awsdns-02.net.'
+  "$DF/bin/release-nameservers" --config "$APP" --yes || fail "release should succeed"
+  assert_called "state rm $ADDR_RE"
+  assert_called "tfvars at state rm: 0"
+  [[ "$(bash -c "source $DF/lib/common.sh; df_tfvar $APP/app.tfvars manage_nameservers")" == "false" ]] || fail "manage_nameservers must end false"
+}
+
+t_release_refuses_while_namecheap_still_answers() {
+  make_app true $'dns1.registrar-servers.com.\ndns2.registrar-servers.com.'
+  "$DF/bin/release-nameservers" --config "$APP" --yes && fail "must refuse before delegation is live"
+  assert_not_called "state rm"
+  [[ -z "$(bash -c "source $DF/lib/common.sh; df_tfvar $APP/app.tfvars manage_nameservers")" ]] || fail "app.tfvars must be unchanged"
+}
+
+t_release_refuses_a_mix_of_old_and_new_nameservers() {
+  make_app true $'ns-1.awsdns-01.org.\ndns1.registrar-servers.com.'
+  "$DF/bin/release-nameservers" --config "$APP" --yes && fail "a half-propagated delegation must not be released"
+  assert_not_called "state rm"
+}
+
+t_release_leaves_tfvars_alone_if_state_rm_fails() {
+  make_app true $'ns-1.awsdns-01.org.\nns-2.awsdns-02.net.'
+  touch "$TMP/state-rm-fails"
+  "$DF/bin/release-nameservers" --config "$APP" --yes && fail "must fail when state rm fails"
+  [[ -z "$(bash -c "source $DF/lib/common.sh; df_tfvar $APP/app.tfvars manage_nameservers")" ]] || fail "app.tfvars must be unchanged"
+}
+
+t_release_is_idempotent() {
+  make_app true $'ns-1.awsdns-01.org.\nns-2.awsdns-02.net.'
+  "$DF/bin/release-nameservers" --config "$APP" --yes
+  : > "$CALLS"
+  "$DF/bin/release-nameservers" --config "$APP" --yes || fail "a second run must succeed"
+  assert_not_called "state rm"
+  assert_not_called "^dig "
+}
+
+t_release_does_nothing_for_an_existing_zone_app() {
+  make_app false $'ns-1.awsdns-01.org.'
+  printf '' > "$TMP/state"
+  "$DF/bin/release-nameservers" --config "$APP" --yes || fail "nothing to release is not an error"
+  assert_not_called "state rm"
+  [[ -z "$(bash -c "source $DF/lib/common.sh; df_tfvar $APP/app.tfvars manage_nameservers")" ]] || fail "app.tfvars must be unchanged"
+}
+
+t_deploy_refuses_a_hand_flipped_variable() {
+  make_app true $'ns-1.awsdns-01.org.'
+  echo 'manage_nameservers = false' >> "$APP/app.tfvars"
+  : > "$APP/app.env"; touch "$TMP/app/Dockerfile"
+  local out; out=$("$DF/bin/deploy-app" --config "$APP" --yes 2>&1) && fail "deploy must stop"
+  assert_contains "$out" "release-nameservers"
+  assert_not_called "^docker build"
+  assert_not_called " apply "
+}
+
+t_new_app_releases_after_provisioning() {
+  make_app true $'ns-1.awsdns-01.org.\nns-2.awsdns-02.net.'
+  rm -rf "$TMP/app/.devopsfoundry"   # new-app scaffolds it
+  NAMECHEAP_API_KEY=x NAMECHEAP_CLIENT_IP=203.0.113.9 \
+    "$DF/bin/new-app" example.com --config "$TMP/app/.devopsfoundry" --yes || fail "new-app should succeed"
+  assert_before " apply .*-var desired_count=0" "state rm $ADDR_RE"
+  [[ "$(bash -c "source $DF/lib/common.sh; df_tfvar $TMP/app/.devopsfoundry/app.tfvars manage_nameservers")" == "false" ]] || fail "new-app must leave manage_nameservers = false"
+}
+
+t_destroy_reverts_a_released_delegation() {
+  make_app false $'ns-1.awsdns-01.org.'
+  echo 'manage_nameservers = false' >> "$APP/app.tfvars"
+  "$DF/bin/destroy-app" --config "$APP" --yes || fail "destroy should succeed"
+  assert_called " apply .*-var manage_nameservers=true -target=module\.app\.module\.namecheap_ns"
+  assert_called " destroy .*-var manage_nameservers=true"
+  assert_before " apply .*-target=module\.app\.module\.namecheap_ns" " destroy "
+}
+
+t_destroy_keep_ns_leaves_a_released_delegation_alone() {
+  make_app false $'ns-1.awsdns-01.org.'
+  echo 'manage_nameservers = false' >> "$APP/app.tfvars"
+  "$DF/bin/destroy-app" --config "$APP" --keep-ns --yes || fail "destroy should succeed"
+  assert_not_called " apply "
+  assert_not_called "manage_nameservers=true"
+}
+
+t_destroy_of_an_unreleased_app_is_unchanged() {
+  make_app true $'ns-1.awsdns-01.org.'
+  "$DF/bin/destroy-app" --config "$APP" --yes || fail "destroy should succeed"
+  assert_not_called " apply "
+  assert_called " destroy -input=false -auto-approve -var-file=app.tfvars$"
+}

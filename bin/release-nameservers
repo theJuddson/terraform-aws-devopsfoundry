@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# release-nameservers — stop managing an app's Namecheap nameserver delegation in
+#                       Terraform, once it is live, so later plans and deploys
+#                       never call the Namecheap API (which only answers
+#                       whitelisted IPs).
+#
+# Usage: bin/release-nameservers --config <dir> [--yes]
+#
+# The delegation itself stays exactly as it is at Namecheap. Only Terraform's
+# record of it goes: the state entry is removed FIRST, then app.tfvars gets
+# manage_nameservers = false. The other order would make the next apply delete
+# the delegation. Safe to re-run; new-app runs it after provisioning.
+set -euo pipefail
+DF_SCRIPT_NAME="release-nameservers"
+source "$(cd "$(dirname "$0")/.." && pwd)/lib/common.sh"
+df_load_env
+
+CONFIG=""; YES=false
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --config) CONFIG="$2"; shift 2 ;;
+    --yes|-y) YES=true; shift ;;
+    *)        die "Unknown arg: $1" ;;
+  esac
+done
+CONFIG="$(df_resolve_config "$CONFIG")"
+TFVARS="$CONFIG/app.tfvars"
+[[ -f "$TFVARS" ]] || die "Missing $TFVARS"
+ADDR='module.app.module.namecheap_ns[0].namecheap_domain_records.ns'
+
+DOMAIN="$(df_tfvar "$TFVARS" domain_name)"
+[[ -n "$DOMAIN" ]] || die "No domain_name in $TFVARS"
+
+in_state=false
+STATE="$(df_tf_at "$CONFIG" state list 2>/dev/null)" || die "Could not read Terraform state in $CONFIG (run terraform init there?)"
+grep -qxF "$ADDR" <<<"$STATE" && in_state=true
+
+if ! $in_state; then
+  if [[ "$(df_tfvar "$TFVARS" manage_nameservers)" == "false" ]]; then
+    pass "Already released: Terraform no longer manages $DOMAIN's nameservers"
+    exit 0
+  fi
+  if grep -q '^module\.app\.module\.route53_zone\[0\]' <<<"$STATE"; then
+    # The zone exists but the record is gone (e.g. removed by hand): just finish.
+    info "No Namecheap record in state; setting manage_nameservers = false"
+    df_set_tfvar "$TFVARS" manage_nameservers false
+    pass "Released"
+    exit 0
+  fi
+  pass "Nothing to release: this app doesn't manage Namecheap nameservers (existing zone, or not provisioned)"
+  exit 0
+fi
+
+# Only release a delegation that is live: the public DNS must already answer
+# with the zone's Route53 nameservers.
+step "Checking $DOMAIN is delegated to its Route53 zone"
+EXPECTED="$(df_tf_at "$CONFIG" output -json name_servers 2>/dev/null | jq -r '.[]' | tr 'A-Z' 'a-z' | sed 's/\.$//' | sort)"
+[[ -n "$EXPECTED" ]] || die "No name_servers output; is the stack provisioned?"
+CURRENT="$(dig +short NS "$DOMAIN" @8.8.8.8 2>/dev/null | tr 'A-Z' 'a-z' | sed 's/\.$//' | sort)"
+if [[ -z "$CURRENT" ]] || [[ -n "$(comm -23 <(echo "$CURRENT") <(echo "$EXPECTED"))" ]]; then
+  echo "  expected: $(echo $EXPECTED)"; echo "  public:   $(echo ${CURRENT:-none})"
+  die "$DOMAIN is not (yet) served only by its Route53 nameservers; not releasing. Re-run once it is."
+fi
+pass "Delegation is live"
+
+if [[ "$YES" != true ]]; then
+  read -r -p "Stop managing $DOMAIN's Namecheap nameservers in Terraform? The delegation itself stays. (y/N) " c
+  [[ "$c" == [yY] ]] || { echo "Aborted."; exit 0; }
+fi
+
+step "Removing the Namecheap record from Terraform state (Namecheap is not changed)"
+df_tf_at "$CONFIG" state rm "$ADDR" >/dev/null || die "terraform state rm failed; app.tfvars left unchanged"
+pass "Removed $ADDR from state"
+
+step "Setting manage_nameservers = false in app.tfvars"
+df_set_tfvar "$TFVARS" manage_nameservers false
+pass "Released: plans and deploys no longer call Namecheap"
+log "INFO" "Released Namecheap nameserver management for $DOMAIN"

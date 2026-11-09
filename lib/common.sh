@@ -98,3 +98,34 @@ df_tf_init() {
     sleep "$delay"; attempt=$((attempt + 1))
   done
 }
+
+# Value of an uncommented `key = value` line in a .tfvars file (last one wins),
+# without quotes or a trailing comment. Empty if unset. Usage: df_tfvar <file> <key>
+df_tfvar() {
+  awk -v k="$2" '
+    $0 ~ "^[[:space:]]*" k "[[:space:]]*=" {
+      v = $0; sub(/^[^=]*=[[:space:]]*/, "", v); sub(/[[:space:]]*#.*$/, "", v)
+      gsub(/^"|"$/, "", v); val = v
+    }
+    END { print val }' "$1"
+}
+
+# Set `key = value` in a .tfvars file: replaces an uncommented line, else uncomments
+# the first `# key =` line, else appends. Usage: df_set_tfvar <file> <key> <value>
+df_set_tfvar() {
+  local file="$1" key="$2" value="$3" tmp
+  tmp="$(mktemp)"
+  awk -v k="$key" -v v="$value" '
+    BEGIN { set = 0 }
+    { lines[NR] = $0 }
+    $0 ~ "^[[:space:]]*" k "[[:space:]]*=" { live[NR] = 1; has_live = 1 }
+    $0 ~ "^[[:space:]]*#[[:space:]]*" k "[[:space:]]*=" && !first_commented { first_commented = NR }
+    END {
+      for (i = 1; i <= NR; i++) {
+        if ((has_live && live[i]) || (!has_live && i == first_commented)) {
+          if (!set) { print k " = " v; set = 1 }   # one line, even if the key appeared twice
+        } else print lines[i]
+      }
+      if (!set) print k " = " v
+    }' "$file" > "$tmp" && mv "$tmp" "$file"
+}
