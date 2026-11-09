@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Static checks for every Terraform module and example: fmt, validate, tflint,
-# terraform test (mocked providers), checkov. Makes no AWS call (validate runs
+# terraform test (mocked providers), the bin/ script tests (stubbed commands), checkov. Makes no AWS call (validate runs
 # with -backend=false; tests plan against mocks). Used by CI.
 #
 #   bin/check-modules                 # everything
@@ -51,6 +51,12 @@ for d in "${dirs[@]}"; do
     fail=1
   fi
 done
+
+# The bin/ scripts, against stub aws/terraform/docker commands (tests/cli).
+if [[ $# -eq 0 ]]; then
+  step test "bin/ scripts"
+  tests/cli/run.sh || fail=1
+fi
 
 # .checkov.baseline holds the findings the v1.1.0 modules already had (see
 # docs/checkov-accepted.md). Anything not in it fails.

@@ -78,3 +78,23 @@ df_resolve_config() {
 
 # Run terraform in a config dir. Usage: df_tf_at <config_dir> <args...>
 df_tf_at() { local c="$1"; shift; terraform -chdir="$c" "$@"; }
+
+# terraform init that survives a registry or GitHub blip. Usage: df_tf_init <dir> <init args...>
+# Retries (after DF_RETRY_DELAYS seconds, default "10 30") only when the error
+# looks like a network failure; a configuration error fails at once.
+DF_NETWORK_ERRORS='could not query provider registry|failed to retrieve|request failed after|Gateway Timeout|Bad Gateway|Service Unavailable|bad response|[Tt]imeout|timed out|connection reset|connection refused|TLS handshake|no such host|temporary failure in name resolution|unexpected EOF'
+df_tf_init() {
+  local dir="$1"; shift
+  local errfile delay attempt=1
+  errfile="$(mktemp)"
+  for delay in ${DF_RETRY_DELAYS:-10 30} ""; do
+    if terraform -chdir="$dir" init "$@" >/dev/null 2>"$errfile"; then
+      rm -f "$errfile"; return 0
+    fi
+    if [[ -z "$delay" ]] || ! grep -qE "$DF_NETWORK_ERRORS" "$errfile"; then
+      cat "$errfile" >&2; rm -f "$errfile"; return 1
+    fi
+    warn "terraform init hit a network error (attempt $attempt); retrying in ${delay}s"
+    sleep "$delay"; attempt=$((attempt + 1))
+  done
+}

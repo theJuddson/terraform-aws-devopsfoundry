@@ -138,7 +138,7 @@ BACKEND_FILE="$DF_ROOT/backend.tfvars"
 info "State backend: $BACKEND_FILE"
 
 step "terraform init"
-df_tf_at "$CONFIG" init -input=false -backend-config="$BACKEND_FILE" >/dev/null
+df_tf_init "$CONFIG" -input=false -backend-config="$BACKEND_FILE" || die "terraform init failed"
 pass "Initialized"
 
 if [[ "$YES" != true ]]; then

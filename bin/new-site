@@ -83,7 +83,7 @@ fi
 
 # ── Terraform init ─────────────────────────────────────
 step "terraform init"
-df_tf "$DOMAIN" init -input=false -backend-config="$DF_ROOT/backend.tfvars" >/dev/null
+df_tf_init "$(df_site_dir "$DOMAIN")" -input=false -backend-config="$DF_ROOT/backend.tfvars" || die "terraform init failed"
 pass "Initialized"
 
 if [[ "$YES" != true ]]; then
