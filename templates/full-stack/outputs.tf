@@ -28,3 +28,8 @@ output "rds_security_group_id" { value = module.app.rds_security_group_id }
 output "task_security_group_id" { value = module.app.task_security_group_id }
 output "private_subnet_ids" { value = module.app.private_subnet_ids }
 output "waf_web_acl_arn" { value = module.app.waf_web_acl_arn }
+
+output "dnssec_ds_record_fields" {
+  description = "With enable_dnssec: the DS record to add at the registrar (Namecheap: Advanced DNS > DNSSEC)"
+  value       = module.app.dnssec_ds_record_fields
+}

@@ -93,6 +93,19 @@ module "route53_zone" {
   acm_domain_validation_options = module.acm_cert.domain_validation_options
 }
 
+# DNSSEC and query logging for the zone this stack owns. Both must live in
+# us-east-1. Not offered with existing_zone_name: that zone belongs to someone else.
+module "route53_zone_security" {
+  source                   = "../route53-zone-security"
+  count                    = !local.use_existing_zone && (var.enable_dnssec || var.enable_dns_query_logging) ? 1 : 0
+  providers                = { aws = aws.us_east_1 }
+  zone_id                  = module.route53_zone[0].zone_id
+  zone_name                = var.domain_name
+  enable_dnssec            = var.enable_dnssec
+  enable_query_logging     = var.enable_dns_query_logging
+  query_log_retention_days = var.dns_query_log_retention_days
+}
+
 module "namecheap_ns" {
   source      = "../namecheap-ns"
   count       = local.use_existing_zone || !var.manage_nameservers ? 0 : 1

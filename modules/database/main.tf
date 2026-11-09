@@ -50,6 +50,7 @@ resource "aws_db_subnet_group" "main" {
 }
 
 resource "aws_db_instance" "main" {
+  #checkov:skip=CKV2_AWS_69:The module's parameter group sets only log settings, so TLS enforcement is the engine default (rds.force_ssl = 1 from Postgres 15)
   identifier     = "${local.name_prefix}-postgres"
   engine         = "postgres"
   engine_version = var.engine_version

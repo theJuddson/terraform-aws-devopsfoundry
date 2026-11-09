@@ -31,6 +31,28 @@ mock_provider "aws" {
 mock_provider "aws" {
   alias = "us_east_1"
 
+  # route53-zone-security runs on this provider and checks it is us-east-1.
+  mock_data "aws_region" {
+    defaults = { region = "us-east-1", name = "us-east-1" }
+  }
+  mock_data "aws_caller_identity" {
+    defaults = { account_id = "111111111111" }
+  }
+  mock_data "aws_partition" {
+    defaults = { partition = "aws" }
+  }
+  mock_data "aws_iam_policy_document" {
+    defaults = { json = "{}" }
+  }
+  mock_resource "aws_cloudwatch_log_group" {
+    override_during = plan
+    defaults        = { arn = "arn:aws:logs:us-east-1:111111111111:log-group:/aws/route53/example.com" }
+  }
+  mock_resource "aws_kms_key" {
+    override_during = plan
+    defaults        = { arn = "arn:aws:kms:us-east-1:111111111111:key/11111111-2222-3333-4444-555555555555" }
+  }
+
   # Real plans only know the validation records once the certificate exists
   # (bin/new-app applies the zone first); here they are known up front.
   mock_resource "aws_acm_certificate" {
@@ -239,5 +261,44 @@ run "kms_key_encrypts_the_redis_auth_secret" {
   assert {
     condition     = aws_secretsmanager_secret.redis_auth[0].kms_key_id == "arn:aws:kms:us-east-1:111111111111:key/11111111-2222-3333-4444-555555555555"
     error_message = "kms_key_arn must encrypt the Redis auth secret full-stack owns."
+  }
+}
+
+run "dns_security_off_by_default" {
+  command = plan
+
+  assert {
+    condition     = length(module.route53_zone_security) == 0 && output.dnssec_ds_record == null
+    error_message = "DNSSEC and query logging must stay off unless asked for."
+  }
+}
+
+run "dns_security_on_for_the_stacks_own_zone" {
+  command = plan
+
+  variables {
+    enable_dnssec            = true
+    enable_dns_query_logging = true
+  }
+
+  assert {
+    condition     = length(module.route53_zone_security) == 1 && module.route53_zone_security[0].query_log_group_name == "/aws/route53/example.com"
+    error_message = "enable_dnssec / enable_dns_query_logging must reach the zone security module for the stack's zone."
+  }
+}
+
+run "dns_security_never_touches_an_existing_zone" {
+  command = plan
+
+  variables {
+    existing_zone_name       = "example.com"
+    subdomain                = "app"
+    enable_dnssec            = true
+    enable_dns_query_logging = true
+  }
+
+  assert {
+    condition     = length(module.route53_zone_security) == 0
+    error_message = "A zone this stack didn't create must never be signed or logged by it."
   }
 }

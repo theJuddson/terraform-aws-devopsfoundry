@@ -31,6 +31,7 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | namecheap\_ns | ../namecheap-ns | n/a |
 | networking | ../networking | n/a |
 | route53\_zone | ../route53-zone | n/a |
+| route53\_zone\_security | ../route53-zone-security | n/a |
 | shared\_platform | ../shared-platform | n/a |
 
 ## Resources
@@ -78,8 +79,11 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | desired\_count | n/a | `number` | `1` | no |
 | dmarc\_policy | DMARC policy: none \| quarantine \| reject | `string` | `"none"` | no |
 | dmarc\_rua\_email | DMARC report address (required when enable\_email=true) | `string` | `""` | no |
+| dns\_query\_log\_retention\_days | n/a | `number` | `30` | no |
 | enable\_cache | n/a | `bool` | `false` | no |
 | enable\_database | ── Toggles ──────────────────────────────────────────── | `bool` | `false` | no |
+| enable\_dns\_query\_logging | Log the DNS queries Route53 answers for the stack's zone to CloudWatch in us-east-1 (billed per GB). | `bool` | `false` | no |
+| enable\_dnssec | Sign the stack's zone with DNSSEC. After apply, publish the dnssec\_ds\_record output at the registrar; turning it off later needs the order in docs/dnssec.md. | `bool` | `false` | no |
 | enable\_email | n/a | `bool` | `false` | no |
 | enable\_flow\_logs | Send VPC flow logs to CloudWatch (billed per GB). Ignored in shared-platform mode, where the host owns the VPC. | `bool` | `false` | no |
 | enable\_nat\_gateway | Provision a NAT gateway (~$33/month). Ignored in shared-platform mode, where<br/>the host platform's networking already decides this.<br/><br/>Set false together with `tasks_in_public_subnets = true` to remove the single<br/>largest fixed cost of a small stack. | `bool` | `true` | no |
@@ -116,6 +120,9 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | db\_master\_secret\_arn | Secrets Manager ARN of the RDS-managed master credential (rotates every 7 days by default) |
 | db\_name | n/a |
 | db\_port | n/a |
+| dns\_query\_log\_group\_name | CloudWatch log group (us-east-1) with the zone's DNS query logs (null when off) |
+| dnssec\_ds\_record | DS record to publish at the registrar when enable\_dnssec = true (null otherwise) |
+| dnssec\_ds\_record\_fields | The DS record's parts for registrars that ask for them separately, such as Namecheap (null when DNSSEC is off) |
 | ecr\_repository\_url | n/a |
 | ecs\_cluster\_name | n/a |
 | ecs\_service\_name | n/a |

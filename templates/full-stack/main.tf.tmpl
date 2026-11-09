@@ -111,6 +111,8 @@ module "app" {
   db_log_min_duration_ms                 = var.db_log_min_duration_ms
   kms_key_arn                            = var.kms_key_arn
   alb_access_logs                        = var.alb_access_logs
+  enable_dnssec                          = var.enable_dnssec
+  enable_dns_query_logging               = var.enable_dns_query_logging
   cache_num_cache_clusters               = var.cache_num_cache_clusters
 
   # Opt-in WAF on the ALB (needs the module at v1.3.0 or later; ignored in shared-platform mode)

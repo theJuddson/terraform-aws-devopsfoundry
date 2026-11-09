@@ -153,6 +153,16 @@ variable "db_iam_database_authentication_enabled" {
   type    = bool
   default = false
 }
+variable "enable_dnssec" {
+  description = "Sign the app's zone with DNSSEC; then publish dnssec_ds_record at the registrar (docs/dnssec.md)"
+  type        = bool
+  default     = false
+}
+variable "enable_dns_query_logging" {
+  description = "Log the zone's DNS queries to CloudWatch in us-east-1 (billed per GB)"
+  type        = bool
+  default     = false
+}
 variable "alb_access_logs" {
   description = "ALB access logs to a private S3 bucket (storage billed; 90-day expiry). Ignored in shared-platform mode."
   type        = bool

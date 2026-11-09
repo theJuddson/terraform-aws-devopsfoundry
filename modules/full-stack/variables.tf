@@ -336,3 +336,20 @@ variable "kms_key_arn" {
     error_message = "kms_key_arn must be a KMS key ARN (arn:aws:kms:<region>:<account>:key/<id>), not an alias."
   }
 }
+
+# ── DNS zone security (opt-in) ─────────────────────────
+# Ignored with existing_zone_name: only a zone this stack created is signed or logged.
+variable "enable_dnssec" {
+  description = "Sign the stack's zone with DNSSEC. After apply, publish the dnssec_ds_record output at the registrar; turning it off later needs the order in docs/dnssec.md."
+  type        = bool
+  default     = false
+}
+variable "enable_dns_query_logging" {
+  description = "Log the DNS queries Route53 answers for the stack's zone to CloudWatch in us-east-1 (billed per GB)."
+  type        = bool
+  default     = false
+}
+variable "dns_query_log_retention_days" {
+  type    = number
+  default = 30
+}

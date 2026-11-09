@@ -10,7 +10,7 @@ checks (`CKV2_*`) here, so it reports fewer findings than CI.
 
 These findings were in the existing modules before the checks were added. Fixing any of them would change what
 existing stacks build, which a minor release must not do, so they are recorded in `.checkov.baseline` instead. Each
-is a candidate for an opt-in variable in a later release. v1.3.0 added the ones named below; the rest are tracked as
+is a candidate for an opt-in variable in a later release. v1.3.0 and v1.4.0 added the ones named below; the rest are tracked as
 [GitHub issues](https://github.com/theJuddson/terraform-aws-devopsfoundry/issues?q=is%3Aissue+label%3Aenhancement).
 The defaults still match v1.1.0, so checkov keeps reporting these for the default settings.
 
@@ -18,23 +18,23 @@ The defaults still match v1.1.0, so checkov keeps reporting these for the defaul
 | --- | --- | --- | --- |
 | all VPC modules | CKV2_AWS_5 | Security groups for RDS, Redis and tasks not attached in the same module | They are attached by the database, cache and container-service modules |
 | cache | CKV2_AWS_50 | Redis without Multi-AZ automatic failover | Single node for cost; `num_cache_clusters = 2` or more turns on Multi-AZ failover (v1.3.0) |
-| cache | CKV_AWS_191 | Redis encrypted with the AWS-managed key, not a customer managed key | Still encrypted at rest; a CMK adds cost and a key policy to manage |
-| container-service | CKV_AWS_158 | Log group not encrypted with a customer managed key | Logs are encrypted with the CloudWatch default key |
+| cache | CKV_AWS_191 | Redis encrypted with the AWS-managed key, not a customer managed key | Still encrypted at rest; opt in with `kms_key_arn` (v1.4.0; replaces an existing cache) |
+| container-service | CKV_AWS_158 | Log group not encrypted with a customer managed key | CloudWatch default encryption; opt in with `log_kms_key_arn` (v1.4.0) |
 | container-service | CKV_AWS_338 | Logs kept 14 days, not a year | `log_retention_days` is a variable; 14 days suits small apps |
 | container-service | CKV_AWS_65 | Container Insights off | Billed per metric; opt in with `container_insights = true` (v1.3.0) |
 | container-service | CKV_AWS_150 | ALB deletion protection off | `destroy-app` must be able to tear a stack down; opt in with `alb_deletion_protection = true` (v1.3.0) |
-| container-service | CKV_AWS_91 | ALB access logs off | Needs a log bucket; not every app wants one |
+| container-service | CKV_AWS_91 | ALB access logs off | Needs a log bucket; opt in with `alb_access_logs = true` (v1.4.0) |
 | database | CKV_AWS_118, CKV_AWS_353 | No enhanced monitoring, no Performance Insights | Cost; opt in with `monitoring_interval` and `performance_insights_enabled` (v1.3.0) |
 | database | CKV_AWS_157 | Single-AZ | `db_multi_az` is a variable; off by default for cost |
-| database | CKV2_AWS_30 | No Postgres query logging | Turn on with a parameter group when needed |
+| database | CKV2_AWS_30 | No Postgres query logging | Opt in with `log_min_duration_ms` (v1.4.0) |
 | database | CKV_AWS_161 | No IAM database authentication | Apps use the RDS-managed password from Secrets Manager; opt in with `iam_database_authentication_enabled = true` (v1.3.0) |
 | database | CKV_AWS_293 | Deletion protection off by default | `db_deletion_protection` is a variable; off so teardown works |
 | email | CKV_AWS_273, CKV_AWS_40 | IAM user with an inline policy | SES SMTP credentials can only be derived from an IAM user's access key; the policy allows `ses:SendRawEmail` only |
 | email, full-stack | CKV2_AWS_57 | SMTP password and Redis auth token not rotated automatically | The app reads them at start; rotation needs an app restart plan first |
-| email | CKV_AWS_149 | SMTP secret encrypted with the AWS-managed key | Still encrypted at rest |
+| email | CKV_AWS_149 | SMTP secret encrypted with the AWS-managed key | Still encrypted at rest; opt in with `kms_key_arn` (v1.4.0) |
 | container-service | CKV2_AWS_28 | ALB without WAF | WAF costs about $5/month per ACL plus rules; opt in with `create_waf = true` or attach one with `waf_web_acl_arn` (v1.3.0) |
 | networking | CKV2_AWS_11, CKV2_AWS_12 | No VPC flow logs; default security group not emptied | Flow logs cost; opt in with `enable_flow_logs = true` (v1.3.0). Nothing uses the default group |
-| route53-zone | CKV2_AWS_38, CKV2_AWS_39 | No DNSSEC signing, no query logging | DNSSEC needs a KMS key in us-east-1 and registrar DS records |
+| route53-zone | CKV2_AWS_38, CKV2_AWS_39 | No DNSSEC signing, no query logging | Opt in with the `route53-zone-security` module or full-stack's `enable_dnssec` / `enable_dns_query_logging` (v1.4.0) |
 | networking | CKV_AWS_394 | Availability zones not pinned by zone ID | Changing it would re-plan subnets for existing stacks |
 | networking | CKV_AWS_130 | Public subnets assign public IPs | They hold the ALB and NAT, and NAT-free tasks need public IPs |
 | networking | CKV_AWS_260 | ALB security group open on port 80 | Port 80 only redirects to HTTPS |
@@ -55,7 +55,11 @@ The defaults still match v1.1.0, so checkov keeps reporting these for the defaul
 | task-runner | CKV_AWS_65 | Container Insights is billed; opt in with `container_insights = true` |
 | task-runner | CKV_AWS_338 | Retention is `log_retention_days`; one-off task logs rarely need a year |
 | ecr-repository | CKV_AWS_136 | AES-256 by default; pass `kms_key_arn` for a customer managed key |
-| networking | CKV_AWS_158, CKV_AWS_338 | The opt-in flow log group uses the CloudWatch default key and `flow_log_retention_days` |
+| networking | CKV_AWS_158, CKV_AWS_338 | The opt-in flow log group uses CloudWatch default encryption unless `flow_log_kms_key_arn` is set, and `flow_log_retention_days` |
+| container-service | CKV_AWS_18, CKV_AWS_144, CKV_AWS_145, CKV_AWS_21, CKV2_AWS_62 | The opt-in ALB log bucket: logging it would recurse, replication and versioning add nothing to expiring logs, ALB logs support SSE-S3 only, no consumer needs notifications |
+| database | CKV2_AWS_69 | The opt-in parameter group (`log_min_duration_ms`) changes logging only; TLS enforcement stays the engine default (`rds.force_ssl = 1` from Postgres 15) |
+| route53-zone-security | CKV_AWS_7, CKV_AWS_109, CKV_AWS_111, CKV_AWS_356 | KMS cannot rotate the asymmetric DNSSEC key; `Resource: "*"` in a key policy means the key itself |
+| route53-zone-security | CKV_AWS_158, CKV_AWS_338 | The query log group uses CloudWatch default encryption unless `kms_key_arn` is set, and `query_log_retention_days` |
 | ecr-repository | CKV_AWS_51 | Tags are immutable by default; `container-service` keeps `MUTABLE` for its `:latest` deploy flow |
 | container-service | CKV2_AWS_31 | The opt-in WAF doesn't log requests (billed per GB); CloudWatch metrics and sampled requests are on |
 | container-service | CKV_AWS_192, CKV2_AWS_76 | The WAF's managed rule groups are a variable; the default list includes `AWSManagedRulesKnownBadInputsRuleSet`, which blocks Log4j lookups |
