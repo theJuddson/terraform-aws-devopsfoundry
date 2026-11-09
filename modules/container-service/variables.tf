@@ -261,3 +261,43 @@ variable "waf_rule_overrides" {
   type        = map(list(string))
   default     = {}
 }
+
+variable "log_kms_key_arn" {
+  description = "Customer managed KMS key for the app's CloudWatch log group. null (default) = CloudWatch's default encryption. The key policy must allow logs.<region>.amazonaws.com (see AWS's CloudWatch Logs encryption guide)."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.log_kms_key_arn == null || can(regex("^arn:aws[a-z-]*:kms:[a-z0-9-]+:[0-9]{12}:key/", var.log_kms_key_arn))
+    error_message = "log_kms_key_arn must be a KMS key ARN (arn:aws:kms:<region>:<account>:key/<id>), not an alias."
+  }
+}
+
+variable "secrets_kms_key_arns" {
+  description = "Customer managed KMS keys that encrypt any of `secrets`. The task execution role gets kms:Decrypt on them, which it needs to read those secrets at start."
+  type        = list(string)
+  default     = []
+}
+
+variable "alb_access_logs" {
+  description = "Write ALB access logs to S3. Creates a private, SSE-S3 encrypted bucket <name>-alb-logs-<account> unless alb_access_logs_bucket names one. Ignored when create_alb = false."
+  type        = bool
+  default     = false
+}
+
+variable "alb_access_logs_bucket" {
+  description = "Existing bucket for the ALB access logs, which must already allow ELB log delivery (see AWS's ALB access logs guide). Empty (default) = create one."
+  type        = string
+  default     = ""
+}
+
+variable "alb_access_logs_retention_days" {
+  description = "Days to keep access logs in the bucket this module creates."
+  type        = number
+  default     = 90
+
+  validation {
+    condition     = var.alb_access_logs_retention_days >= 1 && floor(var.alb_access_logs_retention_days) == var.alb_access_logs_retention_days
+    error_message = "alb_access_logs_retention_days must be a whole number of days, 1 or more."
+  }
+}

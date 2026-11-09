@@ -41,3 +41,14 @@ variable "num_cache_clusters" {
     error_message = "num_cache_clusters must be a whole number from 1 to 6."
   }
 }
+
+variable "kms_key_arn" {
+  description = "Customer managed KMS key for encryption at rest. null (default) = the AWS-managed key. Changing it on an existing cache REPLACES the replication group (data is lost)."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.kms_key_arn == null || can(regex("^arn:aws[a-z-]*:kms:[a-z0-9-]+:[0-9]{12}:key/", var.kms_key_arn))
+    error_message = "kms_key_arn must be a KMS key ARN (arn:aws:kms:<region>:<account>:key/<id>), not an alias."
+  }
+}

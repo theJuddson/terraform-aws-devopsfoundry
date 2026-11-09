@@ -159,6 +159,11 @@ variable "db_iam_database_authentication_enabled" {
   type    = bool
   default = false
 }
+variable "db_log_min_duration_ms" {
+  description = "Log Postgres statements slower than this many ms (0 = all, null = off). Takes effect after the instance's next reboot."
+  type        = number
+  default     = null
+}
 
 # ── Cache tuning ───────────────────────────────────────
 variable "cache_node_type" {
@@ -268,6 +273,20 @@ variable "container_insights" {
   type        = bool
   default     = false
 }
+variable "alb_access_logs" {
+  description = "Write ALB access logs to S3 (a private bucket <name>-alb-logs-<account>, unless alb_access_logs_bucket names one). Ignored in shared-platform mode."
+  type        = bool
+  default     = false
+}
+variable "alb_access_logs_bucket" {
+  description = "Existing bucket for the access logs; it must already allow ELB log delivery. Empty = create one."
+  type        = string
+  default     = ""
+}
+variable "alb_access_logs_retention_days" {
+  type    = number
+  default = 90
+}
 variable "alb_deletion_protection" {
   description = "Block deleting the ALB; turn off again before destroy-app. Ignored in shared-platform mode."
   type        = bool
@@ -305,4 +324,32 @@ variable "waf_rule_overrides" {
   description = "Managed rules to count instead of block, keyed by rule group, e.g. { AWSManagedRulesCommonRuleSet = [\"SizeRestrictions_BODY\"] }."
   type        = map(list(string))
   default     = {}
+}
+
+variable "kms_key_arn" {
+  description = "One customer managed KMS key for the stack's Redis data, the Redis auth and SMTP secrets, the app's logs and the flow logs. null (default) = AWS-managed keys. The key policy must allow logs.<region>.amazonaws.com; tasks get kms:Decrypt automatically. Setting it on an existing cache REPLACES the cache."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.kms_key_arn == null || can(regex("^arn:aws[a-z-]*:kms:[a-z0-9-]+:[0-9]{12}:key/", var.kms_key_arn))
+    error_message = "kms_key_arn must be a KMS key ARN (arn:aws:kms:<region>:<account>:key/<id>), not an alias."
+  }
+}
+
+# ── DNS zone security (opt-in) ─────────────────────────
+# Ignored with existing_zone_name: only a zone this stack created is signed or logged.
+variable "enable_dnssec" {
+  description = "Sign the stack's zone with DNSSEC. After apply, publish the dnssec_ds_record output at the registrar; turning it off later needs the order in docs/dnssec.md."
+  type        = bool
+  default     = false
+}
+variable "enable_dns_query_logging" {
+  description = "Log the DNS queries Route53 answers for the stack's zone to CloudWatch in us-east-1 (billed per GB)."
+  type        = bool
+  default     = false
+}
+variable "dns_query_log_retention_days" {
+  type    = number
+  default = 30
 }

@@ -25,6 +25,7 @@ No modules.
 | Name | Type |
 | ---- | ---- |
 | [aws_db_instance.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/db_instance) | resource |
+| [aws_db_parameter_group.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/db_parameter_group) | resource |
 | [aws_db_subnet_group.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/db_subnet_group) | resource |
 | [aws_iam_role.monitoring](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role) | resource |
 | [aws_iam_role_policy_attachment.monitoring](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment) | resource |
@@ -46,6 +47,7 @@ No modules.
 | engine\_version | n/a | `string` | `"16.11"` | no |
 | iam\_database\_authentication\_enabled | Also accept IAM authentication tokens as database passwords. The RDS-managed password keeps working. | `bool` | `false` | no |
 | instance\_class | n/a | `string` | `"db.t4g.micro"` | no |
+| log\_min\_duration\_ms | Log every statement that runs at least this many milliseconds (Postgres<br/>log\_min\_duration\_statement); 0 logs all statements. null (default) = off,<br/>and the instance keeps AWS's default parameter group. The logs go to the<br/>CloudWatch log group RDS already exports (/aws/rds/instance/<name>-postgres/postgresql).<br/><br/>Moving an existing instance onto the new parameter group takes effect after<br/>its next reboot; RDS shows it as pending-reboot until then. | `number` | `null` | no |
 | master\_username | n/a | `string` | `"appuser"` | no |
 | max\_allocated\_storage | n/a | `number` | `100` | no |
 | monitoring\_interval | Seconds between enhanced monitoring samples (0 = off; 1, 5, 10, 15, 30 or 60). Creates the monitoring role when on. Billed as CloudWatch Logs. | `number` | `0` | no |

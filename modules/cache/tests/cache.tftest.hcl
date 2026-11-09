@@ -62,3 +62,35 @@ run "num_cache_clusters_is_checked" {
 
   expect_failures = [var.num_cache_clusters]
 }
+
+run "aws_managed_key_by_default" {
+  command = plan
+
+  assert {
+    condition     = aws_elasticache_replication_group.main.kms_key_id == null
+    error_message = "Without kms_key_arn the cache must keep the AWS-managed key (changing it replaces the cache)."
+  }
+}
+
+run "customer_managed_key_when_given" {
+  command = plan
+
+  variables {
+    kms_key_arn = "arn:aws:kms:us-east-1:111111111111:key/11111111-2222-3333-4444-555555555555"
+  }
+
+  assert {
+    condition     = aws_elasticache_replication_group.main.kms_key_id == "arn:aws:kms:us-east-1:111111111111:key/11111111-2222-3333-4444-555555555555"
+    error_message = "kms_key_arn must encrypt the cache at rest."
+  }
+}
+
+run "kms_key_arn_rejects_an_alias" {
+  command = plan
+
+  variables {
+    kms_key_arn = "alias/my-key"
+  }
+
+  expect_failures = [var.kms_key_arn]
+}

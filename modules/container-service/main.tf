@@ -79,6 +79,7 @@ module "ecr" {
 resource "aws_cloudwatch_log_group" "app" {
   name              = "/ecs/${local.name_prefix}-${var.service_name}"
   retention_in_days = var.log_retention_days
+  kms_key_id        = var.log_kms_key_arn
   tags              = { Name = "${local.name_prefix}-${var.service_name}-logs" }
 }
 
@@ -115,6 +116,14 @@ data "aws_iam_policy_document" "task_execution_secrets" {
     actions   = ["secretsmanager:GetSecretValue"]
     resources = local.secret_arns
   }
+  # Secrets encrypted with a customer managed key can only be read with it.
+  dynamic "statement" {
+    for_each = length(var.secrets_kms_key_arns) > 0 ? [1] : []
+    content {
+      actions   = ["kms:Decrypt"]
+      resources = var.secrets_kms_key_arns
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "task_execution_secrets" {
@@ -142,6 +151,140 @@ resource "aws_lb" "main" {
   enable_deletion_protection = var.alb_deletion_protection
   idle_timeout               = 60
   tags                       = { Name = "${local.name_prefix}-alb" }
+
+  dynamic "access_logs" {
+    for_each = local.alb_logs_bucket == null ? [] : [1]
+    content {
+      bucket  = local.alb_logs_bucket
+      enabled = true
+    }
+  }
+
+  # The ALB checks it may write to the bucket when logging is switched on.
+  depends_on = [aws_s3_bucket_policy.alb_logs]
+}
+
+# ── ALB access logs (opt-in) ─────────────────────────
+# Either a bucket the caller already has (alb_access_logs_bucket) or one made
+# here. ALB access logs support SSE-S3 only, not KMS.
+locals {
+  create_alb_logs_bucket = var.create_alb && var.alb_access_logs && var.alb_access_logs_bucket == ""
+  alb_logs_bucket = !(var.create_alb && var.alb_access_logs) ? null : (
+    local.create_alb_logs_bucket ? aws_s3_bucket.alb_logs[0].id : var.alb_access_logs_bucket
+  )
+}
+
+data "aws_caller_identity" "current" {
+  count = local.create_alb_logs_bucket ? 1 : 0
+}
+
+# Regions launched before August 2022 deliver as an ELB-owned account; later
+# ones as the logdelivery service principal. The policy allows both. This
+# lookup fails in a region newer than the aws provider knows about; pass
+# alb_access_logs_bucket there instead.
+data "aws_elb_service_account" "current" {
+  count = local.create_alb_logs_bucket ? 1 : 0
+}
+
+resource "aws_s3_bucket" "alb_logs" {
+  #checkov:skip=CKV_AWS_18:This bucket holds access logs; logging it too would recurse
+  #checkov:skip=CKV_AWS_144:Cross-region replication doubles cost for logs that expire
+  #checkov:skip=CKV_AWS_145:ALB access logs support SSE-S3 only, not KMS
+  #checkov:skip=CKV_AWS_21:Log objects are written once and expire; versioning adds nothing
+  #checkov:skip=CKV2_AWS_62:No consumer needs event notifications for access logs
+  count  = local.create_alb_logs_bucket ? 1 : 0
+  bucket = "${local.name_prefix}-alb-logs-${data.aws_caller_identity.current[0].account_id}"
+  # destroy-app must be able to tear the stack down; logs go with it.
+  force_destroy = true
+  tags          = { Name = "${local.name_prefix}-alb-logs" }
+}
+
+resource "aws_s3_bucket_public_access_block" "alb_logs" {
+  count                   = local.create_alb_logs_bucket ? 1 : 0
+  bucket                  = aws_s3_bucket.alb_logs[0].id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_ownership_controls" "alb_logs" {
+  count  = local.create_alb_logs_bucket ? 1 : 0
+  bucket = aws_s3_bucket.alb_logs[0].id
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs" {
+  count  = local.create_alb_logs_bucket ? 1 : 0
+  bucket = aws_s3_bucket.alb_logs[0].id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "alb_logs" {
+  count  = local.create_alb_logs_bucket ? 1 : 0
+  bucket = aws_s3_bucket.alb_logs[0].id
+  rule {
+    id     = "expire-access-logs"
+    status = "Enabled"
+    filter {}
+    expiration {
+      days = var.alb_access_logs_retention_days
+    }
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 1
+    }
+  }
+}
+
+data "aws_iam_policy_document" "alb_logs" {
+  count = local.create_alb_logs_bucket ? 1 : 0
+  statement {
+    sid       = "ELBLogDelivery"
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.alb_logs[0].arn}/AWSLogs/${data.aws_caller_identity.current[0].account_id}/*"]
+    principals {
+      type        = "AWS"
+      identifiers = [data.aws_elb_service_account.current[0].arn]
+    }
+  }
+  statement {
+    sid       = "ELBLogDeliveryServicePrincipal"
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.alb_logs[0].arn}/AWSLogs/${data.aws_caller_identity.current[0].account_id}/*"]
+    principals {
+      type        = "Service"
+      identifiers = ["logdelivery.elasticloadbalancing.amazonaws.com"]
+    }
+  }
+  statement {
+    sid       = "DenyInsecureTransport"
+    effect    = "Deny"
+    actions   = ["s3:*"]
+    resources = [aws_s3_bucket.alb_logs[0].arn, "${aws_s3_bucket.alb_logs[0].arn}/*"]
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "alb_logs" {
+  count  = local.create_alb_logs_bucket ? 1 : 0
+  bucket = aws_s3_bucket.alb_logs[0].id
+  policy = data.aws_iam_policy_document.alb_logs[0].json
+  # Public access block first, so the policy is never briefly evaluated without it.
+  depends_on = [aws_s3_bucket_public_access_block.alb_logs]
 }
 
 # ── WAF (opt-in) ──────────────────────────────────────

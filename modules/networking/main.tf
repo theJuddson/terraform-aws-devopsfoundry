@@ -232,11 +232,12 @@ moved {
 
 # ── VPC flow logs (opt-in) ───────────────────────────
 resource "aws_cloudwatch_log_group" "flow_logs" {
-  #checkov:skip=CKV_AWS_158:Encrypted with the CloudWatch default key, as the other log groups here
+  #checkov:skip=CKV_AWS_158:CloudWatch default encryption unless flow_log_kms_key_arn is set
   #checkov:skip=CKV_AWS_338:Retention is flow_log_retention_days; a year of flow logs is costly for a small app
   count             = var.enable_flow_logs ? 1 : 0
   name              = "/vpc/${local.name_prefix}/flow-logs"
   retention_in_days = var.flow_log_retention_days
+  kms_key_id        = var.flow_log_kms_key_arn
   tags              = { Name = "${local.name_prefix}-flow-logs" }
 }
 

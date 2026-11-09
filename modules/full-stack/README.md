@@ -31,6 +31,7 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | namecheap\_ns | ../namecheap-ns | n/a |
 | networking | ../networking | n/a |
 | route53\_zone | ../route53-zone | n/a |
+| route53\_zone\_security | ../route53-zone-security | n/a |
 | shared\_platform | ../shared-platform | n/a |
 
 ## Resources
@@ -49,6 +50,9 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | ---- | ----------- | ---- | ------- | :------: |
 | domain\_name | Apex domain registered at Namecheap | `string` | n/a | yes |
 | name | Resource-name prefix / app slug (e.g. myapp-com) | `string` | n/a | yes |
+| alb\_access\_logs | Write ALB access logs to S3 (a private bucket <name>-alb-logs-<account>, unless alb\_access\_logs\_bucket names one). Ignored in shared-platform mode. | `bool` | `false` | no |
+| alb\_access\_logs\_bucket | Existing bucket for the access logs; it must already allow ELB log delivery. Empty = create one. | `string` | `""` | no |
+| alb\_access\_logs\_retention\_days | n/a | `number` | `90` | no |
 | alb\_deletion\_protection | Block deleting the ALB; turn off again before destroy-app. Ignored in shared-platform mode. | `bool` | `false` | no |
 | aws\_region | n/a | `string` | `"us-east-1"` | no |
 | az\_count | n/a | `number` | `2` | no |
@@ -66,6 +70,7 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | db\_engine\_version | n/a | `string` | `"16.11"` | no |
 | db\_iam\_database\_authentication\_enabled | n/a | `bool` | `false` | no |
 | db\_instance\_class | n/a | `string` | `"db.t4g.micro"` | no |
+| db\_log\_min\_duration\_ms | Log Postgres statements slower than this many ms (0 = all, null = off). Takes effect after the instance's next reboot. | `number` | `null` | no |
 | db\_monitoring\_interval | Enhanced monitoring interval in seconds (0 = off). | `number` | `0` | no |
 | db\_multi\_az | n/a | `bool` | `false` | no |
 | db\_name | ── Database tuning ──────────────────────────────────── | `string` | `"appdb"` | no |
@@ -74,8 +79,11 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | desired\_count | n/a | `number` | `1` | no |
 | dmarc\_policy | DMARC policy: none \| quarantine \| reject | `string` | `"none"` | no |
 | dmarc\_rua\_email | DMARC report address (required when enable\_email=true) | `string` | `""` | no |
+| dns\_query\_log\_retention\_days | n/a | `number` | `30` | no |
 | enable\_cache | n/a | `bool` | `false` | no |
 | enable\_database | ── Toggles ──────────────────────────────────────────── | `bool` | `false` | no |
+| enable\_dns\_query\_logging | Log the DNS queries Route53 answers for the stack's zone to CloudWatch in us-east-1 (billed per GB). | `bool` | `false` | no |
+| enable\_dnssec | Sign the stack's zone with DNSSEC. After apply, publish the dnssec\_ds\_record output at the registrar; turning it off later needs the order in docs/dnssec.md. | `bool` | `false` | no |
 | enable\_email | n/a | `bool` | `false` | no |
 | enable\_flow\_logs | Send VPC flow logs to CloudWatch (billed per GB). Ignored in shared-platform mode, where the host owns the VPC. | `bool` | `false` | no |
 | enable\_nat\_gateway | Provision a NAT gateway (~$33/month). Ignored in shared-platform mode, where<br/>the host platform's networking already decides this.<br/><br/>Set false together with `tasks_in_public_subnets = true` to remove the single<br/>largest fixed cost of a small stack. | `bool` | `true` | no |
@@ -87,6 +95,7 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | health\_check\_matcher | n/a | `string` | `"200"` | no |
 | health\_check\_path | n/a | `string` | `"/health"` | no |
 | health\_check\_timeout | n/a | `number` | `5` | no |
+| kms\_key\_arn | One customer managed KMS key for the stack's Redis data, the Redis auth and SMTP secrets, the app's logs and the flow logs. null (default) = AWS-managed keys. The key policy must allow logs.<region>.amazonaws.com; tasks get kms:Decrypt automatically. Setting it on an existing cache REPLACES the cache. | `string` | `null` | no |
 | listener\_rule\_priority\_base | First ALB listener-rule priority to claim in shared mode; each guest app needs a distinct base | `number` | `100` | no |
 | mail\_from\_subdomain | Custom MAIL FROM subdomain label for SPF alignment (e.g. 'mail'). Empty = SES default. | `string` | `""` | no |
 | manage\_nameservers | Whether Terraform manages the domain's Namecheap nameserver delegation to the Route53 zone (ignored when<br/>existing\_zone\_name is set). The delegation is set once and never changes, but managing it makes every plan<br/>call the Namecheap API, which only answers whitelisted IPs. Set false after the first apply so deploys<br/>never need Namecheap. On an existing stack, first run<br/>`terraform state rm 'module.<name>.module.namecheap_ns[0].namecheap_domain_records.ns'`; without it,<br/>Terraform deletes the delegation. (A `removed` block can't do this: the module block is still declared.) | `bool` | `true` | no |
@@ -111,6 +120,9 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | db\_master\_secret\_arn | Secrets Manager ARN of the RDS-managed master credential (rotates every 7 days by default) |
 | db\_name | n/a |
 | db\_port | n/a |
+| dns\_query\_log\_group\_name | CloudWatch log group (us-east-1) with the zone's DNS query logs (null when off) |
+| dnssec\_ds\_record | DS record to publish at the registrar when enable\_dnssec = true (null otherwise) |
+| dnssec\_ds\_record\_fields | The DS record's parts for registrars that ask for them separately, such as Namecheap (null when DNSSEC is off) |
 | ecr\_repository\_url | n/a |
 | ecs\_cluster\_name | n/a |
 | ecs\_service\_name | n/a |

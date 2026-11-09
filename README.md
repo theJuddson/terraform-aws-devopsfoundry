@@ -26,8 +26,8 @@ or straight from git, over HTTPS or SSH, pinned to a release tag (the newest is 
 [Releases page](https://github.com/theJuddson/terraform-aws-devopsfoundry/releases)):
 
 ```hcl
-source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.3.1"
-source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.3.1"
+source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.4.0"
+source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.4.0"
 ```
 
 Each module's README lists its inputs and outputs, and the building blocks have a runnable example under
@@ -43,6 +43,7 @@ Each module's README lists its inputs and outputs, and the building blocks have 
 | [ecr-repository](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/ecr-repository) | ECR repository with scan on push and a lifecycle policy |
 | [ec2-host](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/ec2-host) | SSM-only EC2 instance with a data volume that survives replacement, and scheduled snapshots |
 | [budget-alarm](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/budget-alarm) | Monthly AWS Budgets alarm to email or SNS |
+| [route53-zone-security](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/route53-zone-security) | DNSSEC signing and DNS query logging for a hosted zone (us-east-1) |
 | **Web stack** | |
 | [networking](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/networking) | VPC, public and private subnets, optional NAT gateway, security groups |
 | [container-service](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/container-service) | Fargate service behind an HTTPS ALB, with its ECR repository, logs and Route53 alias |
@@ -191,7 +192,7 @@ serving and `--enable-email` are refused in this mode, and `destroy-app` removes
 
 ```bash
 bin/new-app example.com --subdomain app --existing-zone example.com \
-  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.3.1
+  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.4.0
 ```
 
 #### App-owned state
@@ -286,7 +287,7 @@ AWS profile/OIDC, so the flow lifts into GitHub Actions when ready — point the
 ```
 modules/        static:  acm-cert · route53-zone · route53-records · static-site · namecheap-ns
                 app:     networking · container-service · database · cache · email · full-stack
-                blocks:  object-store · kms-key · shared-filesystem · task-runner · ecr-repository · ec2-host · budget-alarm
+                blocks:  object-store · kms-key · shared-filesystem · task-runner · ecr-repository · ec2-host · budget-alarm · route53-zone-security
 main.tf         empty root module (the Terraform Registry requires one; use the submodules)
 examples/       one root per building-block module (validated in CI, never applied)
 tests/          offline compatibility and validation fixtures for bin/check-*

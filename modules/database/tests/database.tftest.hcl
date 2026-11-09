@@ -116,3 +116,73 @@ run "monitoring_interval_is_checked" {
 
   expect_failures = [var.monitoring_interval]
 }
+
+run "slow_query_logging_off_keeps_the_default_parameter_group" {
+  command = plan
+
+  assert {
+    condition     = length(aws_db_parameter_group.main) == 0
+    error_message = "Without log_min_duration_ms no parameter group may be created; the instance stays on AWS's default."
+  }
+}
+
+run "slow_query_logging_uses_a_module_parameter_group" {
+  command = plan
+
+  variables {
+    log_min_duration_ms = 500
+  }
+
+  # The real name comes from name_prefix at apply; give it one now so the
+  # instance's reference to it can be checked.
+  override_resource {
+    target          = aws_db_parameter_group.main
+    override_during = plan
+    values          = { name = "demo-postgres16-mock" }
+  }
+
+  assert {
+    condition     = aws_db_instance.main.parameter_group_name == "demo-postgres16-mock"
+    error_message = "The instance must use the module's parameter group."
+  }
+
+  assert {
+    condition     = length(aws_db_parameter_group.main) == 1 && aws_db_parameter_group.main[0].family == "postgres16"
+    error_message = "log_min_duration_ms must create a parameter group for the engine's major version."
+  }
+  assert {
+    condition = (
+      one([for p in aws_db_parameter_group.main[0].parameter : p.value if p.name == "log_min_duration_statement"]) == "500" &&
+      one([for p in aws_db_parameter_group.main[0].parameter : p.apply_method if p.name == "log_min_duration_statement"]) == "immediate"
+    )
+    error_message = "The group must set log_min_duration_statement to the threshold, applied immediately."
+  }
+  assert {
+    condition     = startswith(aws_db_parameter_group.main[0].name_prefix, "demo-postgres16-")
+    error_message = "The group must be named after the app and family."
+  }
+}
+
+run "parameter_group_family_follows_the_engine_version" {
+  command = plan
+
+  variables {
+    engine_version      = "17.2"
+    log_min_duration_ms = 0
+  }
+
+  assert {
+    condition     = aws_db_parameter_group.main[0].family == "postgres17"
+    error_message = "The family must come from engine_version's major version."
+  }
+}
+
+run "log_min_duration_ms_is_checked" {
+  command = plan
+
+  variables {
+    log_min_duration_ms = -1
+  }
+
+  expect_failures = [var.log_min_duration_ms]
+}

@@ -91,3 +91,22 @@ variable "iam_database_authentication_enabled" {
   type        = bool
   default     = false
 }
+
+variable "log_min_duration_ms" {
+  description = <<-EOT
+    Log every statement that runs at least this many milliseconds (Postgres
+    log_min_duration_statement); 0 logs all statements. null (default) = off,
+    and the instance keeps AWS's default parameter group. The logs go to the
+    CloudWatch log group RDS already exports (/aws/rds/instance/<name>-postgres/postgresql).
+
+    Moving an existing instance onto the new parameter group takes effect after
+    its next reboot; RDS shows it as pending-reboot until then.
+  EOT
+  type        = number
+  default     = null
+
+  validation {
+    condition     = var.log_min_duration_ms == null || try(var.log_min_duration_ms >= 0 && floor(var.log_min_duration_ms) == var.log_min_duration_ms, false)
+    error_message = "log_min_duration_ms must be null (off) or a whole number of milliseconds, 0 or more."
+  }
+}

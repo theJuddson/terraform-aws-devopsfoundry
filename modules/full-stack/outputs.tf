@@ -65,3 +65,18 @@ output "waf_web_acl_arn" {
   description = "Web ACL attached to the ALB this stack owns (empty when none, or in shared-platform mode)"
   value       = module.container_service.waf_web_acl_arn
 }
+
+output "dnssec_ds_record" {
+  description = "DS record to publish at the registrar when enable_dnssec = true (null otherwise)"
+  value       = one(module.route53_zone_security[*].ds_record)
+}
+
+output "dnssec_ds_record_fields" {
+  description = "The DS record's parts for registrars that ask for them separately, such as Namecheap (null when DNSSEC is off)"
+  value       = one(module.route53_zone_security[*].ds_record_fields)
+}
+
+output "dns_query_log_group_name" {
+  description = "CloudWatch log group (us-east-1) with the zone's DNS query logs (null when off)"
+  value       = one(module.route53_zone_security[*].query_log_group_name)
+}

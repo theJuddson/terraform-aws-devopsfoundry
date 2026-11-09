@@ -62,6 +62,7 @@ No modules.
 | enable\_database | Create the RDS security group + ingress rule | `bool` | `false` | no |
 | enable\_flow\_logs | Send VPC flow logs to a CloudWatch log group. Billed per GB ingested and stored. | `bool` | `false` | no |
 | enable\_nat\_gateway | Provision a NAT gateway (~$33/month) so private-subnet tasks can reach the<br/>internet. Set false together with container-service's<br/>`tasks_in_public_subnets` to drop that cost: tasks then run in public subnets<br/>with public IPs, still admitting inbound traffic only from the ALB.<br/><br/>Databases stay in the private subnets either way; they need no egress. | `bool` | `true` | no |
+| flow\_log\_kms\_key\_arn | Customer managed KMS key for the flow log group. null (default) = CloudWatch's default encryption. The key policy must allow logs.<region>.amazonaws.com. | `string` | `null` | no |
 | flow\_log\_retention\_days | Days to keep flow logs. Must be a value CloudWatch Logs accepts (1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, ...). | `number` | `30` | no |
 | flow\_log\_traffic\_type | Which traffic the flow logs record: ACCEPT, REJECT or ALL. REJECT is the cheapest way to see blocked connections. | `string` | `"ALL"` | no |
 | vpc\_cidr | CIDR block for the VPC | `string` | `"10.0.0.0/16"` | no |

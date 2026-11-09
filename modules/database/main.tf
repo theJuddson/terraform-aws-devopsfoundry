@@ -14,6 +14,33 @@ terraform {
 
 locals {
   name_prefix = var.name
+  # A module-owned parameter group exists only when a setting needs one;
+  # otherwise the instance keeps AWS's default group, as before.
+  custom_parameters = var.log_min_duration_ms == null ? {} : {
+    log_min_duration_statement = tostring(var.log_min_duration_ms)
+  }
+}
+
+resource "aws_db_parameter_group" "main" {
+  count       = length(local.custom_parameters) > 0 ? 1 : 0
+  name_prefix = "${local.name_prefix}-postgres${split(".", var.engine_version)[0]}-"
+  family      = "postgres${split(".", var.engine_version)[0]}"
+  description = "${local.name_prefix} Postgres settings (DevOpsFoundry)"
+
+  dynamic "parameter" {
+    for_each = local.custom_parameters
+    content {
+      name         = parameter.key
+      value        = parameter.value
+      apply_method = "immediate"
+    }
+  }
+
+  # A new family on a major version upgrade needs a new group, created before
+  # the instance moves to it.
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_db_subnet_group" "main" {
@@ -23,6 +50,7 @@ resource "aws_db_subnet_group" "main" {
 }
 
 resource "aws_db_instance" "main" {
+  #checkov:skip=CKV2_AWS_69:The module's parameter group sets only log settings, so TLS enforcement is the engine default (rds.force_ssl = 1 from Postgres 15)
   identifier     = "${local.name_prefix}-postgres"
   engine         = "postgres"
   engine_version = var.engine_version
@@ -41,6 +69,7 @@ resource "aws_db_instance" "main" {
   vpc_security_group_ids = [var.rds_security_group_id]
   publicly_accessible    = false
   port                   = var.db_port
+  parameter_group_name   = length(local.custom_parameters) > 0 ? aws_db_parameter_group.main[0].name : null
 
   backup_retention_period   = var.backup_retention_days
   backup_window             = "08:00-09:00"

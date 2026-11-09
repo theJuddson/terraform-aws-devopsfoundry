@@ -3,6 +3,28 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.4.0
+
+- New opt-in settings, all off by default, so existing plans are unchanged:
+  - `container-service`: ALB access logs (#17). `alb_access_logs` writes them to a private, SSE-S3 encrypted
+    bucket `<name>-alb-logs-<account>` with TLS-only access and a lifecycle expiry
+    (`alb_access_logs_retention_days`, default 90), or to an existing bucket named in `alb_access_logs_bucket`.
+  - Customer managed KMS keys (#19): `cache` `kms_key_arn` (setting it on an existing cache replaces it),
+    `container-service` `log_kms_key_arn` and `secrets_kms_key_arns` (grants the task execution role
+    `kms:Decrypt`), `email` `kms_key_arn` and `networking` `flow_log_kms_key_arn`. Keys must be key ARNs, not
+    aliases.
+  - `database`: Postgres slow-query logging (#20). `log_min_duration_ms` creates a parameter group for the engine's
+    major version; an existing instance picks it up at its next reboot.
+- New module `route53-zone-security` (#21): DNSSEC signing (an ECC_NIST_P256 KMS key, a key-signing key, and the
+  DS record as an output) and DNS query logging for a hosted zone, in us-east-1. Turning DNSSEC on and off needs
+  registrar steps in a set order: see `docs/dnssec.md`.
+- `full-stack` exposes them: `alb_access_logs`, `alb_access_logs_bucket`, `alb_access_logs_retention_days`,
+  `kms_key_arn` (one key for Redis, the Redis and SMTP secrets, the app's logs and flow logs),
+  `db_log_min_duration_ms`, `enable_dnssec`, `enable_dns_query_logging` and `dns_query_log_retention_days`, plus
+  outputs `dnssec_ds_record`, `dnssec_ds_record_fields` and `dns_query_log_group_name`. DNSSEC and query logging
+  apply only to a zone the stack created, never one named in `existing_zone_name`. The `new-app` scaffold
+  includes them.
+
 ## v1.3.1
 
 - Fix (#34): a guest app on a shared platform built without a NAT gateway put its tasks in the host's private
