@@ -50,10 +50,15 @@ resource "aws_db_instance" "main" {
   skip_final_snapshot       = var.skip_final_snapshot
   final_snapshot_identifier = var.skip_final_snapshot ? null : "${local.name_prefix}-postgres-final-${formatdate("YYYYMMDD-hhmm", timestamp())}"
 
-  multi_az                     = var.multi_az
-  deletion_protection          = var.deletion_protection
-  auto_minor_version_upgrade   = true
-  performance_insights_enabled = false
+  multi_az                   = var.multi_az
+  deletion_protection        = var.deletion_protection
+  auto_minor_version_upgrade = true
+
+  performance_insights_enabled          = var.performance_insights_enabled
+  performance_insights_retention_period = var.performance_insights_enabled ? 7 : null
+  monitoring_interval                   = var.monitoring_interval
+  monitoring_role_arn                   = var.monitoring_interval > 0 ? aws_iam_role.monitoring[0].arn : null
+  iam_database_authentication_enabled   = var.iam_database_authentication_enabled
 
   enabled_cloudwatch_logs_exports = ["postgresql"]
   tags                            = { Name = "${local.name_prefix}-postgres" }
@@ -61,4 +66,32 @@ resource "aws_db_instance" "main" {
   lifecycle {
     ignore_changes = [final_snapshot_identifier]
   }
+}
+
+# ── Enhanced monitoring (opt-in) ─────────────────────
+data "aws_partition" "current" {
+  count = var.monitoring_interval > 0 ? 1 : 0
+}
+
+data "aws_iam_policy_document" "monitoring_assume" {
+  count = var.monitoring_interval > 0 ? 1 : 0
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["monitoring.rds.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "monitoring" {
+  count              = var.monitoring_interval > 0 ? 1 : 0
+  name               = "${local.name_prefix}-rds-monitoring"
+  assume_role_policy = data.aws_iam_policy_document.monitoring_assume[0].json
+}
+
+resource "aws_iam_role_policy_attachment" "monitoring" {
+  count      = var.monitoring_interval > 0 ? 1 : 0
+  role       = aws_iam_role.monitoring[0].name
+  policy_arn = "arn:${data.aws_partition.current[0].partition}:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
 }

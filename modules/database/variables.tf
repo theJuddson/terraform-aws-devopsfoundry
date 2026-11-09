@@ -68,3 +68,26 @@ variable "skip_final_snapshot" {
   type        = bool
   default     = true
 }
+
+variable "performance_insights_enabled" {
+  description = "Turn on Performance Insights, kept for the free 7 days."
+  type        = bool
+  default     = false
+}
+
+variable "monitoring_interval" {
+  description = "Seconds between enhanced monitoring samples (0 = off; 1, 5, 10, 15, 30 or 60). Creates the monitoring role when on. Billed as CloudWatch Logs."
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = contains([0, 1, 5, 10, 15, 30, 60], var.monitoring_interval)
+    error_message = "monitoring_interval must be 0, 1, 5, 10, 15, 30 or 60."
+  }
+}
+
+variable "iam_database_authentication_enabled" {
+  description = "Also accept IAM authentication tokens as database passwords. The RDS-managed password keeps working."
+  type        = bool
+  default     = false
+}

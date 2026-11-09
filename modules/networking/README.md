@@ -24,7 +24,11 @@ No modules.
 
 | Name | Type |
 | ---- | ---- |
+| [aws_cloudwatch_log_group.flow_logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_log_group) | resource |
 | [aws_eip.nat](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/eip) | resource |
+| [aws_flow_log.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/flow_log) | resource |
+| [aws_iam_role.flow_logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role) | resource |
+| [aws_iam_role_policy.flow_logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
 | [aws_internet_gateway.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/internet_gateway) | resource |
 | [aws_nat_gateway.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/nat_gateway) | resource |
 | [aws_route_table.private](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route_table) | resource |
@@ -42,6 +46,8 @@ No modules.
 | [aws_subnet.public](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/subnet) | resource |
 | [aws_vpc.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc) | resource |
 | [aws_availability_zones.available](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/availability_zones) | data source |
+| [aws_iam_policy_document.flow_logs_assume](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
+| [aws_iam_policy_document.flow_logs_write](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 
 ## Inputs
 
@@ -54,7 +60,10 @@ No modules.
 | db\_port | Postgres port | `number` | `5432` | no |
 | enable\_cache | Create the Redis security group + ingress rule | `bool` | `false` | no |
 | enable\_database | Create the RDS security group + ingress rule | `bool` | `false` | no |
+| enable\_flow\_logs | Send VPC flow logs to a CloudWatch log group. Billed per GB ingested and stored. | `bool` | `false` | no |
 | enable\_nat\_gateway | Provision a NAT gateway (~$33/month) so private-subnet tasks can reach the<br/>internet. Set false together with container-service's<br/>`tasks_in_public_subnets` to drop that cost: tasks then run in public subnets<br/>with public IPs, still admitting inbound traffic only from the ALB.<br/><br/>Databases stay in the private subnets either way; they need no egress. | `bool` | `true` | no |
+| flow\_log\_retention\_days | Days to keep flow logs. Must be a value CloudWatch Logs accepts (1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, ...). | `number` | `30` | no |
+| flow\_log\_traffic\_type | Which traffic the flow logs record: ACCEPT, REJECT or ALL. REJECT is the cheapest way to see blocked connections. | `string` | `"ALL"` | no |
 | vpc\_cidr | CIDR block for the VPC | `string` | `"10.0.0.0/16"` | no |
 
 ## Outputs
@@ -63,6 +72,7 @@ No modules.
 | ---- | ----------- |
 | alb\_security\_group\_id | n/a |
 | api\_security\_group\_id | n/a |
+| flow\_log\_group\_name | CloudWatch log group holding the VPC flow logs (null when enable\_flow\_logs = false) |
 | private\_subnet\_ids | Private subnet IDs (for ECS, RDS, Redis) |
 | public\_subnet\_ids | Public subnet IDs (for the ALB) |
 | rds\_security\_group\_id | RDS SG id, or null when database disabled |

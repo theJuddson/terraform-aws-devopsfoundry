@@ -175,3 +175,15 @@ variable "tasks_in_public_subnets" {
   type        = bool
   default     = false
 }
+
+variable "container_insights" {
+  description = "Turn on CloudWatch Container Insights for the cluster (billed per metric). Ignored when create_cluster = false."
+  type        = bool
+  default     = false
+}
+
+variable "alb_deletion_protection" {
+  description = "Block deleting the ALB until this is set back to false. Leave off if you tear stacks down with destroy-app. Ignored when create_alb = false."
+  type        = bool
+  default     = false
+}

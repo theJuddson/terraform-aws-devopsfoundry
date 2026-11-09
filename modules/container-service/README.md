@@ -61,7 +61,9 @@ A containerized service on ECS Fargate behind an HTTPS ALB, framework-neutral: y
 | public\_subnet\_ids | n/a | `list(string)` | n/a | yes |
 | vpc\_id | ── Networking wiring ────────────────────────────────── | `string` | n/a | yes |
 | zone\_id | Route53 hosted zone ID for the domain | `string` | n/a | yes |
+| alb\_deletion\_protection | Block deleting the ALB until this is set back to false. Leave off if you tear stacks down with destroy-app. Ignored when create\_alb = false. | `bool` | `false` | no |
 | container\_image | Image URI. Empty -> the module's own ECR repo :latest tag. | `string` | `""` | no |
+| container\_insights | Turn on CloudWatch Container Insights for the cluster (billed per metric). Ignored when create\_cluster = false. | `bool` | `false` | no |
 | container\_port | n/a | `number` | `8080` | no |
 | cpu | Fargate task CPU units (256/512/1024/...) | `number` | `512` | no |
 | create\_alb | Create a dedicated ALB. False = attach to an existing one via existing\_*. | `bool` | `true` | no |

@@ -49,20 +49,26 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | ---- | ----------- | ---- | ------- | :------: |
 | domain\_name | Apex domain registered at Namecheap | `string` | n/a | yes |
 | name | Resource-name prefix / app slug (e.g. myapp-com) | `string` | n/a | yes |
+| alb\_deletion\_protection | Block deleting the ALB; turn off again before destroy-app. Ignored in shared-platform mode. | `bool` | `false` | no |
 | aws\_region | n/a | `string` | `"us-east-1"` | no |
 | az\_count | n/a | `number` | `2` | no |
 | cache\_engine\_version | n/a | `string` | `"7.1"` | no |
 | cache\_node\_type | ── Cache tuning ─────────────────────────────────────── | `string` | `"cache.t4g.micro"` | no |
+| cache\_num\_cache\_clusters | Redis nodes; 2 or more adds replicas with Multi-AZ automatic failover. | `number` | `1` | no |
 | container\_image | ── Container ────────────────────────────────────────── | `string` | `""` | no |
+| container\_insights | CloudWatch Container Insights on the app's cluster (billed per metric). Ignored in shared-platform mode. | `bool` | `false` | no |
 | container\_port | n/a | `number` | `8080` | no |
 | cpu | n/a | `number` | `512` | no |
 | db\_allocated\_storage | n/a | `number` | `20` | no |
 | db\_backup\_retention\_days | n/a | `number` | `1` | no |
 | db\_deletion\_protection | n/a | `bool` | `false` | no |
 | db\_engine\_version | n/a | `string` | `"16.11"` | no |
+| db\_iam\_database\_authentication\_enabled | n/a | `bool` | `false` | no |
 | db\_instance\_class | n/a | `string` | `"db.t4g.micro"` | no |
+| db\_monitoring\_interval | Enhanced monitoring interval in seconds (0 = off). | `number` | `0` | no |
 | db\_multi\_az | n/a | `bool` | `false` | no |
 | db\_name | ── Database tuning ──────────────────────────────────── | `string` | `"appdb"` | no |
+| db\_performance\_insights\_enabled | Performance Insights, kept for the free 7 days. | `bool` | `false` | no |
 | db\_skip\_final\_snapshot | n/a | `bool` | `true` | no |
 | desired\_count | n/a | `number` | `1` | no |
 | dmarc\_policy | DMARC policy: none \| quarantine \| reject | `string` | `"none"` | no |
@@ -70,9 +76,12 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | enable\_cache | n/a | `bool` | `false` | no |
 | enable\_database | ── Toggles ──────────────────────────────────────────── | `bool` | `false` | no |
 | enable\_email | n/a | `bool` | `false` | no |
+| enable\_flow\_logs | Send VPC flow logs to CloudWatch (billed per GB). Ignored in shared-platform mode, where the host owns the VPC. | `bool` | `false` | no |
 | enable\_nat\_gateway | Provision a NAT gateway (~$33/month). Ignored in shared-platform mode, where<br/>the host platform's networking already decides this.<br/><br/>Set false together with `tasks_in_public_subnets = true` to remove the single<br/>largest fixed cost of a small stack. | `bool` | `true` | no |
 | env | n/a | `map(string)` | `{}` | no |
 | existing\_zone\_name | Name of an EXISTING public Route53 hosted zone (e.g. "example.com") to place this app's records in.<br/>Empty (default) = DevOpsFoundry creates a zone for domain\_name and delegates the domain's Namecheap<br/>nameservers to it. When set, no zone is created and the registrar is never touched: the ACM cert covers<br/>exactly the service hostname (no wildcard), and only its validation and alias records are added, never<br/>overwriting existing ones. For hosting an app under a domain whose DNS already serves something else. | `string` | `""` | no |
+| flow\_log\_retention\_days | n/a | `number` | `30` | no |
+| flow\_log\_traffic\_type | ACCEPT, REJECT or ALL; see the networking module. | `string` | `"ALL"` | no |
 | health\_check\_interval | n/a | `number` | `15` | no |
 | health\_check\_matcher | n/a | `string` | `"200"` | no |
 | health\_check\_path | n/a | `string` | `"/health"` | no |
