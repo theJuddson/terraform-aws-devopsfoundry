@@ -82,6 +82,21 @@ variable "az_count" {
   default = 2
 }
 
+variable "enable_flow_logs" {
+  description = "Send VPC flow logs to CloudWatch (billed per GB). Ignored in shared-platform mode, where the host owns the VPC."
+  type        = bool
+  default     = false
+}
+variable "flow_log_traffic_type" {
+  description = "ACCEPT, REJECT or ALL; see the networking module."
+  type        = string
+  default     = "ALL"
+}
+variable "flow_log_retention_days" {
+  type    = number
+  default = 30
+}
+
 # ── Toggles ────────────────────────────────────────────
 variable "enable_database" {
   type    = bool
@@ -130,6 +145,21 @@ variable "db_skip_final_snapshot" {
   default = true
 }
 
+variable "db_performance_insights_enabled" {
+  description = "Performance Insights, kept for the free 7 days."
+  type        = bool
+  default     = false
+}
+variable "db_monitoring_interval" {
+  description = "Enhanced monitoring interval in seconds (0 = off)."
+  type        = number
+  default     = 0
+}
+variable "db_iam_database_authentication_enabled" {
+  type    = bool
+  default = false
+}
+
 # ── Cache tuning ───────────────────────────────────────
 variable "cache_node_type" {
   type    = string
@@ -138,6 +168,12 @@ variable "cache_node_type" {
 variable "cache_engine_version" {
   type    = string
   default = "7.1"
+}
+
+variable "cache_num_cache_clusters" {
+  description = "Redis nodes; 2 or more adds replicas with Multi-AZ automatic failover."
+  type        = number
+  default     = 1
 }
 
 # ── Email ──────────────────────────────────────────────
@@ -224,4 +260,16 @@ variable "manage_nameservers" {
   EOT
   type        = bool
   default     = true
+}
+
+# ── Observability and protection (opt-in) ──────────────
+variable "container_insights" {
+  description = "CloudWatch Container Insights on the app's cluster (billed per metric). Ignored in shared-platform mode."
+  type        = bool
+  default     = false
+}
+variable "alb_deletion_protection" {
+  description = "Block deleting the ALB; turn off again before destroy-app. Ignored in shared-platform mode."
+  type        = bool
+  default     = false
 }

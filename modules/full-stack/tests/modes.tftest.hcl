@@ -190,3 +190,16 @@ run "backing_services_follow_their_toggles" {
     error_message = "Enabling the cache must create the Redis auth secret."
   }
 }
+
+run "flow_logs_reach_the_network_module" {
+  command = plan
+
+  variables {
+    enable_flow_logs = true
+  }
+
+  assert {
+    condition     = module.networking[0].flow_log_group_name == "/vpc/demo/flow-logs"
+    error_message = "enable_flow_logs must be passed through to the networking module."
+  }
+}

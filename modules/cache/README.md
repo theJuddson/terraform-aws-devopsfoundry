@@ -40,6 +40,7 @@ No modules.
 | cache\_port | n/a | `number` | `6379` | no |
 | engine\_version | n/a | `string` | `"7.1"` | no |
 | node\_type | n/a | `string` | `"cache.t4g.micro"` | no |
+| num\_cache\_clusters | Nodes in the replication group. 1 is a single node; 2 or more adds replicas in other AZs with automatic failover (each node is billed). | `number` | `1` | no |
 | parameter\_group\_name | n/a | `string` | `"default.redis7"` | no |
 
 ## Outputs

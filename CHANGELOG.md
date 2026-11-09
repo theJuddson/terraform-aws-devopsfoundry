@@ -3,6 +3,22 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.3.0
+
+- New opt-in settings, all off by default, so existing plans are unchanged:
+  - `networking`: `enable_flow_logs` sends VPC flow logs to a CloudWatch log group with its own delivery role;
+    `flow_log_traffic_type` (`ACCEPT`, `REJECT` or `ALL`) and `flow_log_retention_days` tune it. New output
+    `flow_log_group_name`.
+  - `container-service`: `container_insights` and `alb_deletion_protection`.
+  - `database`: `performance_insights_enabled` (free 7-day retention), `monitoring_interval` for enhanced monitoring
+    (creates the monitoring role), and `iam_database_authentication_enabled`.
+  - `cache`: `num_cache_clusters`; 2 or more adds replicas with Multi-AZ automatic failover.
+  - `full-stack` passes them all through: `enable_flow_logs`, `flow_log_traffic_type`, `flow_log_retention_days`,
+    `container_insights`, `alb_deletion_protection`, `db_performance_insights_enabled`, `db_monitoring_interval`,
+    `db_iam_database_authentication_enabled` and `cache_num_cache_clusters`.
+- `database` and `cache` have tests.
+- The remaining accepted checkov findings are tracked as GitHub issues.
+
 ## v1.2.8
 
 - Documentation only. Module READMEs show the Terraform Registry source with `version = "~> 1.2"` instead of a git

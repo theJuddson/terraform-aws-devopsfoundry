@@ -154,6 +154,10 @@ module "networking" {
   enable_database    = var.enable_database
   enable_cache       = var.enable_cache
   enable_nat_gateway = var.enable_nat_gateway
+
+  enable_flow_logs        = var.enable_flow_logs
+  flow_log_traffic_type   = var.flow_log_traffic_type
+  flow_log_retention_days = var.flow_log_retention_days
 }
 
 # ── Optional backing services ─────────────────────────
@@ -181,6 +185,10 @@ module "database" {
   backup_retention_days = var.db_backup_retention_days
   deletion_protection   = var.db_deletion_protection
   skip_final_snapshot   = var.db_skip_final_snapshot
+
+  performance_insights_enabled        = var.db_performance_insights_enabled
+  monitoring_interval                 = var.db_monitoring_interval
+  iam_database_authentication_enabled = var.db_iam_database_authentication_enabled
 }
 
 module "cache" {
@@ -191,6 +199,7 @@ module "cache" {
   redis_security_group_id = local.net.redis_security_group_id
   node_type               = var.cache_node_type
   engine_version          = var.cache_engine_version
+  num_cache_clusters      = var.cache_num_cache_clusters
 }
 
 # Composite owns the Redis auth secret (cache module only generates the token).
@@ -255,6 +264,8 @@ module "container_service" {
   health_check_timeout  = var.health_check_timeout
 
   tasks_in_public_subnets = var.tasks_in_public_subnets
+  container_insights      = var.container_insights
+  alb_deletion_protection = var.alb_deletion_protection
 
   env     = local.merged_env
   secrets = local.merged_secrets

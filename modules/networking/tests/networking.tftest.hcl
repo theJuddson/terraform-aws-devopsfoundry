@@ -3,6 +3,9 @@
 # provider: no account is touched.
 
 mock_provider "aws" {
+  mock_data "aws_iam_policy_document" {
+    defaults = { json = "{}" }
+  }
   # The module slices this list by az_count and names subnets after it.
   mock_data "aws_availability_zones" {
     defaults = { names = ["us-east-1a", "us-east-1b", "us-east-1c"] }
@@ -162,4 +165,62 @@ run "database_and_cache_get_dedicated_security_groups" {
     condition     = aws_security_group_rule.api_ingress_from_alb.from_port == 3000 && aws_security_group_rule.api_ingress_from_alb.to_port == 3000
     error_message = "Tasks must admit container_port from the ALB."
   }
+}
+
+run "flow_logs_off_by_default" {
+  command = plan
+
+  assert {
+    condition     = length(aws_flow_log.main) == 0 && length(aws_cloudwatch_log_group.flow_logs) == 0 && length(aws_iam_role.flow_logs) == 0
+    error_message = "Flow logs are billed per GB; nothing must be planned for them unless enable_flow_logs = true."
+  }
+  assert {
+    condition     = output.flow_log_group_name == null
+    error_message = "flow_log_group_name must be null when flow logs are off."
+  }
+}
+
+run "flow_logs_on_write_to_their_own_log_group" {
+  command = plan
+
+  variables {
+    enable_flow_logs        = true
+    flow_log_traffic_type   = "REJECT"
+    flow_log_retention_days = 14
+  }
+
+  assert {
+    condition     = length(aws_flow_log.main) == 1 && aws_flow_log.main[0].traffic_type == "REJECT" && aws_flow_log.main[0].log_destination_type == "cloud-watch-logs"
+    error_message = "enable_flow_logs = true must record the chosen traffic type to CloudWatch Logs."
+  }
+  assert {
+    condition     = aws_cloudwatch_log_group.flow_logs[0].name == "/vpc/demo/flow-logs" && aws_cloudwatch_log_group.flow_logs[0].retention_in_days == 14
+    error_message = "The flow log group must be named after the app and keep logs for flow_log_retention_days."
+  }
+  assert {
+    condition     = aws_iam_role.flow_logs[0].name == "demo-vpc-flow-logs" && output.flow_log_group_name == "/vpc/demo/flow-logs"
+    error_message = "Flow logs need their delivery role, and the log group must be reported."
+  }
+}
+
+run "flow_log_traffic_type_is_checked" {
+  command = plan
+
+  variables {
+    enable_flow_logs      = true
+    flow_log_traffic_type = "all"
+  }
+
+  expect_failures = [var.flow_log_traffic_type]
+}
+
+run "flow_log_retention_must_be_a_cloudwatch_period" {
+  command = plan
+
+  variables {
+    enable_flow_logs        = true
+    flow_log_retention_days = 10
+  }
+
+  expect_failures = [var.flow_log_retention_days]
 }
