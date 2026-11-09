@@ -50,6 +50,12 @@ locals {
   forward_rule_priority      = var.listener_rule_priority_base
   www_redirect_rule_priority = local.shared_alb ? var.listener_rule_priority_base + 1 : 1
 
+  # WAF: only an ALB this stack owns gets a web ACL; guests inherit the host's.
+  waf_create      = var.create_alb && var.create_waf
+  waf_attach      = var.create_alb && (var.create_waf || var.waf_web_acl_arn != "")
+  waf_web_acl_arn = local.waf_create ? aws_wafv2_web_acl.alb[0].arn : (local.waf_attach ? var.waf_web_acl_arn : "")
+  waf_metric      = replace("${local.name_prefix}-alb", "/[^A-Za-z0-9_-]/", "-")
+
   secrets_list = [for k, v in var.secrets : { name = k, valueFrom = v }]
   # Exec role needs GetSecretValue on the underlying secret ARN. Strip any
   # trailing ":<json-key>::" selector from each valueFrom to get the base ARN.
@@ -125,6 +131,7 @@ resource "aws_iam_role" "task" {
 
 # ── ALB ───────────────────────────────────────────────
 resource "aws_lb" "main" {
+  #checkov:skip=CKV2_AWS_76:The opt-in WAF's rule groups are a variable; the default list includes AWSManagedRulesKnownBadInputsRuleSet (Log4j)
   count                      = var.create_alb ? 1 : 0
   name                       = "${local.name_prefix}-alb"
   internal                   = false
@@ -135,6 +142,114 @@ resource "aws_lb" "main" {
   enable_deletion_protection = var.alb_deletion_protection
   idle_timeout               = 60
   tags                       = { Name = "${local.name_prefix}-alb" }
+}
+
+# ── WAF (opt-in) ──────────────────────────────────────
+# A per-IP rate limit first (cheapest to evaluate), then the AWS managed rule
+# groups. waf_count_only runs everything in count mode for a safe first rollout.
+resource "aws_wafv2_web_acl" "alb" {
+  #checkov:skip=CKV2_AWS_31:Request logging is billed per GB; CloudWatch metrics and sampled requests are on
+  #checkov:skip=CKV_AWS_192:Rule groups are dynamic; the default list includes AWSManagedRulesKnownBadInputsRuleSet (Log4j)
+  count       = local.waf_create ? 1 : 0
+  name        = "${local.name_prefix}-alb"
+  description = "Rate limit and AWS managed rules for ${local.name_prefix}-alb"
+  scope       = "REGIONAL"
+
+  default_action {
+    allow {}
+  }
+
+  rule {
+    name     = "rate-limit-per-ip"
+    priority = 0
+
+    action {
+      dynamic "block" {
+        for_each = var.waf_count_only ? [] : [1]
+        content {}
+      }
+      dynamic "count" {
+        for_each = var.waf_count_only ? [1] : []
+        content {}
+      }
+    }
+
+    statement {
+      rate_based_statement {
+        limit              = var.waf_rate_limit
+        aggregate_key_type = "IP"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${local.waf_metric}-rate-limit"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  dynamic "rule" {
+    for_each = { for i, g in var.waf_managed_rule_groups : g => i }
+    content {
+      name     = rule.key
+      priority = 10 + rule.value
+
+      override_action {
+        dynamic "none" {
+          for_each = var.waf_count_only ? [] : [1]
+          content {}
+        }
+        dynamic "count" {
+          for_each = var.waf_count_only ? [1] : []
+          content {}
+        }
+      }
+
+      statement {
+        managed_rule_group_statement {
+          name        = rule.key
+          vendor_name = "AWS"
+
+          dynamic "rule_action_override" {
+            for_each = lookup(var.waf_rule_overrides, rule.key, [])
+            content {
+              name = rule_action_override.value
+              action_to_use {
+                count {}
+              }
+            }
+          }
+        }
+      }
+
+      visibility_config {
+        cloudwatch_metrics_enabled = true
+        metric_name                = "${local.waf_metric}-${rule.key}"
+        sampled_requests_enabled   = true
+      }
+    }
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = local.waf_metric
+    sampled_requests_enabled   = true
+  }
+
+  tags = { Name = "${local.name_prefix}-alb" }
+}
+
+resource "aws_wafv2_web_acl_association" "alb" {
+  count        = local.waf_attach ? 1 : 0
+  resource_arn = aws_lb.main[0].arn
+  web_acl_arn  = local.waf_web_acl_arn
+
+  lifecycle {
+    precondition {
+      condition     = !(var.create_waf && var.waf_web_acl_arn != "")
+      error_message = "Set create_waf or waf_web_acl_arn, not both."
+    }
+  }
 }
 
 resource "aws_lb_target_group" "app" {

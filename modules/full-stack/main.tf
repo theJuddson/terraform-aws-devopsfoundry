@@ -267,6 +267,13 @@ module "container_service" {
   container_insights      = var.container_insights
   alb_deletion_protection = var.alb_deletion_protection
 
+  create_waf              = var.create_waf
+  waf_web_acl_arn         = var.waf_web_acl_arn
+  waf_count_only          = var.waf_count_only
+  waf_rate_limit          = var.waf_rate_limit
+  waf_managed_rule_groups = var.waf_managed_rule_groups
+  waf_rule_overrides      = var.waf_rule_overrides
+
   env     = local.merged_env
   secrets = local.merged_secrets
 }

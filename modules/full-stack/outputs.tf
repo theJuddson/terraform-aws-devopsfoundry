@@ -60,3 +60,8 @@ output "task_security_group_id" {
 output "private_subnet_ids" {
   value = local.net.private_subnet_ids
 }
+
+output "waf_web_acl_arn" {
+  description = "Web ACL attached to the ALB this stack owns (empty when none, or in shared-platform mode)"
+  value       = module.container_service.waf_web_acl_arn
+}

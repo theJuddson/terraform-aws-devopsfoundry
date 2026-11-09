@@ -16,6 +16,15 @@ the earlier versions below were private and their tags are not in this repositor
   - `full-stack` passes them all through: `enable_flow_logs`, `flow_log_traffic_type`, `flow_log_retention_days`,
     `container_insights`, `alb_deletion_protection`, `db_performance_insights_enabled`, `db_monitoring_interval`,
     `db_iam_database_authentication_enabled` and `cache_num_cache_clusters`.
+- Opt-in WAF on the ALB (`container-service`, passed through by `full-stack` and the `new-app` template):
+  - `create_waf` creates a regional web ACL with a per-IP rate limit (`waf_rate_limit`, default 2000 requests per
+    5 minutes) and AWS managed rule groups (`waf_managed_rule_groups`, default IP reputation, core rule set and
+    known bad inputs), and attaches it to the ALB. About $5/month + $1/rule + $0.60 per million requests.
+  - `waf_count_only` counts matches without blocking, for a safe first rollout on a live ALB; `waf_rule_overrides`
+    counts individual managed rules instead of blocking them.
+  - `waf_web_acl_arn` attaches an existing web ACL instead.
+  - All are ignored in shared-platform mode: set them on the platform that owns the ALB and every guest app is
+    covered. New output `waf_web_acl_arn`.
 - `database` and `cache` have tests.
 - The remaining accepted checkov findings are tracked as GitHub issues.
 

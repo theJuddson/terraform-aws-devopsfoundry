@@ -59,6 +59,7 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | container\_insights | CloudWatch Container Insights on the app's cluster (billed per metric). Ignored in shared-platform mode. | `bool` | `false` | no |
 | container\_port | n/a | `number` | `8080` | no |
 | cpu | n/a | `number` | `512` | no |
+| create\_waf | Create a WAF web ACL (per-IP rate limit + AWS managed rules) on the ALB. About $5/month + $1/rule + $0.60 per million requests. | `bool` | `false` | no |
 | db\_allocated\_storage | n/a | `number` | `20` | no |
 | db\_backup\_retention\_days | n/a | `number` | `1` | no |
 | db\_deletion\_protection | n/a | `bool` | `false` | no |
@@ -96,6 +97,11 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | subdomain | Subdomain fronting the service (api -> api.example.com). Empty or "@" serves at the apex (example.com). | `string` | `"api"` | no |
 | tasks\_in\_public\_subnets | Run ECS tasks in public subnets with public IPs (no NAT needed). Inbound stays ALB-only. | `bool` | `false` | no |
 | vpc\_cidr | ── Networking ───────────────────────────────────────── | `string` | `"10.0.0.0/16"` | no |
+| waf\_count\_only | Count WAF matches without blocking. Start here on a live ALB, then set false to enforce. | `bool` | `false` | no |
+| waf\_managed\_rule\_groups | AWS managed rule groups to apply, in order. | `list(string)` | <pre>[<br/>  "AWSManagedRulesAmazonIpReputationList",<br/>  "AWSManagedRulesCommonRuleSet",<br/>  "AWSManagedRulesKnownBadInputsRuleSet"<br/>]</pre> | no |
+| waf\_rate\_limit | Requests per client IP per 5 minutes before the rate rule blocks it, across every host on the ALB. | `number` | `2000` | no |
+| waf\_rule\_overrides | Managed rules to count instead of block, keyed by rule group, e.g. { AWSManagedRulesCommonRuleSet = ["SizeRestrictions\_BODY"] }. | `map(list(string))` | `{}` | no |
+| waf\_web\_acl\_arn | Attach an existing regional web ACL to the ALB instead of creating one. Mutually exclusive with create\_waf. | `string` | `""` | no |
 
 ## Outputs
 
@@ -115,4 +121,5 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | rds\_security\_group\_id | Security group on the RDS instance; add ingress rules here for companion services |
 | service\_url | n/a |
 | task\_security\_group\_id | Security group attached to this app's ECS tasks |
+| waf\_web\_acl\_arn | Web ACL attached to the ALB this stack owns (empty when none, or in shared-platform mode) |
 <!-- END_TF_DOCS -->

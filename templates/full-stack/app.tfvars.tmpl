@@ -59,6 +59,7 @@ shared_platform = "__SHARED_PLATFORM__"
 # enable_nat_gateway      = false
 # tasks_in_public_subnets = true
 
+
 # ── Backing services (toggles) ─────────────────────────
 enable_database = __ENABLE_DB__      # RDS Postgres -> injects DB_URL/DB_HOST/DB_PORT/DB_NAME + DB_USERNAME/DB_PASSWORD
 enable_cache    = __ENABLE_CACHE__   # Redis        -> injects REDIS_HOST/REDIS_PORT/REDIS_SSL_ENABLED + REDIS_PASSWORD
@@ -77,3 +78,14 @@ enable_email    = __ENABLE_EMAIL__   # SES          -> injects MAIL_HOST/MAIL_PO
 # db_performance_insights_enabled = true   # free 7-day retention
 # db_monitoring_interval          = 60     # enhanced monitoring, seconds
 # cache_num_cache_clusters        = 2      # Redis replica + Multi-AZ failover
+
+# ── WAF on the ALB (opt-in) ────────────────────────────
+# A per-IP rate limit plus AWS managed rules (IP reputation, core rule set,
+# known bad inputs): ~$5/month + $1/rule + $0.60 per million requests. On a live
+# ALB, start with waf_count_only = true, check the counts in CloudWatch, then
+# enforce. Ignored in shared-platform mode: set it on the platform that owns the
+# ALB, and every guest app is covered.
+# create_waf     = true
+# waf_count_only = true
+# waf_rate_limit = 2000   # per IP per 5 minutes, across every host on the ALB
+# waf_rule_overrides = { AWSManagedRulesCommonRuleSet = ["SizeRestrictions_BODY"] }   # bodies over 8 KB
