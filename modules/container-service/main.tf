@@ -131,6 +131,7 @@ resource "aws_iam_role" "task" {
 
 # ── ALB ───────────────────────────────────────────────
 resource "aws_lb" "main" {
+  #checkov:skip=CKV2_AWS_76:The opt-in WAF's rule groups are a variable; the default list includes AWSManagedRulesKnownBadInputsRuleSet (Log4j)
   count                      = var.create_alb ? 1 : 0
   name                       = "${local.name_prefix}-alb"
   internal                   = false

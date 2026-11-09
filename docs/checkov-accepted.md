@@ -58,7 +58,7 @@ The defaults still match v1.1.0, so checkov keeps reporting these for the defaul
 | networking | CKV_AWS_158, CKV_AWS_338 | The opt-in flow log group uses the CloudWatch default key and `flow_log_retention_days` |
 | ecr-repository | CKV_AWS_51 | Tags are immutable by default; `container-service` keeps `MUTABLE` for its `:latest` deploy flow |
 | container-service | CKV2_AWS_31 | The opt-in WAF doesn't log requests (billed per GB); CloudWatch metrics and sampled requests are on |
-| container-service | CKV_AWS_192 | The WAF's managed rule groups are a variable; the default list includes `AWSManagedRulesKnownBadInputsRuleSet`, which blocks Log4j lookups |
+| container-service | CKV_AWS_192, CKV2_AWS_76 | The WAF's managed rule groups are a variable; the default list includes `AWSManagedRulesKnownBadInputsRuleSet`, which blocks Log4j lookups |
 
 ## tflint
 
