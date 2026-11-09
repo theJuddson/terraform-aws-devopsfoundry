@@ -94,6 +94,23 @@ data "aws_ecs_cluster" "platform" {
   cluster_name = "${var.platform_name}-cluster"
 }
 
+# ── Can this app's tasks reach the internet? ──────────
+# Tasks pull their image and secrets from AWS over the internet. A platform
+# built with enable_nat_gateway = false runs its own tasks in the public subnets
+# and leaves its private subnets with no default route. A guest whose tasks run
+# there never starts: deploy-app waits out its 20-minute timeout on a
+# ResourceInitializationError. Checked at plan instead (see aws_security_group.api).
+data "aws_route_table" "private" {
+  for_each  = toset(data.aws_subnets.private.ids)
+  subnet_id = each.value
+}
+
+locals {
+  private_subnets_have_egress = alltrue([
+    for rt in data.aws_route_table.private : anytrue([for r in rt.routes : r.cidr_block == "0.0.0.0/0"])
+  ])
+}
+
 # ── This app's own security groups, inside the shared VPC ──
 # Deliberately not reusing the platform's api-sg: a dedicated group is what keeps
 # this app's database reachable only by this app's tasks.
@@ -112,6 +129,13 @@ resource "aws_security_group" "api" {
   }
 
   tags = { Name = "${var.name}-api-sg" }
+
+  lifecycle {
+    precondition {
+      condition     = var.tasks_in_public_subnets || local.private_subnets_have_egress
+      error_message = "Platform \"${var.platform_name}\" has no NAT gateway, so its private subnets have no route to the internet and this app's tasks could not pull their image or secrets. Set tasks_in_public_subnets = true, as the platform itself does, or give the platform a NAT gateway."
+    }
+  }
 }
 
 # An ingress rule ON THIS APP'S security group that names the platform's ALB

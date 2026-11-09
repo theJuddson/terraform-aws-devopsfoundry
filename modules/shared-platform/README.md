@@ -33,6 +33,7 @@ No modules.
 | [aws_ecs_cluster.platform](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ecs_cluster) | data source |
 | [aws_lb.platform](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/lb) | data source |
 | [aws_lb_listener.https](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/lb_listener) | data source |
+| [aws_route_table.private](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/route_table) | data source |
 | [aws_security_group.platform_alb](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/security_group) | data source |
 | [aws_subnets.private](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/subnets) | data source |
 | [aws_subnets.public](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/subnets) | data source |
@@ -50,6 +51,7 @@ No modules.
 | enable\_cache | Create the Redis security group + ingress rule | `bool` | `false` | no |
 | enable\_database | Create the RDS security group + ingress rule | `bool` | `false` | no |
 | https\_listener\_port | Port of the shared ALB's HTTPS listener | `number` | `443` | no |
+| tasks\_in\_public\_subnets | Whether this app's tasks run in the public subnets (container-service's setting of the same name). When false, the plan fails if the platform's private subnets have no route to the internet. | `bool` | `false` | no |
 
 ## Outputs
 
@@ -64,6 +66,7 @@ No modules.
 | ecs\_cluster\_name | n/a |
 | https\_listener\_arn | n/a |
 | private\_subnet\_ids | Shared private subnet IDs (for this app's tasks, RDS, Redis) |
+| private\_subnets\_have\_egress | Whether every private subnet has a default route (a NAT gateway or other egress). False on a platform built with enable\_nat\_gateway = false. |
 | public\_subnet\_ids | Shared public subnet IDs (the platform's ALB already lives here) |
 | rds\_security\_group\_id | This app's own RDS SG id, or null when database disabled |
 | redis\_security\_group\_id | This app's own Redis SG id, or null when cache disabled |

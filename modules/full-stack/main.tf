@@ -169,6 +169,8 @@ module "shared_platform" {
   container_port  = var.container_port
   enable_database = var.enable_database
   enable_cache    = var.enable_cache
+
+  tasks_in_public_subnets = var.tasks_in_public_subnets
 }
 
 module "database" {

@@ -23,6 +23,10 @@ mock_provider "aws" {
   mock_data "aws_subnets" {
     defaults = { ids = ["subnet-a", "subnet-b"] }
   }
+  # A host built with a NAT gateway: its private subnets route 0.0.0.0/0 out.
+  mock_data "aws_route_table" {
+    defaults = { routes = [{ cidr_block = "0.0.0.0/0", nat_gateway_id = "nat-mock" }] }
+  }
 }
 mock_provider "aws" {
   alias = "us_east_1"
@@ -201,5 +205,25 @@ run "flow_logs_reach_the_network_module" {
   assert {
     condition     = module.networking[0].flow_log_group_name == "/vpc/demo/flow-logs"
     error_message = "enable_flow_logs must be passed through to the networking module."
+  }
+}
+
+run "guest_on_a_host_without_nat_can_run_tasks_in_public_subnets" {
+  command = plan
+
+  variables {
+    shared_platform         = "host"
+    tasks_in_public_subnets = true
+  }
+
+  override_data {
+    target = module.shared_platform[0].data.aws_route_table.private
+    values = { routes = [] }
+  }
+
+  # Without tasks_in_public_subnets reaching shared-platform, this plan would fail.
+  assert {
+    condition     = module.shared_platform[0].private_subnets_have_egress == false
+    error_message = "The guest must see that the host's private subnets have no route out."
   }
 }
