@@ -9,6 +9,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
+source lib/retry.sh
 OLD="${1:-v1.2.0}"
 WORK="$(mktemp -d)"
 trap 'git -C "$ROOT" worktree remove --force "$WORK/old" >/dev/null 2>&1 || true; rm -rf "$WORK"' EXIT
@@ -23,7 +24,7 @@ plan() { # $1 label, $2 modules dir
   cp tests/compat/main.tf "$dir/"
   cp tests/compat/ecr-state-made-by-v1.1.0.json "$dir/terraform.tfstate"
   ln -s "$2" "$dir/mod"
-  (cd "$dir" && terraform init -input=false -no-color >/dev/null \
+  (cd "$dir" && retry terraform init -input=false -no-color >/dev/null \
     && terraform plan -refresh=false -input=false -no-color -out=p.bin >/dev/null \
     && terraform show -json p.bin) | python3 -I tests/compat/normalize.py /dev/stdin > "$WORK/$1.norm"
 }

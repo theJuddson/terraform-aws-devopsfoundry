@@ -34,7 +34,11 @@ jobs:
       - name: Install checkov and terraform-docs
         run: |
           pip install --quiet checkov==3.4.3
-          curl -sSLo /tmp/terraform-docs.tgz https://github.com/terraform-docs/terraform-docs/releases/download/v0.24.0/terraform-docs-v0.24.0-linux-amd64.tar.gz
+          # GitHub release downloads sometimes return 5xx; --fail keeps an error
+          # page from being saved as the tarball, and the checksum pins the file.
+          curl -sSfL --retry 5 --retry-all-errors --retry-delay 10 -o /tmp/terraform-docs.tgz \
+            https://github.com/terraform-docs/terraform-docs/releases/download/v0.24.0/terraform-docs-v0.24.0-linux-amd64.tar.gz
+          echo "9005daf969de0b50134493a2c00078b49f5f5b39d021cda7c89bf4d4f3d776d3  /tmp/terraform-docs.tgz" | sha256sum -c -
           tar -xzf /tmp/terraform-docs.tgz -C /usr/local/bin terraform-docs
 
       - name: Cache providers

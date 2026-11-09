@@ -8,6 +8,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
+source lib/retry.sh
 export TF_PLUGIN_CACHE_DIR="${TF_PLUGIN_CACHE_DIR:-$HOME/.terraform.d/plugin-cache}"
 mkdir -p "$TF_PLUGIN_CACHE_DIR"
 
@@ -24,7 +25,7 @@ step() { printf '\n== %s: %s\n' "$1" "$2"; }
 
 terraform fmt -check -recursive modules examples tests || { echo "terraform fmt -check failed (run: terraform fmt -recursive modules examples tests)"; fail=1; }
 
-tflint --init --config "$ROOT/.tflint.hcl" >/dev/null
+retry tflint --init --config "$ROOT/.tflint.hcl" >/dev/null
 
 for d in "${dirs[@]}"; do
   # A module that needs aliased providers from its caller is validated through
@@ -35,7 +36,7 @@ for d in "${dirs[@]}"; do
     [[ -d "$vdir" ]] || { echo "$d needs a wrapper at $vdir"; fail=1; continue; }
   fi
   step validate "$vdir"
-  if ! (cd "$vdir" && terraform init -backend=false -input=false -no-color >/dev/null && terraform validate -no-color); then
+  if ! (cd "$vdir" && retry terraform init -backend=false -input=false -no-color >/dev/null && terraform validate -no-color); then
     fail=1
   fi
   step tflint "$d"
@@ -46,7 +47,7 @@ done
 for d in "${dirs[@]}"; do
   compgen -G "$d/tests/*.tftest.hcl" >/dev/null || continue
   step test "$d"
-  if ! (cd "$d" && terraform init -backend=false -input=false -no-color >/dev/null && terraform test -no-color); then
+  if ! (cd "$d" && retry terraform init -backend=false -input=false -no-color >/dev/null && terraform test -no-color); then
     fail=1
   fi
 done
