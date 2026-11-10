@@ -26,7 +26,6 @@ done
 CONFIG="$(df_resolve_config "$CONFIG")"
 TFVARS="$CONFIG/app.tfvars"
 [[ -f "$TFVARS" ]] || die "Missing $TFVARS"
-ADDR='module.app.module.namecheap_ns[0].namecheap_domain_records.ns'
 
 DOMAIN="$(df_tfvar "$TFVARS" domain_name)"
 [[ -n "$DOMAIN" ]] || die "No domain_name in $TFVARS"
@@ -71,14 +70,15 @@ wire_root() {
 
 in_state=false
 STATE="$(df_tf_at "$CONFIG" state list 2>/dev/null)" || die "Could not read Terraform state in $CONFIG (run terraform init there?)"
-grep -qxF "$ADDR" <<<"$STATE" && in_state=true
+ADDR="$(grep -E "$DF_NS_RECORD_RE" <<<"$STATE" | head -1 || true)"
+[[ -n "$ADDR" ]] && in_state=true
 
 if ! $in_state; then
   if [[ "$(app_arg)" == "false" || ( "$(app_arg)" == "var.manage_nameservers" && "$(df_tfvar "$TFVARS" manage_nameservers)" == "false" ) ]]; then
     pass "Already released: Terraform no longer manages $DOMAIN's nameservers"
     exit 0
   fi
-  if grep -q '^module\.app\.module\.route53_zone\[0\]' <<<"$STATE"; then
+  if grep -qE "$DF_ZONE_RE" <<<"$STATE"; then
     # The zone exists but the record is gone (e.g. removed by hand): just finish.
     info "No Namecheap record in state; finishing the release"
     wire_root

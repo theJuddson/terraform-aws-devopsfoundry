@@ -16,14 +16,18 @@ make_app() { # make_app <state-has-record:true|false> <public NS lines>
         -e 's/__ENABLE_[A-Z]*__/false/g' "$DF/templates/full-stack/$t.tmpl" > "$APP/$t"
   done
   cp "$DF/templates/full-stack/variables.tf" "$APP/variables.tf"
-  { echo 'module.app.module.route53_zone[0].aws_route53_zone.main'; $1 && echo "$ADDR"; } > "$TMP/state"
+  if [[ -n "${OLD_ADDRS:-}" ]]; then  # a state not applied since v1.2.5: unindexed addresses
+    { echo 'module.app.module.route53_zone.aws_route53_zone.main'; $1 && echo "${ADDR/\[0\]/}"; } > "$TMP/state"
+  else
+    { echo 'module.app.module.route53_zone[0].aws_route53_zone.main'; $1 && echo "$ADDR"; } > "$TMP/state"
+  fi
   printf '%s\n' "$2" > "$TMP/dig"
   stub terraform "
 case \"\$*\" in
   *' state list'*) cat '$TMP/state' ;;
   *' state rm '*)  echo \"tfvars at state rm: \$(grep -c '^manage_nameservers = false' '$APP/app.tfvars')\" >> \"\$CALLS\"
                    [[ -f '$TMP/state-rm-fails' ]] && exit 1
-                   grep -vxF '$ADDR' '$TMP/state' > '$TMP/state.new'; mv '$TMP/state.new' '$TMP/state' ;;
+                   grep -vxF \"\${@: -1}\" '$TMP/state' > '$TMP/state.new'; mv '$TMP/state.new' '$TMP/state' ;;
   *'output -json name_servers'*) echo '$R53_NS' ;;
   *'output -raw cpu_architecture'*) echo X86_64 ;;
   *'output -raw'*) echo 'https://api.example.com' ;;
@@ -185,4 +189,29 @@ t_destroy_of_an_unreleased_app_is_unchanged() {
   "$DF/bin/destroy-app" --config "$APP" --yes || fail "destroy should succeed"
   assert_not_called " apply "
   assert_called " destroy -input=false -auto-approve -var-file=app.tfvars$"
+}
+
+OLD_ADDR_RE='module\.app\.module\.namecheap_ns\.namecheap_domain_records\.ns'
+
+t_release_handles_a_state_with_pre_v1_2_5_addresses() {
+  OLD_ADDRS=1 make_app true $'ns-1.awsdns-01.org.\nns-2.awsdns-02.net.'
+  "$DF/bin/release-nameservers" --config "$APP" --yes || fail "release should succeed"
+  assert_called "state rm $OLD_ADDR_RE$"
+  ! grep -q namecheap "$TMP/state" || fail "the record must be gone from state"
+  [[ "$(tfvar manage_nameservers)" == "false" ]] || fail "manage_nameservers must end false"
+}
+
+t_deploy_guard_sees_a_pre_v1_2_5_address() {
+  OLD_ADDRS=1 make_app true $'ns-1.awsdns-01.org.'
+  echo 'manage_nameservers = false' >> "$APP/app.tfvars"
+  : > "$APP/app.env"; touch "$TMP/app/Dockerfile"
+  "$DF/bin/deploy-app" --config "$APP" --yes >/dev/null 2>&1 && fail "deploy must stop"
+  assert_not_called "^docker build"
+}
+
+t_destroy_readopts_with_a_pre_v1_2_5_zone_address() {
+  OLD_ADDRS=1 make_app false $'ns-1.awsdns-01.org.'
+  echo 'manage_nameservers = false' >> "$APP/app.tfvars"
+  "$DF/bin/destroy-app" --config "$APP" --yes || fail "destroy should succeed"
+  assert_called " apply .*-var manage_nameservers=true -target=module\.app\.module\.namecheap_ns"
 }
