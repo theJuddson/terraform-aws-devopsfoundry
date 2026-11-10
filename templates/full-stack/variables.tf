@@ -226,7 +226,13 @@ variable "dmarc_rua_email" {
 }
 
 variable "shared_platform" {
-  description = "Slug of an existing DevOpsFoundry app whose VPC/NAT/ALB/ECS cluster to share; empty = dedicated"
+  description = "Platform to share the VPC/NAT/ALB/ECS cluster of: a host's platform_name, or the host app's slug; empty = dedicated"
+  type        = string
+  default     = ""
+}
+
+variable "platform_name" {
+  description = "Host only: publish this app's VPC/ALB/cluster as a shared platform under this name (an SSM parameter guests read); empty = none"
   type        = string
   default     = ""
 }

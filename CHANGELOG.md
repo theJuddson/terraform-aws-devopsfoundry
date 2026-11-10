@@ -3,6 +3,19 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.6.0
+
+- Shared platforms can be renamed (#30). `full-stack` takes an opt-in `platform_name`: the host then publishes a
+  platform descriptor, the SSM parameter `/devopsfoundry/platform/<platform_name>`, holding its VPC, subnet, ALB
+  security group, ALB and cluster IDs. `shared-platform` reads it before falling back to naming conventions, so
+  guests can switch to `shared_platform = "<platform_name>"` with no plan changes and nothing in AWS renamed or
+  replaced. A malformed descriptor stops the plan before any lookup. See *Renaming a shared platform* in the
+  README. Off by default: existing stacks plan no changes. Guests now read `/devopsfoundry/platform` at plan,
+  which needs `ssm:GetParametersByPath` on that path.
+- `container-service` outputs `alb_arn`; `shared-platform` outputs `platform_source` (`descriptor` or `naming`);
+  `full-stack` outputs `platform_descriptor_name`.
+- `templates/full-stack` exposes `platform_name`.
+
 ## v1.5.1
 
 - Fix: `bin/release-nameservers` on app roots scaffolded before v1.5.0. Their `main.tf` doesn't pass

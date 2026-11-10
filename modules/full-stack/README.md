@@ -42,6 +42,7 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | [aws_route53_record.existing_zone_validation](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
 | [aws_secretsmanager_secret.redis_auth](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/secretsmanager_secret) | resource |
 | [aws_secretsmanager_secret_version.redis_auth](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/secretsmanager_secret_version) | resource |
+| [aws_ssm_parameter.platform_descriptor](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
 | [aws_route53_zone.existing](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/route53_zone) | data source |
 
 ## Inputs
@@ -101,9 +102,10 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | mail\_from\_subdomain | Custom MAIL FROM subdomain label for SPF alignment (e.g. 'mail'). Empty = SES default. | `string` | `""` | no |
 | manage\_nameservers | Whether Terraform manages the domain's Namecheap nameserver delegation to the Route53 zone (ignored when<br/>existing\_zone\_name is set). The delegation is set once and never changes, but managing it makes every plan<br/>call the Namecheap API, which only answers whitelisted IPs. Set false after the first apply so deploys<br/>never need Namecheap. On an existing stack, first run<br/>`terraform state rm 'module.<name>.module.namecheap_ns[0].namecheap_domain_records.ns'`; without it,<br/>Terraform deletes the delegation. (A `removed` block can't do this: the module block is still declared.) | `bool` | `true` | no |
 | memory | n/a | `number` | `1024` | no |
+| platform\_name | Publish this stack's VPC, subnets, ALB and ECS cluster as a shared platform<br/>under this name: an SSM parameter /devopsfoundry/platform/<platform\_name><br/>that guest apps (shared\_platform = "<platform\_name>") read before falling<br/>back to naming conventions. Lets a platform shared by several apps carry a<br/>generic name without replacing any resource. Empty (the default) publishes<br/>nothing. Not allowed in shared-platform mode. | `string` | `""` | no |
 | secrets | n/a | `map(string)` | `{}` | no |
 | service\_name | Short container/service name | `string` | `"app"` | no |
-| shared\_platform | Slug of an EXISTING DevOpsFoundry app whose VPC, NAT gateway, ALB and ECS<br/>cluster this app should share (e.g. "other-app-com"). Empty (the default)<br/>provisions dedicated infrastructure.<br/><br/>Sharing removes the two largest fixed costs — NAT (~$33/mo) and ALB<br/>(~$16/mo) — at the price of a shared failure domain with the host platform.<br/>A database, when enabled, is still this app's own. | `string` | `""` | no |
+| shared\_platform | Name of an EXISTING DevOpsFoundry platform whose VPC, NAT gateway, ALB and<br/>ECS cluster this app should share: the host's platform\_name, or the host<br/>app's slug (e.g. "other-app-com"). Empty (the default) provisions dedicated<br/>infrastructure.<br/><br/>Sharing removes the two largest fixed costs — NAT (~$33/mo) and ALB<br/>(~$16/mo) — at the price of a shared failure domain with the host platform.<br/>A database, when enabled, is still this app's own. | `string` | `""` | no |
 | subdomain | Subdomain fronting the service (api -> api.example.com). Empty or "@" serves at the apex (example.com). | `string` | `"api"` | no |
 | tasks\_in\_public\_subnets | Run ECS tasks in public subnets with public IPs (no NAT needed). Inbound stays ALB-only. In shared-platform mode this must match the host: true if the host has no NAT gateway (the plan fails otherwise). | `bool` | `false` | no |
 | vpc\_cidr | ── Networking ───────────────────────────────────────── | `string` | `"10.0.0.0/16"` | no |
@@ -131,6 +133,7 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | health\_check\_path | Path deploy-app curls after rollout |
 | log\_group | n/a |
 | name\_servers | Route53 nameservers delegated at Namecheap |
+| platform\_descriptor\_name | SSM parameter publishing this stack as a shared platform (platform\_name), or null |
 | private\_subnet\_ids | n/a |
 | rds\_security\_group\_id | Security group on the RDS instance; add ingress rules here for companion services |
 | service\_url | n/a |

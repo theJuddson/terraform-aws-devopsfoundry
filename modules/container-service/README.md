@@ -114,6 +114,7 @@ A containerized service on ECS Fargate behind an HTTPS ALB, framework-neutral: y
 
 | Name | Description |
 | ---- | ----------- |
+| alb\_arn | ARN of the ALB this stack created, or empty when it uses a shared one |
 | alb\_dns\_name | The ALB serving this app — dedicated or shared |
 | cpu\_architecture | CPU architecture the tasks run on (X86\_64 or ARM64); build images for it |
 | ecr\_repository\_url | n/a |

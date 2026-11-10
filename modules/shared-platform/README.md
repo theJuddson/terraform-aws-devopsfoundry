@@ -1,6 +1,6 @@
 # shared-platform
 
-Looks up an existing DevOpsFoundry app's VPC, subnets, NAT, ALB and ECS cluster by naming convention, so another app can attach to them instead of paying for its own. Read-only: it creates the guest app's own security groups only.
+Looks up an existing DevOpsFoundry platform's VPC, subnets, NAT, ALB and ECS cluster, so another app can attach to them instead of paying for its own. It uses the host's platform descriptor (the SSM parameter `/devopsfoundry/platform/<platform_name>`, published by full-stack's `platform_name`) when there is one, and naming conventions otherwise. Read-only: it creates the guest app's own security groups only.
 
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
@@ -35,6 +35,7 @@ No modules.
 | [aws_lb_listener.https](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/lb_listener) | data source |
 | [aws_route_table.private](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/route_table) | data source |
 | [aws_security_group.platform_alb](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/security_group) | data source |
+| [aws_ssm_parameters_by_path.platforms](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ssm_parameters_by_path) | data source |
 | [aws_subnets.private](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/subnets) | data source |
 | [aws_subnets.public](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/subnets) | data source |
 | [aws_vpc.platform](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/vpc) | data source |
@@ -44,7 +45,7 @@ No modules.
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
 | name | Resource-name prefix for THIS app (app slug) | `string` | n/a | yes |
-| platform\_name | Slug of an EXISTING DevOpsFoundry app whose VPC, NAT, ALB and ECS cluster<br/>this app should share (e.g. "other-app-com"). Resources are located by this<br/>tool's own naming conventions — see main.tf. | `string` | n/a | yes |
+| platform\_name | Name of an EXISTING DevOpsFoundry platform whose VPC, NAT, ALB and ECS<br/>cluster this app should share: the platform\_name it publishes, or the host<br/>app's slug (e.g. "other-app-com"). A published descriptor is used first,<br/>then this tool's own naming conventions — see main.tf. | `string` | n/a | yes |
 | cache\_port | Redis port | `number` | `6379` | no |
 | container\_port | Port the app container listens on | `number` | `8080` | no |
 | db\_port | Postgres port | `number` | `5432` | no |
@@ -65,6 +66,7 @@ No modules.
 | ecs\_cluster\_arn | n/a |
 | ecs\_cluster\_name | n/a |
 | https\_listener\_arn | n/a |
+| platform\_source | How the platform was found: "descriptor" (its SSM parameter) or "naming" (naming conventions) |
 | private\_subnet\_ids | Shared private subnet IDs (for this app's tasks, RDS, Redis) |
 | private\_subnets\_have\_egress | Whether every private subnet has a default route (a NAT gateway or other egress). False on a platform built with enable\_nat\_gateway = false. |
 | public\_subnet\_ids | Shared public subnet IDs (the platform's ALB already lives here) |

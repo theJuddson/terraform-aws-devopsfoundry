@@ -43,8 +43,9 @@ secrets = {
 }
 
 # ── Shared platform ────────────────────────────────────
-# Slug of an EXISTING DevOpsFoundry app whose VPC, NAT gateway, ALB and ECS
-# cluster this app should share. Empty = dedicated infrastructure.
+# An EXISTING DevOpsFoundry platform whose VPC, NAT gateway, ALB and ECS
+# cluster this app should share: the host's platform_name, or the host app's
+# slug. Empty = dedicated infrastructure.
 #
 # Sharing removes the two largest fixed costs (NAT ~$33/mo, ALB ~$16/mo) at the
 # price of a shared failure domain: an ALB or NAT problem on the host platform
@@ -56,6 +57,12 @@ shared_platform = "__SHARED_PLATFORM__"
 # Each guest app on a shared ALB needs a distinct listener-rule priority base;
 # it claims <base> and <base>+1.
 # listener_rule_priority_base = 100
+
+# HOST only: publish this app's VPC, ALB and cluster as a shared platform under
+# a generic name, for guests to use as their shared_platform. Adds one SSM
+# parameter; no resource is renamed. See "Renaming a shared platform" in the
+# DevOpsFoundry README.
+# platform_name = "web-platform"
 
 # ── Networking cost ────────────────────────────────────
 # A dedicated stack provisions a NAT gateway (~$33/mo) so tasks in private

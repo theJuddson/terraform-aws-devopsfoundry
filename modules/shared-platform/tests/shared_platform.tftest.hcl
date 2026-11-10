@@ -18,6 +18,10 @@ mock_provider "aws" {
   mock_data "aws_subnets" {
     defaults = { ids = ["subnet-a", "subnet-b"] }
   }
+  # No platform descriptors published: hosts are found by naming convention.
+  mock_data "aws_ssm_parameters_by_path" {
+    defaults = { names = [], values = [] }
+  }
   # A host built with a NAT gateway: its private subnets route 0.0.0.0/0 out.
   mock_data "aws_route_table" {
     defaults = { routes = [{ cidr_block = "0.0.0.0/0", nat_gateway_id = "nat-mock" }] }
@@ -31,6 +35,11 @@ variables {
 
 run "defaults_find_host_by_naming_convention" {
   command = plan
+
+  assert {
+    condition     = output.platform_source == "naming" && data.aws_ssm_parameters_by_path.platforms.path == "/devopsfoundry/platform"
+    error_message = "Without a descriptor the platform must be found by naming convention, after checking /devopsfoundry/platform."
+  }
 
   assert {
     condition     = toset(one([for f in data.aws_vpc.platform.filter : f.values if f.name == "tag:Name"])) == toset(["host-vpc"])
@@ -222,4 +231,127 @@ run "a_local_route_alone_is_not_egress" {
   }
 
   expect_failures = [aws_security_group.api]
+}
+
+# ── Platform descriptors (/devopsfoundry/platform/<name>) ──
+
+run "a_published_descriptor_is_used_by_id" {
+  command = plan
+
+  variables {
+    platform_name = "shared-web"
+  }
+
+  # Another platform's descriptor first, and one whose name merely starts with
+  # this one's, so a wrong index or a prefix match would pick the wrong IDs.
+  override_data {
+    target = data.aws_ssm_parameters_by_path.platforms
+    values = {
+      names = ["/devopsfoundry/platform/other", "/devopsfoundry/platform/shared-web-2", "/devopsfoundry/platform/shared-web"]
+      values = [
+        "{\"version\":1,\"host\":\"x\",\"vpc_id\":\"vpc-wrong\",\"public_subnet_ids\":[],\"private_subnet_ids\":[],\"alb_security_group_id\":\"sg-wrong\",\"alb_arn\":\"arn:aws:elasticloadbalancing:us-east-1:111111111111:loadbalancer/app/wrong/1\",\"ecs_cluster_name\":\"wrong\"}",
+        "{\"version\":1,\"host\":\"y\",\"vpc_id\":\"vpc-wrong2\",\"public_subnet_ids\":[],\"private_subnet_ids\":[],\"alb_security_group_id\":\"sg-wrong2\",\"alb_arn\":\"arn:aws:elasticloadbalancing:us-east-1:111111111111:loadbalancer/app/wrong2/1\",\"ecs_cluster_name\":\"wrong2\"}",
+        "{\"version\":1,\"host\":\"first-app-com\",\"vpc_id\":\"vpc-host\",\"public_subnet_ids\":[\"subnet-pub-1\",\"subnet-pub-2\"],\"private_subnet_ids\":[\"subnet-priv-1\",\"subnet-priv-2\"],\"alb_security_group_id\":\"sg-host-alb\",\"alb_arn\":\"arn:aws:elasticloadbalancing:us-east-1:111111111111:loadbalancer/app/first-app-com-alb/abc\",\"ecs_cluster_name\":\"first-app-com-cluster\"}",
+      ]
+    }
+  }
+
+  assert {
+    condition     = output.platform_source == "descriptor"
+    error_message = "A published descriptor must be preferred over naming conventions."
+  }
+  assert {
+    condition     = data.aws_vpc.platform.id == "vpc-host" && length(data.aws_vpc.platform.filter) == 0
+    error_message = "The VPC must be looked up by the descriptor's vpc_id, not by a <platform>-vpc tag."
+  }
+  assert {
+    condition = (
+      toset(one([for f in data.aws_subnets.public.filter : f.values if f.name == "subnet-id"])) == toset(["subnet-pub-1", "subnet-pub-2"]) &&
+      toset(one([for f in data.aws_subnets.private.filter : f.values if f.name == "subnet-id"])) == toset(["subnet-priv-1", "subnet-priv-2"])
+    )
+    error_message = "Subnets must be looked up by the descriptor's IDs, each tier from its own list."
+  }
+  assert {
+    condition = alltrue([
+      for d in [data.aws_subnets.public, data.aws_subnets.private] :
+      length([for f in d.filter : f if f.name == "tag:Name"]) == 0 &&
+      toset(one([for f in d.filter : f.values if f.name == "vpc-id"])) == toset([data.aws_vpc.platform.id])
+    ])
+    error_message = "Descriptor subnets must still be confined to the platform VPC, and not filtered by name."
+  }
+  assert {
+    condition     = data.aws_security_group.platform_alb.id == "sg-host-alb" && length(data.aws_security_group.platform_alb.filter) == 0
+    error_message = "The ALB security group must be the descriptor's alb_security_group_id."
+  }
+  assert {
+    condition     = data.aws_lb.platform.arn == "arn:aws:elasticloadbalancing:us-east-1:111111111111:loadbalancer/app/first-app-com-alb/abc" && data.aws_lb.platform.name != "shared-web-alb"
+    error_message = "The ALB must be the descriptor's alb_arn, not <platform>-alb."
+  }
+  assert {
+    condition     = data.aws_ecs_cluster.platform.cluster_name == "first-app-com-cluster"
+    error_message = "The cluster must be the descriptor's ecs_cluster_name, not <platform>-cluster."
+  }
+  assert {
+    condition     = data.aws_lb_listener.https.load_balancer_arn == data.aws_lb.platform.arn && data.aws_lb_listener.https.port == 443
+    error_message = "The HTTPS listener must still be found on the descriptor's ALB."
+  }
+}
+
+run "another_platforms_descriptor_is_ignored" {
+  command = plan
+
+  override_data {
+    target = data.aws_ssm_parameters_by_path.platforms
+    values = {
+      names  = ["/devopsfoundry/platform/host-2"]
+      values = ["{\"version\":1}"]
+    }
+  }
+
+  assert {
+    condition     = output.platform_source == "naming" && data.aws_lb.platform.name == "host-alb"
+    error_message = "Only /devopsfoundry/platform/<platform_name> itself may be used; otherwise naming conventions apply."
+  }
+}
+
+run "an_unknown_descriptor_version_stops_the_plan" {
+  command = plan
+
+  override_data {
+    target = data.aws_ssm_parameters_by_path.platforms
+    values = {
+      names  = ["/devopsfoundry/platform/host"]
+      values = ["{\"version\":2,\"host\":\"h\",\"vpc_id\":\"vpc-1\",\"public_subnet_ids\":[],\"private_subnet_ids\":[],\"alb_security_group_id\":\"sg-1\",\"alb_arn\":\"arn:aws:elasticloadbalancing:us-east-1:111111111111:loadbalancer/app/h/1\",\"ecs_cluster_name\":\"c\"}"]
+    }
+  }
+
+  expect_failures = [data.aws_vpc.platform]
+}
+
+run "a_descriptor_missing_a_field_stops_the_plan" {
+  command = plan
+
+  override_data {
+    target = data.aws_ssm_parameters_by_path.platforms
+    values = {
+      names  = ["/devopsfoundry/platform/host"]
+      values = ["{\"version\":1,\"host\":\"h\",\"vpc_id\":\"vpc-1\",\"public_subnet_ids\":[],\"private_subnet_ids\":[],\"alb_security_group_id\":\"sg-1\",\"ecs_cluster_name\":\"c\"}"]
+    }
+  }
+
+  expect_failures = [data.aws_vpc.platform]
+}
+
+run "a_descriptor_that_is_not_json_stops_the_plan" {
+  command = plan
+
+  override_data {
+    target = data.aws_ssm_parameters_by_path.platforms
+    values = {
+      names  = ["/devopsfoundry/platform/host"]
+      values = ["vpc-123"]
+    }
+  }
+
+  expect_failures = [data.aws_vpc.platform]
 }

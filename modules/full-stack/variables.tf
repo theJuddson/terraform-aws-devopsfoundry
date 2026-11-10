@@ -207,9 +207,10 @@ variable "mail_from_subdomain" {
 
 variable "shared_platform" {
   description = <<-EOT
-    Slug of an EXISTING DevOpsFoundry app whose VPC, NAT gateway, ALB and ECS
-    cluster this app should share (e.g. "other-app-com"). Empty (the default)
-    provisions dedicated infrastructure.
+    Name of an EXISTING DevOpsFoundry platform whose VPC, NAT gateway, ALB and
+    ECS cluster this app should share: the host's platform_name, or the host
+    app's slug (e.g. "other-app-com"). Empty (the default) provisions dedicated
+    infrastructure.
 
     Sharing removes the two largest fixed costs — NAT (~$33/mo) and ALB
     (~$16/mo) — at the price of a shared failure domain with the host platform.
@@ -217,6 +218,24 @@ variable "shared_platform" {
   EOT
   type        = string
   default     = ""
+}
+
+variable "platform_name" {
+  description = <<-EOT
+    Publish this stack's VPC, subnets, ALB and ECS cluster as a shared platform
+    under this name: an SSM parameter /devopsfoundry/platform/<platform_name>
+    that guest apps (shared_platform = "<platform_name>") read before falling
+    back to naming conventions. Lets a platform shared by several apps carry a
+    generic name without replacing any resource. Empty (the default) publishes
+    nothing. Not allowed in shared-platform mode.
+  EOT
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.platform_name == "" || can(regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", var.platform_name))
+    error_message = "platform_name must be lowercase letters, digits and hyphens (at most 63), not starting or ending with a hyphen."
+  }
 }
 
 variable "listener_rule_priority_base" {

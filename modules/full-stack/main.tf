@@ -305,6 +305,37 @@ module "container_service" {
   secrets = local.merged_secrets
 }
 
+# ── Platform descriptor (opt-in) ──────────────────────
+# Publishes this stack's shared infrastructure by ID under a name of its own, so
+# guests can find it without relying on the <name>-vpc/-alb/-cluster naming
+# conventions. Renaming a shared platform is then: publish under the new name,
+# point guests at it. No AWS resource is renamed or replaced. Read by
+# modules/shared-platform; the schema is documented there.
+resource "aws_ssm_parameter" "platform_descriptor" {
+  #checkov:skip=CKV2_AWS_34:Holds only resource IDs (VPC, subnets, ALB, cluster), no secrets; String (and insecure_value, so plans show it) keeps it readable without KMS grants
+  count       = var.platform_name != "" ? 1 : 0
+  name        = "/devopsfoundry/platform/${var.platform_name}"
+  description = "DevOpsFoundry shared platform ${var.platform_name}, hosted by ${var.name}"
+  type        = "String"
+  insecure_value = jsonencode({
+    version               = 1
+    host                  = var.name
+    vpc_id                = local.net.vpc_id
+    public_subnet_ids     = local.net.public_subnet_ids
+    private_subnet_ids    = local.net.private_subnet_ids
+    alb_security_group_id = local.net.alb_security_group_id
+    alb_arn               = module.container_service.alb_arn
+    ecs_cluster_name      = module.container_service.ecs_cluster_name
+  })
+
+  lifecycle {
+    precondition {
+      condition     = !local.use_shared
+      error_message = "platform_name publishes this stack's own network and ALB; a stack in shared-platform mode has none to publish. Set it on the host platform instead."
+    }
+  }
+}
+
 # ── State migration ───────────────────────────────────
 # `networking` gained a count when shared-platform mode was added. Without this,
 # Terraform would plan to destroy and recreate the VPC (and everything in it)

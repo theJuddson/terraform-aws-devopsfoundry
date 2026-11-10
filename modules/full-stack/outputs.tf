@@ -85,3 +85,8 @@ output "cpu_architecture" {
   description = "CPU architecture the app's tasks run on; deploy-app builds the image for it"
   value       = module.container_service.cpu_architecture
 }
+
+output "platform_descriptor_name" {
+  description = "SSM parameter publishing this stack as a shared platform (platform_name), or null"
+  value       = one(aws_ssm_parameter.platform_descriptor[*].name)
+}
