@@ -86,6 +86,7 @@ module "app" {
   tasks_in_public_subnets     = var.tasks_in_public_subnets
   shared_platform             = var.shared_platform
   listener_rule_priority_base = var.listener_rule_priority_base
+  platform_name               = var.platform_name # needs the module at v1.6.0 or later
 
   enable_database = var.enable_database
   enable_cache    = var.enable_cache

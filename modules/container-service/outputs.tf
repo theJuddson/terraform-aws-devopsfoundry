@@ -18,6 +18,11 @@ output "service_url" {
   value = "https://${local.service_fqdn}"
 }
 
+output "alb_arn" {
+  description = "ARN of the ALB this stack created, or empty when it uses a shared one"
+  value       = var.create_alb ? aws_lb.main[0].arn : ""
+}
+
 output "alb_dns_name" {
   description = "The ALB serving this app — dedicated or shared"
   value       = local.alb_dns_name

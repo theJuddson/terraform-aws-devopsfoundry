@@ -26,8 +26,8 @@ or straight from git, over HTTPS or SSH, pinned to a release tag (the newest is 
 [Releases page](https://github.com/theJuddson/terraform-aws-devopsfoundry/releases)):
 
 ```hcl
-source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.5.1"
-source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.5.1"
+source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.6.0"
+source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.6.0"
 ```
 
 Each module's README lists its inputs and outputs, and the building blocks have a runnable example under
@@ -205,7 +205,7 @@ serving and `--enable-email` are refused in this mode, and `destroy-app` removes
 
 ```bash
 bin/new-app example.com --subdomain app --existing-zone example.com \
-  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.5.1
+  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.6.0
 ```
 
 #### App-owned state
@@ -253,9 +253,11 @@ bin/new-app example.com --config ../MyApp/.devopsfoundry \
 Typical cost falls from ~$85/mo to ~$25/mo (one Fargate task plus its own RDS).
 
 **What is shared, and what is not.** The host platform's VPC, subnets, NAT, ALB
-and ECS cluster are read-only data sources, located by this tool's naming
-conventions (`<slug>-vpc`, `<slug>-private-<az>`, `<slug>-alb`,
-`<slug>-alb-sg`, `<slug>-cluster`). The guest app still owns its own security
+and ECS cluster are read-only data sources. They are found by ID from the
+host's platform descriptor when it publishes one (see *Renaming a shared
+platform* below), and otherwise by this tool's naming conventions
+(`<slug>-vpc`, `<slug>-private-<az>`, `<slug>-alb`, `<slug>-alb-sg`,
+`<slug>-cluster`). The guest app still owns its own security
 groups, target group, task definition, service, and — when `enable_database` is
 on — its own RDS instance, with its own credentials and backups. Nothing in the
 host platform's Terraform state is modified, so it never shows drift.
@@ -271,6 +273,34 @@ domain. An ALB or NAT problem on the host takes the guest down too, and
 anything that needs independent availability.
 
 **Ordering:** never `destroy-app` a platform that still has guests attached.
+
+#### Renaming a shared platform
+
+A platform keeps the name of the app that built it, so once several apps share
+it, `shared_platform = "first-app-com"` describes one product. To give it a
+generic name, the host publishes a **platform descriptor**: an SSM parameter
+`/devopsfoundry/platform/<platform_name>` holding its VPC, subnet, ALB security
+group, ALB and cluster IDs. Guests read it before falling back to naming
+conventions. Nothing in AWS is renamed or replaced, so there is no downtime; the
+host's resources keep their original names, visible only in the AWS console.
+
+1. **Host:** set `platform_name = "web-platform"` in its `app.tfvars` (app roots
+   scaffolded before v1.6.0 also need `platform_name = var.platform_name` in the
+   module block and the variable in `variables.tf`; see `templates/full-stack`),
+   then `bin/deploy-app`. The plan adds one SSM parameter and changes nothing
+   else.
+2. **Each guest:** set `shared_platform = "web-platform"` and plan. It should
+   show no changes, because the same resources are found by ID. Guests not yet
+   switched keep working under the old name.
+
+The first rename is seamless because guests on the old name still find the host
+by naming convention. Renaming *again* is not: a stack publishes one name at a
+time, so changing `platform_name` deletes the previous descriptor. Guests'
+running services are unaffected, but their plans fail until each one switches to
+the new name, so switch them right after the host's apply. A stack in
+shared-platform mode cannot publish a descriptor. Whoever plans a guest needs
+`ssm:GetParametersByPath` on `/devopsfoundry/platform`; the CLI's usual
+credentials have it.
 
 #### Dropping the NAT gateway
 

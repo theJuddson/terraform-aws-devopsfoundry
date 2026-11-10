@@ -1,8 +1,9 @@
 variable "platform_name" {
   description = <<-EOT
-    Slug of an EXISTING DevOpsFoundry app whose VPC, NAT, ALB and ECS cluster
-    this app should share (e.g. "other-app-com"). Resources are located by this
-    tool's own naming conventions — see main.tf.
+    Name of an EXISTING DevOpsFoundry platform whose VPC, NAT, ALB and ECS
+    cluster this app should share: the platform_name it publishes, or the host
+    app's slug (e.g. "other-app-com"). A published descriptor is used first,
+    then this tool's own naming conventions — see main.tf.
   EOT
   type        = string
 }

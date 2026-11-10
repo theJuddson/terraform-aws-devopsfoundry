@@ -23,6 +23,10 @@ mock_provider "aws" {
   mock_data "aws_subnets" {
     defaults = { ids = ["subnet-a", "subnet-b"] }
   }
+  # No platform descriptors published: hosts are found by naming convention.
+  mock_data "aws_ssm_parameters_by_path" {
+    defaults = { names = [], values = [] }
+  }
   # A host built with a NAT gateway: its private subnets route 0.0.0.0/0 out.
   mock_data "aws_route_table" {
     defaults = { routes = [{ cidr_block = "0.0.0.0/0", nat_gateway_id = "nat-mock" }] }
@@ -314,4 +318,95 @@ run "cpu_architecture_reaches_the_service" {
     condition     = output.cpu_architecture == "ARM64"
     error_message = "cpu_architecture must reach container-service and come back as an output for deploy-app."
   }
+}
+
+run "no_platform_descriptor_by_default" {
+  command = plan
+
+  assert {
+    condition     = length(aws_ssm_parameter.platform_descriptor) == 0 && output.platform_descriptor_name == null
+    error_message = "A stack must publish no platform descriptor unless platform_name is set."
+  }
+}
+
+run "platform_name_publishes_the_stacks_own_infrastructure" {
+  command = plan
+
+  variables {
+    platform_name = "shared-web"
+  }
+
+  # Known module outputs, so the descriptor's JSON is known at plan.
+  override_module {
+    target = module.networking[0]
+    outputs = {
+      vpc_id                  = "vpc-demo"
+      public_subnet_ids       = ["subnet-pub-1", "subnet-pub-2"]
+      private_subnet_ids      = ["subnet-priv-1", "subnet-priv-2"]
+      alb_security_group_id   = "sg-demo-alb"
+      api_security_group_id   = "sg-demo-api"
+      rds_security_group_id   = null
+      redis_security_group_id = null
+      flow_log_group_name     = null
+    }
+  }
+  override_module {
+    target = module.container_service
+    outputs = {
+      alb_arn            = "arn:aws:elasticloadbalancing:us-east-1:111111111111:loadbalancer/app/demo-alb/abc"
+      ecs_cluster_name   = "demo-cluster"
+      ecr_repository_url = "111111111111.dkr.ecr.us-east-1.amazonaws.com/demo"
+      ecs_service_name   = "demo"
+      service_fqdn       = "example.com"
+      service_url        = "https://example.com"
+      alb_dns_name       = "demo-alb.example"
+      log_group          = "/ecs/demo"
+      task_role_arn      = "arn:aws:iam::111111111111:role/demo-task"
+      waf_web_acl_arn    = ""
+      cpu_architecture   = "X86_64"
+    }
+  }
+
+  assert {
+    condition     = aws_ssm_parameter.platform_descriptor[0].name == "/devopsfoundry/platform/shared-web" && output.platform_descriptor_name == "/devopsfoundry/platform/shared-web"
+    error_message = "The descriptor must be published at /devopsfoundry/platform/<platform_name>, where modules/shared-platform looks."
+  }
+  assert {
+    condition = jsondecode(aws_ssm_parameter.platform_descriptor[0].insecure_value) == {
+      version               = 1
+      host                  = "demo"
+      vpc_id                = "vpc-demo"
+      public_subnet_ids     = ["subnet-pub-1", "subnet-pub-2"]
+      private_subnet_ids    = ["subnet-priv-1", "subnet-priv-2"]
+      alb_security_group_id = "sg-demo-alb"
+      alb_arn               = "arn:aws:elasticloadbalancing:us-east-1:111111111111:loadbalancer/app/demo-alb/abc"
+      ecs_cluster_name      = "demo-cluster"
+    }
+    error_message = "The descriptor must carry the stack's own network, ALB and cluster IDs in modules/shared-platform's version 1 schema."
+  }
+  assert {
+    condition     = aws_ssm_parameter.platform_descriptor[0].type == "String"
+    error_message = "Guests read the descriptor without KMS grants, so it must be a plain String."
+  }
+}
+
+run "a_guest_cannot_publish_a_platform" {
+  command = plan
+
+  variables {
+    shared_platform = "host"
+    platform_name   = "shared-web"
+  }
+
+  expect_failures = [aws_ssm_parameter.platform_descriptor]
+}
+
+run "platform_name_must_be_a_slug" {
+  command = plan
+
+  variables {
+    platform_name = "Shared_Web"
+  }
+
+  expect_failures = [var.platform_name]
 }
