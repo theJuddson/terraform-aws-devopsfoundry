@@ -3,6 +3,29 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.5.0
+
+- CLI:
+  - `bin/release-nameservers --config DIR` (#35): once a domain answers only with its Route53 nameservers, it
+    removes the Namecheap record from Terraform state and then sets `manage_nameservers = false` (the other
+    order would delete the delegation). `new-app` runs it after provisioning, so `deploy-app` never calls
+    Namecheap or needs a whitelisted IP. For an existing app, run it once. `deploy-app` refuses a hand-set
+    `manage_nameservers = false` while the record is still in state, and `destroy-app` re-adopts a released
+    record so it still reverts the delegation (unless `--keep-ns`).
+  - `bin/put-secret NAME [--env ENV_NAME]` (#27): stores a secret from a hidden prompt or stdin, passing it to the
+    AWS CLI on stdin so it never reaches argv or shell history; creates the secret or adds a version, and prints
+    the ARN or the `app.tfvars` line.
+  - `deploy-app` checks every secret in `app.tfvars` before building (#28): it must exist, not be scheduled for
+    deletion, and have a non-empty value. Values are never printed.
+  - `new-app` plans each phase, shows a summary, asks before applying (unless `--yes`) and applies exactly the
+    reviewed plan (#29). `--plan-only` applies nothing; on a new app only phase 1a can be planned exactly.
+  - `terraform init` in `new-app` and `new-site` retries network errors (#32), not configuration errors.
+- `container-service` and `full-stack`: `cpu_architecture` (`X86_64` default, or `ARM64` for Graviton) and a
+  `cpu_architecture` output (#31). `deploy-app` builds `linux/arm64` or `linux/amd64` to match.
+- The `new-app` scaffold exposes `manage_nameservers` and `cpu_architecture`, and ignores `*.tfplan`.
+- `tests/cli` tests the `bin/` scripts against stub `aws`, `terraform` and `docker` commands; `bin/check-modules`
+  (and so CI) runs them.
+
 ## v1.4.0
 
 - New opt-in settings, all off by default, so existing plans are unchanged:
