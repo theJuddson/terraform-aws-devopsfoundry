@@ -69,6 +69,7 @@ module "app" {
   cpu                   = var.cpu
   memory                = var.memory
   desired_count         = var.desired_count
+  cpu_architecture      = var.cpu_architecture
   env                   = var.env
   secrets               = var.secrets
   health_check_path     = var.health_check_path
@@ -80,6 +81,7 @@ module "app" {
   az_count = var.az_count
 
   existing_zone_name          = var.existing_zone_name
+  manage_nameservers          = var.manage_nameservers
   enable_nat_gateway          = var.enable_nat_gateway
   tasks_in_public_subnets     = var.tasks_in_public_subnets
   shared_platform             = var.shared_platform

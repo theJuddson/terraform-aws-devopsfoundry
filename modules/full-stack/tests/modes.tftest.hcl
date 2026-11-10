@@ -302,3 +302,16 @@ run "dns_security_never_touches_an_existing_zone" {
     error_message = "A zone this stack didn't create must never be signed or logged by it."
   }
 }
+
+run "cpu_architecture_reaches_the_service" {
+  command = plan
+
+  variables {
+    cpu_architecture = "ARM64"
+  }
+
+  assert {
+    condition     = output.cpu_architecture == "ARM64"
+    error_message = "cpu_architecture must reach container-service and come back as an output for deploy-app."
+  }
+}

@@ -33,3 +33,5 @@ output "dnssec_ds_record_fields" {
   description = "With enable_dnssec: the DS record to add at the registrar (Namecheap: Advanced DNS > DNSSEC)"
   value       = module.app.dnssec_ds_record_fields
 }
+
+output "cpu_architecture" { value = module.app.cpu_architecture }

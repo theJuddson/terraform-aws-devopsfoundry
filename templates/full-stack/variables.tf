@@ -31,6 +31,11 @@ variable "memory" {
   type    = number
   default = 1024
 }
+variable "cpu_architecture" {
+  description = "X86_64 or ARM64 (Graviton); deploy-app builds the image to match"
+  type        = string
+  default     = "X86_64"
+}
 variable "desired_count" {
   type    = number
   default = 1
@@ -242,6 +247,12 @@ variable "tasks_in_public_subnets" {
   description = "Run ECS tasks in public subnets with public IPs (no NAT needed). Inbound stays ALB-only. A guest on a shared platform must match the host."
   type        = bool
   default     = false
+}
+
+variable "manage_nameservers" {
+  description = "Whether Terraform manages the Namecheap delegation. new-app sets false once it is live (bin/release-nameservers); never set it false by hand."
+  type        = bool
+  default     = true
 }
 
 variable "existing_zone_name" {

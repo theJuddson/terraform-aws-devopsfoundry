@@ -80,3 +80,8 @@ output "dns_query_log_group_name" {
   description = "CloudWatch log group (us-east-1) with the zone's DNS query logs (null when off)"
   value       = one(module.route53_zone_security[*].query_log_group_name)
 }
+
+output "cpu_architecture" {
+  description = "CPU architecture the app's tasks run on; deploy-app builds the image for it"
+  value       = module.container_service.cpu_architecture
+}

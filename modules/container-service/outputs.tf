@@ -36,3 +36,8 @@ output "waf_web_acl_arn" {
   description = "The web ACL attached to this app's ALB: created (create_waf), supplied (waf_web_acl_arn), or empty"
   value       = local.waf_web_acl_arn
 }
+
+output "cpu_architecture" {
+  description = "CPU architecture the tasks run on (X86_64 or ARM64); build images for it"
+  value       = var.cpu_architecture
+}

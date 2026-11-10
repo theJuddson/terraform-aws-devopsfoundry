@@ -13,11 +13,19 @@ aws_region  = "us-east-1"
 # domain's Namecheap nameservers to it. Set via `bin/new-app --existing-zone`.
 existing_zone_name = "__EXISTING_ZONE__"
 
+# Namecheap delegation: new-app runs bin/release-nameservers once the domain is
+# live, which removes the record from state and sets this to false, so deploys
+# never call Namecheap. Don't set it false by hand: without the state step,
+# the next apply would delete the delegation.
+# manage_nameservers = true
+
 # ── Container ──────────────────────────────────────────
 container_port    = 8080
 cpu               = 512          # Fargate units (256/512/1024/2048/4096)
 memory            = 1024         # MiB
 desired_count     = 1            # new-app provisions at 0; deploy-app scales up
+# cpu_architecture = "ARM64"     # Graviton: ~20% cheaper, and builds natively on Apple Silicon
+#                                # (no amd64 emulation). Native modules must support arm64.
 health_check_path = "/health"    # ALB target-group health check + post-deploy curl
 
 # Plaintext env vars injected into the container.
@@ -27,7 +35,9 @@ env = {
 
 # Secret env vars: ENV_NAME = "<secretsmanager-arn>"  (append ":json_key::" to
 # pull a single JSON field). DB_*/REDIS_*/MAIL_* are auto-injected when the
-# matching toggle is on — only add app-specific secrets here.
+# matching toggle is on — only add app-specific secrets here. Store one with
+# `bin/put-secret myapp/stripe --env STRIPE_KEY` (hidden prompt; prints the line
+# to add). deploy-app checks each one exists and has a value before deploying.
 secrets = {
   # STRIPE_KEY = "arn:aws:secretsmanager:us-east-1:...:secret:myapp/stripe-AbCdEf"
 }

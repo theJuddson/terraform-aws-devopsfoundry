@@ -38,8 +38,21 @@ if $KEEP_NS; then
   df_tf_at "$CONFIG" state rm module.app.module.namecheap_ns 2>/dev/null || warn "namecheap_ns not in state"
 fi
 
+# An app handed off by release-nameservers has no Namecheap record in state, so
+# destroy alone would leave the domain pointing at deleted Route53 nameservers.
+# Re-adopt the record first (it rewrites the same nameservers, a no-op at
+# Namecheap); destroying it then reverts the delegation as before.
+EXTRA=()
+if ! $KEEP_NS && [[ "$(df_tfvar "$CONFIG/app.tfvars" manage_nameservers)" == "false" ]] \
+  && df_tf_at "$CONFIG" state list 2>/dev/null | grep -q '^module\.app\.module\.route53_zone\[0\]'; then
+  step "Re-adopting the Namecheap delegation so destroy can revert it"
+  df_tf_at "$CONFIG" apply -input=false -auto-approve "${TFVARS[@]}" -var manage_nameservers=true \
+    -target=module.app.module.namecheap_ns || die "Could not re-adopt the delegation (Namecheap API access needed); use --keep-ns to destroy without reverting it"
+  EXTRA=(-var manage_nameservers=true)
+fi
+
 step "terraform destroy"
-df_tf_at "$CONFIG" destroy -input=false -auto-approve "${TFVARS[@]}"
+df_tf_at "$CONFIG" destroy -input=false -auto-approve "${TFVARS[@]}" ${EXTRA[@]+"${EXTRA[@]}"}
 log "INFO" "Destroyed app at $CONFIG (keep_ns=$KEEP_NS)"
 pass "AWS resources destroyed"
 info "App root kept at $CONFIG (state now empty). Remove the dir manually if done."

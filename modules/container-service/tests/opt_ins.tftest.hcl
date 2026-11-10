@@ -216,3 +216,35 @@ run "access_logs_ignored_on_a_shared_alb" {
     error_message = "A guest on a shared ALB must not create a log bucket; the host owns the ALB's logging."
   }
 }
+
+run "tasks_run_on_x86_64_by_default" {
+  command = plan
+
+  assert {
+    condition     = one(aws_ecs_task_definition.app.runtime_platform).cpu_architecture == "X86_64" && output.cpu_architecture == "X86_64"
+    error_message = "Existing services must stay on X86_64 unless cpu_architecture is set."
+  }
+}
+
+run "arm64_tasks_when_asked" {
+  command = plan
+
+  variables {
+    cpu_architecture = "ARM64"
+  }
+
+  assert {
+    condition     = one(aws_ecs_task_definition.app.runtime_platform).cpu_architecture == "ARM64" && output.cpu_architecture == "ARM64"
+    error_message = "cpu_architecture = ARM64 must run the tasks on Graviton and report it for deploy-app."
+  }
+}
+
+run "cpu_architecture_is_checked" {
+  command = plan
+
+  variables {
+    cpu_architecture = "arm64"
+  }
+
+  expect_failures = [var.cpu_architecture]
+}

@@ -284,6 +284,7 @@ module "container_service" {
   health_check_timeout  = var.health_check_timeout
 
   tasks_in_public_subnets = var.tasks_in_public_subnets
+  cpu_architecture        = var.cpu_architecture
   container_insights      = var.container_insights
   alb_deletion_protection = var.alb_deletion_protection
   log_kms_key_arn         = var.kms_key_arn

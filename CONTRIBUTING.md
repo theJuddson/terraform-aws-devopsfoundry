@@ -27,6 +27,10 @@ Module tests live in `modules/<name>/tests/*.tftest.hcl`. They only plan, agains
 input and mode creates or rejects; `modules/full-stack/tests/modes.tftest.hcl` shows the pattern. A change to a module's
 behaviour should come with a test that fails without it. Run one module's tests with `terraform test` in its directory.
 
+The `bin/` scripts are tested in `tests/cli` (`tests/cli/run.sh`), against stub `aws`, `terraform`, `docker`, `dig`
+and `curl` commands that record their calls; no account or registrar is touched. Keep the scripts working on
+macOS's bash 3.2: no associative arrays or `mapfile`, and guard empty arrays under `set -u`.
+
 CI runs the same checks on every pull request. New checkov findings must be fixed or suppressed in the code with a
 `#checkov:skip=<id>:<reason>` comment and added to `docs/checkov-accepted.md`.
 

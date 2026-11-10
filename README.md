@@ -26,8 +26,8 @@ or straight from git, over HTTPS or SSH, pinned to a release tag (the newest is 
 [Releases page](https://github.com/theJuddson/terraform-aws-devopsfoundry/releases)):
 
 ```hcl
-source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.4.0"
-source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.4.0"
+source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.5.0"
+source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.5.0"
 ```
 
 Each module's README lists its inputs and outputs, and the building blocks have a runnable example under
@@ -83,9 +83,11 @@ shares state with anything else.
 | `bin/new-site <domain> --build-dir ./dist` | Zone + NS delegation + ACM + S3 + CloudFront |
 | `bin/deploy <domain>` | Build, sync to S3, invalidate CloudFront |
 | `bin/destroy-site <domain>` | Tear down; reverts nameservers to Namecheap default |
-| `bin/new-app <domain> --config <dir>` | Zone + NS + ACM + VPC + Fargate stack at `desired_count = 0` |
+| `bin/new-app <domain> --config <dir>` | Zone + NS + ACM + VPC + Fargate stack at `desired_count = 0`; shows each phase's plan and asks before applying it (`--yes` skips, `--plan-only` applies nothing) |
 | `bin/deploy-app --config <dir>` | Build image → ECR → apply → roll service → verify |
-| `bin/destroy-app --config <dir>` | Tear down the app stack |
+| `bin/put-secret <name> --env ENV_NAME` | Store an app secret from a hidden prompt or stdin (never argv or history); prints the `app.tfvars` line |
+| `bin/release-nameservers --config <dir>` | Stop managing a live Namecheap delegation in Terraform, so deploys never call Namecheap (`new-app` runs it) |
+| `bin/destroy-app --config <dir>` | Tear down the app stack; reverts the delegation unless `--keep-ns` |
 
 Both `new-site` and `new-app` run in **two phases** to dodge the
 cert-validation-vs-NS-propagation race — delegate first, poll `dig` until it
@@ -153,6 +155,17 @@ bin/deploy-app  --config ../MyApp/.devopsfoundry
 bin/destroy-app --config ../MyApp/.devopsfoundry
 ```
 
+Once the domain is delegated, `new-app` stops managing the Namecheap record in Terraform (`bin/release-nameservers`:
+the record leaves the state, then `manage_nameservers = false`), so `deploy-app` never needs the Namecheap API or a
+whitelisted IP. For an app made before this, run `bin/release-nameservers --config <dir>` once. `destroy-app` still
+reverts the delegation; it re-adopts the record first.
+
+**CPU architecture.** Tasks run on X86_64 by default. Set `cpu_architecture = "ARM64"` in `app.tfvars` to run on
+Graviton (about 20% cheaper per vCPU-hour); `deploy-app` then builds `linux/arm64` images, which on Apple Silicon
+means native builds instead of slow, sometimes crashing amd64 emulation. Native dependencies must support arm64. Either
+way, build steps that don't depend on the target platform (installing and compiling JavaScript, for example) can run
+natively with `FROM --platform=$BUILDPLATFORM node:22 AS build` in a multi-stage Dockerfile.
+
 The service is fronted at `<subdomain>.<domain>` (default subdomain `api`). Pass
 `--apex` (or set `subdomain = ""` in `app.tfvars`) to serve at the **bare domain**
 itself — the ACM cert covers the apex, and Route53 aliases the apex A record to the ALB.
@@ -192,7 +205,7 @@ serving and `--enable-email` are refused in this mode, and `destroy-app` removes
 
 ```bash
 bin/new-app example.com --subdomain app --existing-zone example.com \
-  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.4.0
+  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.5.0
 ```
 
 #### App-owned state
