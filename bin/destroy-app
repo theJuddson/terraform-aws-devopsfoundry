@@ -44,7 +44,7 @@ fi
 # Namecheap); destroying it then reverts the delegation as before.
 EXTRA=()
 if ! $KEEP_NS && [[ "$(df_tfvar "$CONFIG/app.tfvars" manage_nameservers)" == "false" ]] \
-  && df_tf_at "$CONFIG" state list 2>/dev/null | grep -q '^module\.app\.module\.route53_zone\[0\]'; then
+  && df_tf_at "$CONFIG" state list 2>/dev/null | grep -qE "$DF_ZONE_RE"; then
   step "Re-adopting the Namecheap delegation so destroy can revert it"
   df_tf_at "$CONFIG" apply -input=false -auto-approve "${TFVARS[@]}" -var manage_nameservers=true \
     -target=module.app.module.namecheap_ns || die "Could not re-adopt the delegation (Namecheap API access needed); use --keep-ns to destroy without reverting it"

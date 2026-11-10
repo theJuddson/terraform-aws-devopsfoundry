@@ -26,24 +26,72 @@ done
 CONFIG="$(df_resolve_config "$CONFIG")"
 TFVARS="$CONFIG/app.tfvars"
 [[ -f "$TFVARS" ]] || die "Missing $TFVARS"
-ADDR='module.app.module.namecheap_ns[0].namecheap_domain_records.ns'
 
 DOMAIN="$(df_tfvar "$TFVARS" domain_name)"
 [[ -n "$DOMAIN" ]] || die "No domain_name in $TFVARS"
 
+MAIN="$CONFIG/main.tf"; VARS="$CONFIG/variables.tf"
+# The module "app" block's manage_nameservers argument, if any (e.g.
+# "var.manage_nameservers", or "false" in roots released by hand).
+app_arg() {
+  awk '/^module "app"/ { inb = 1 } inb && /^}/ { inb = 0 }
+       inb && /^[[:space:]]*manage_nameservers[[:space:]]*=/ { v = $0; sub(/^[^=]*=[[:space:]]*/, "", v); sub(/[[:space:]]*#.*$/, "", v); print v }' "$MAIN"
+}
+
+# App roots scaffolded before v1.5.0 don't pass manage_nameservers to the
+# module, so setting it in app.tfvars alone would do nothing and the next apply
+# would recreate the record. wire_root adds it (defaulting to true: no change
+# yet) and checks offline that this app's module version accepts it.
+wire_root() {
+  if [[ -z "$(app_arg)" ]]; then
+    step "Wiring manage_nameservers into this app root (main.tf, variables.tf)"
+    cp "$MAIN" "$MAIN.release-bak"; cp "$VARS" "$VARS.release-bak"
+    grep -q '^variable "manage_nameservers"' "$VARS" || printf '\n%s\n' \
+      'variable "manage_nameservers" {' \
+      '  description = "Whether Terraform manages the Namecheap delegation; bin/release-nameservers sets false once it is live"' \
+      '  type        = bool' \
+      '  default     = true' \
+      '}' >> "$VARS"
+    awk '/^module "app"/ { inb = 1 }
+         { print }
+         inb && !done && /^[[:space:]]*source[[:space:]]*=/ { print "  manage_nameservers = var.manage_nameservers"; done = 1 }
+         inb && /^}/ { inb = 0 }' "$MAIN.release-bak" > "$MAIN"
+    terraform fmt "$MAIN" "$VARS" >/dev/null 2>&1 || true
+    # Modules first: a local module path may have gained submodules since the
+    # last init. `get` only fills the .terraform module cache; backend, state
+    # and providers are untouched.
+    local out=""
+    if ! out="$(df_tf_at "$CONFIG" get -no-color 2>&1 >/dev/null)" \
+      || ! out="$(df_tf_at "$CONFIG" validate -no-color 2>&1)"; then
+      mv "$MAIN.release-bak" "$MAIN"; mv "$VARS.release-bak" "$VARS"
+      if grep -q 'An argument named "manage_nameservers" is not expected' <<<"$out"; then
+        die "This app's full-stack module is older than v1.2.5 and has no manage_nameservers; upgrade its module source first. Nothing changed."
+      fi
+      echo "$out" >&2
+      die "terraform validate failed for this app root (output above); fix that first. Nothing changed."
+    fi
+    rm -f "$MAIN.release-bak" "$VARS.release-bak"
+    pass "Wired (commit main.tf and variables.tf with app.tfvars)"
+  elif [[ "$(app_arg)" != "var.manage_nameservers" && "$(app_arg)" != "false" ]]; then
+    die "main.tf sets manage_nameservers = $(app_arg); expected var.manage_nameservers. Fix it by hand."
+  fi
+}
+
 in_state=false
 STATE="$(df_tf_at "$CONFIG" state list 2>/dev/null)" || die "Could not read Terraform state in $CONFIG (run terraform init there?)"
-grep -qxF "$ADDR" <<<"$STATE" && in_state=true
+ADDR="$(grep -E "$DF_NS_RECORD_RE" <<<"$STATE" | head -1 || true)"
+[[ -n "$ADDR" ]] && in_state=true
 
 if ! $in_state; then
-  if [[ "$(df_tfvar "$TFVARS" manage_nameservers)" == "false" ]]; then
+  if [[ "$(app_arg)" == "false" || ( "$(app_arg)" == "var.manage_nameservers" && "$(df_tfvar "$TFVARS" manage_nameservers)" == "false" ) ]]; then
     pass "Already released: Terraform no longer manages $DOMAIN's nameservers"
     exit 0
   fi
-  if grep -q '^module\.app\.module\.route53_zone\[0\]' <<<"$STATE"; then
+  if grep -qE "$DF_ZONE_RE" <<<"$STATE"; then
     # The zone exists but the record is gone (e.g. removed by hand): just finish.
-    info "No Namecheap record in state; setting manage_nameservers = false"
-    df_set_tfvar "$TFVARS" manage_nameservers false
+    info "No Namecheap record in state; finishing the release"
+    wire_root
+    [[ "$(app_arg)" == "false" ]] || df_set_tfvar "$TFVARS" manage_nameservers false
     pass "Released"
     exit 0
   fi
@@ -63,6 +111,8 @@ if [[ -z "$CURRENT" ]] || [[ -n "$(comm -23 <(echo "$CURRENT") <(echo "$EXPECTED
 fi
 pass "Delegation is live"
 
+wire_root
+
 if [[ "$YES" != true ]]; then
   read -r -p "Stop managing $DOMAIN's Namecheap nameservers in Terraform? The delegation itself stays. (y/N) " c
   [[ "$c" == [yY] ]] || { echo "Aborted."; exit 0; }
@@ -72,7 +122,9 @@ step "Removing the Namecheap record from Terraform state (Namecheap is not chang
 df_tf_at "$CONFIG" state rm "$ADDR" >/dev/null || die "terraform state rm failed; app.tfvars left unchanged"
 pass "Removed $ADDR from state"
 
-step "Setting manage_nameservers = false in app.tfvars"
-df_set_tfvar "$TFVARS" manage_nameservers false
+if [[ "$(app_arg)" == "var.manage_nameservers" ]]; then
+  step "Setting manage_nameservers = false in app.tfvars"
+  df_set_tfvar "$TFVARS" manage_nameservers false
+fi
 pass "Released: plans and deploys no longer call Namecheap"
 log "INFO" "Released Namecheap nameserver management for $DOMAIN"

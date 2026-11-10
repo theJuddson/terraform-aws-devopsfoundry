@@ -3,6 +3,17 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.5.1
+
+- Fix: `bin/release-nameservers` on app roots scaffolded before v1.5.0. Their `main.tf` doesn't pass
+  `manage_nameservers` to the module, so setting it in `app.tfvars` did nothing and the next apply recreated the
+  Namecheap record. The script now adds the variable and argument (default `true`, so nothing changes yet), checks
+  offline with `terraform validate` that the app's module accepts it, and only then touches state. A module older than
+  v1.2.5 is refused with the files restored. A literal `manage_nameservers = false` in `main.tf` counts as released.
+- Fix: `release-nameservers`, the `deploy-app` guard and `destroy-app` now recognise states not applied since v1.2.5,
+  whose Namecheap record and zone still have their unindexed addresses (`module.app.module.namecheap_ns...` rather
+  than `namecheap_ns[0]`). Before, `release-nameservers` reported such apps as having nothing to release.
+
 ## v1.5.0
 
 - CLI:
