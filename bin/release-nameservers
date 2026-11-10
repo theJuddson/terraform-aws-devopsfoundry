@@ -57,9 +57,18 @@ wire_root() {
          inb && !done && /^[[:space:]]*source[[:space:]]*=/ { print "  manage_nameservers = var.manage_nameservers"; done = 1 }
          inb && /^}/ { inb = 0 }' "$MAIN.release-bak" > "$MAIN"
     terraform fmt "$MAIN" "$VARS" >/dev/null 2>&1 || true
-    if ! df_tf_at "$CONFIG" validate -no-color >/dev/null 2>&1; then
+    # Modules first: a local module path may have gained submodules since the
+    # last init. `get` only fills the .terraform module cache; backend, state
+    # and providers are untouched.
+    local out=""
+    if ! out="$(df_tf_at "$CONFIG" get -no-color 2>&1 >/dev/null)" \
+      || ! out="$(df_tf_at "$CONFIG" validate -no-color 2>&1)"; then
       mv "$MAIN.release-bak" "$MAIN"; mv "$VARS.release-bak" "$VARS"
-      die "This app's full-stack module is older than v1.2.5 and has no manage_nameservers; upgrade its module source first. Nothing changed."
+      if grep -q 'An argument named "manage_nameservers" is not expected' <<<"$out"; then
+        die "This app's full-stack module is older than v1.2.5 and has no manage_nameservers; upgrade its module source first. Nothing changed."
+      fi
+      echo "$out" >&2
+      die "terraform validate failed for this app root (output above); fix that first. Nothing changed."
     fi
     rm -f "$MAIN.release-bak" "$VARS.release-bak"
     pass "Wired (commit main.tf and variables.tf with app.tfvars)"

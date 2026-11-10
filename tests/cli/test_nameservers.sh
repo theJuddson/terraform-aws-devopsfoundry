@@ -59,7 +59,7 @@ t_release_refuses_a_module_too_old_for_the_setting() {
   make_app true $'ns-1.awsdns-01.org.\nns-2.awsdns-02.net.'
   make_old_root
   cp "$APP/main.tf" "$TMP/main.before"; cp "$APP/variables.tf" "$TMP/vars.before"
-  sed -i.bak 's/^exit 0$/[[ "$*" == *" validate"* ]] \&\& { echo "Unsupported argument" >\&2; exit 1; }; exit 0/' "$STUBS/terraform"
+  sed -i.bak 's/^exit 0$/[[ "$*" == *" validate"* ]] \&\& { echo "An argument named \\"manage_nameservers\\" is not expected here." >\&2; exit 1; }; exit 0/' "$STUBS/terraform"
   local out; out=$("$DF/bin/release-nameservers" --config "$APP" --yes 2>&1) && fail "must refuse"
   assert_contains "$out" "older than v1.2.5"
   assert_not_called "state rm"
@@ -214,4 +214,24 @@ t_destroy_readopts_with_a_pre_v1_2_5_zone_address() {
   echo 'manage_nameservers = false' >> "$APP/app.tfvars"
   "$DF/bin/destroy-app" --config "$APP" --yes || fail "destroy should succeed"
   assert_called " apply .*-var manage_nameservers=true -target=module\.app\.module\.namecheap_ns"
+}
+
+t_release_reports_other_validate_errors_as_they_are() {
+  make_app true $'ns-1.awsdns-01.org.\nns-2.awsdns-02.net.'
+  make_old_root
+  cp "$APP/main.tf" "$TMP/main.before"
+  sed -i.bak 's/^exit 0$/[[ "$*" == *" validate"* ]] \&\& { echo "Error: Module not installed" >\&2; exit 1; }; exit 0/' "$STUBS/terraform"
+  local out; out=$("$DF/bin/release-nameservers" --config "$APP" --yes 2>&1) && fail "must stop"
+  assert_contains "$out" "Module not installed"
+  assert_not_contains "$out" "older than v1.2.5"
+  assert_not_called "state rm"
+  cmp -s "$APP/main.tf" "$TMP/main.before" || fail "main.tf must be restored"
+}
+
+t_release_installs_modules_before_validating() {
+  make_app true $'ns-1.awsdns-01.org.\nns-2.awsdns-02.net.'
+  make_old_root
+  "$DF/bin/release-nameservers" --config "$APP" --yes || fail "release should succeed"
+  assert_before " get -no-color" " validate "
+  assert_not_called " init"
 }
