@@ -26,8 +26,8 @@ or straight from git, over HTTPS or SSH, pinned to a release tag (the newest is 
 [Releases page](https://github.com/theJuddson/terraform-aws-devopsfoundry/releases)):
 
 ```hcl
-source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.6.0"
-source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.6.0"
+source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.7.1"
+source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.7.1"
 ```
 
 Each module's README lists its inputs and outputs, and the building blocks have a runnable example under
@@ -214,7 +214,7 @@ serving and `--enable-email` are refused in this mode, and `destroy-app` removes
 
 ```bash
 bin/new-app example.com --subdomain app --existing-zone example.com \
-  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.6.0
+  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.7.1
 ```
 
 #### App-owned state
@@ -350,7 +350,7 @@ templates/full-stack/  app-root stamped into a repo's .devopsfoundry/ by new-app
 sites/<domain>/        generated static Terraform root (own remote-state key) + site.env
 bin/            sites: preflight · new-site · deploy · destroy-site
                 apps:  new-app · deploy-app · destroy-app
-                repo:  check-modules (fmt/validate/tflint/checkov) · check-compat (offline no-change proof) · soci-index
+                repo:  check-modules (fmt/validate/tflint/checkov) · check-compat (offline no-change proof) · check-readme-pins · soci-index
 lib/common.sh   shared shell helpers (logging, slug, tf wrappers)
 backend.tfvars.example  shared S3 state backend; copy to backend.tfvars (key is per-site / per-app)
 ```
@@ -362,8 +362,10 @@ in the shared bucket, so sites never share state.
 
 `bin/check-modules` runs `terraform fmt -check`, `terraform validate`, tflint and checkov over every module and
 example, and `bin/check-compat` proves offline that upgrading container-service from v1.2.0 (and from the earlier private
-v1.1.0 state layout) plans no change.
-Neither calls AWS. Both run on every pull request (`.github/workflows/checks.yml`). Accepted checkov findings are
+v1.1.0 state layout) plans no change. `bin/check-readme-pins` fails when this README's `?ref=` and `--module-ref`
+examples pin an older release than the newest `## vX.Y.Z` in `CHANGELOG.md`; a release PR runs
+`bin/check-readme-pins --fix` after adding its CHANGELOG entry.
+None of them calls AWS. All run on every pull request (`.github/workflows/checks.yml`). Accepted checkov findings are
 listed in [docs/checkov-accepted.md](https://github.com/theJuddson/terraform-aws-devopsfoundry/blob/main/docs/checkov-accepted.md).
 
 ## Contributing, security, license

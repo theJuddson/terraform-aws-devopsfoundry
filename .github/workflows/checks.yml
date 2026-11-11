@@ -63,5 +63,8 @@ jobs:
             terraform-docs -c .terraform-docs.yml --output-check "modules/$m"
           done
 
+      - name: README pins the newest release
+        run: bin/check-readme-pins
+
       - name: Upgrading from v1.2.0 plans no changes (offline)
         run: bin/check-compat v1.2.0
