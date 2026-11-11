@@ -117,8 +117,31 @@ resource "aws_iam_user" "ses_smtp" {
   path = "/system/"
 }
 
+# Two key slots, so a new key can be published while the old one still works
+# (bin/rotate-secret). The active slot's key is in the secret; the standby slot
+# holds the previous key, Active until every task has restarted, then Inactive
+# until the next rotation replaces it.
+locals {
+  smtp_slots = var.smtp_standby_key == "none" ? [var.smtp_active_key] : ["a", "b"]
+}
+
 resource "aws_iam_access_key" "ses_smtp" {
-  user = aws_iam_user.ses_smtp.name
+  for_each = toset(local.smtp_slots)
+  user     = aws_iam_user.ses_smtp.name
+  status   = each.key == var.smtp_active_key || var.smtp_standby_key == "active" ? "Active" : "Inactive"
+
+  lifecycle {
+    precondition {
+      condition     = var.smtp_standby_key != "none" || var.smtp_active_key == "a"
+      error_message = "smtp_active_key can only be \"b\" once there is a standby key (smtp_standby_key \"active\" or \"inactive\")."
+    }
+  }
+}
+
+# Roots from before rotation existed had one unindexed key; it is slot "a".
+moved {
+  from = aws_iam_access_key.ses_smtp
+  to   = aws_iam_access_key.ses_smtp["a"]
 }
 
 data "aws_iam_policy_document" "ses_send" {
@@ -143,8 +166,8 @@ resource "aws_secretsmanager_secret" "smtp" {
 resource "aws_secretsmanager_secret_version" "smtp" {
   secret_id = aws_secretsmanager_secret.smtp.id
   secret_string = jsonencode({
-    username = aws_iam_access_key.ses_smtp.id
-    password = aws_iam_access_key.ses_smtp.ses_smtp_password_v4
+    username = aws_iam_access_key.ses_smtp[var.smtp_active_key].id
+    password = aws_iam_access_key.ses_smtp[var.smtp_active_key].ses_smtp_password_v4
     host     = local.smtp_host
     port     = "587"
   })

@@ -3,6 +3,24 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.9.0
+
+- Secret rotation (#22). New `bin/rotate-secret --config <dir> redis|smtp` replaces an app's Redis auth token or
+  SES SMTP password without a failed request: it publishes the new credential while the old one still works,
+  forces an ECS deployment and waits for it, then retires the old one. Each apply is planned and refused if it
+  changes anything else, and `app.tfvars` records progress so a re-run after a failure carries on.
+  - `cache`: new `auth_token_generation` (bumping it makes a new token) and `auth_token_update_strategy`
+    (`ROTATE` keeps the old token valid, `SET` retires it), and an `auth_token_rotation` output. The token output
+    now waits for the replication group, so the secret never holds a token Redis doesn't accept yet.
+  - `email`: two SMTP key slots. New `smtp_active_key` (`a`/`b`, the key in the secret) and `smtp_standby_key`
+    (`none`, `active` or `inactive`), and an `smtp_keys` output. A `moved` block makes the existing key slot `a`.
+  - `full-stack` passes them through as `cache_auth_token_generation`, `cache_auth_token_update_strategy`,
+    `smtp_active_key` and `smtp_standby_key`. Existing app roots: add those variables and `module "app"`
+    arguments from `templates/full-stack` to rotate.
+  - Upgrading plans no change: the token keeps no keepers at generation 0 and the SMTP key moves in place.
+- `bin/preflight` warns about any app Redis or SMTP secret whose current value is older than 90 days
+  (`DF_SECRET_MAX_AGE_DAYS`), with the command to rotate it. It never reads secret values.
+
 ## v1.8.0
 
 - Email: DMARC reports sent to another domain (#26). Receivers only send aggregate reports to a `dmarc_rua_email`

@@ -61,6 +61,8 @@ No modules.
 | enable\_notifications | Create an SNS topic wired to SES Bounce/Complaint (subscription left to the caller) | `bool` | `false` | no |
 | kms\_key\_arn | Customer managed KMS key for the SMTP credentials secret. null (default) = the AWS-managed key. Whatever reads the secret also needs kms:Decrypt on it. | `string` | `null` | no |
 | mail\_from\_subdomain | Label for a custom MAIL FROM subdomain (e.g. 'mail' -> mail.<sender\_domain>), giving SPF alignment. Empty = SES default (amazonses.com), DKIM-only DMARC alignment. | `string` | `""` | no |
+| smtp\_active\_key | Key slot (a or b) whose SMTP credentials are in the secret. Set by bin/rotate-secret. | `string` | `"a"` | no |
+| smtp\_standby\_key | The other key slot: none (no second key yet), active (the previous key still works while tasks restart) or inactive (retired, replaced at the next rotation). Set by bin/rotate-secret. | `string` | `"none"` | no |
 
 ## Outputs
 
@@ -69,5 +71,6 @@ No modules.
 | dmarc\_report\_authorization | When dmarc\_rua\_email is on another domain: the TXT record that domain must publish before receivers send it reports, and whether this module created it (dmarc\_report\_zone\_id). Null when no record is needed. |
 | notifications\_topic\_arn | SNS topic ARN for SES bounce/complaint (null when disabled) |
 | smtp\_host | n/a |
+| smtp\_keys | Status of each SMTP key slot (Active or Inactive), and which slot the secret holds (bin/rotate-secret). |
 | smtp\_secret\_arn | Secrets Manager ARN holding SMTP creds (JSON: username/password/host/port) |
 <!-- END_TF_DOCS -->

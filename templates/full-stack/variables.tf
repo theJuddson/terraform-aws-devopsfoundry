@@ -189,6 +189,31 @@ variable "cache_num_cache_clusters" {
   default     = 1
 }
 
+# ── Secret rotation (written to app.tfvars by bin/rotate-secret) ──
+variable "cache_auth_token_generation" {
+  description = "Bump to generate a new Redis auth token. Managed by bin/rotate-secret."
+  type        = number
+  default     = 0
+}
+
+variable "cache_auth_token_update_strategy" {
+  description = "ROTATE keeps the previous Redis token valid while tasks restart; SET retires it. null = provider default. Managed by bin/rotate-secret."
+  type        = string
+  default     = null
+}
+
+variable "smtp_active_key" {
+  description = "SMTP key slot (a or b) in the <name>/ses/smtp secret. Managed by bin/rotate-secret."
+  type        = string
+  default     = "a"
+}
+
+variable "smtp_standby_key" {
+  description = "The other SMTP key slot: none, active (previous key still works) or inactive (retired). Managed by bin/rotate-secret."
+  type        = string
+  default     = "none"
+}
+
 # ── Opt-in WAF on the ALB ─────────────────────────────
 variable "create_waf" {
   description = "WAF web ACL on the ALB: per-IP rate limit + AWS managed rules (~$5/month + $1/rule + $0.60/M requests). Ignored in shared-platform mode."

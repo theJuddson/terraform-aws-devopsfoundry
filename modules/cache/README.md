@@ -37,6 +37,8 @@ No modules.
 | name | Resource-name prefix (app slug) | `string` | n/a | yes |
 | private\_subnet\_ids | n/a | `list(string)` | n/a | yes |
 | redis\_security\_group\_id | n/a | `string` | n/a | yes |
+| auth\_token\_generation | Bump to generate a new auth token (bin/rotate-secret does this). 0 keeps the token made at creation. | `number` | `0` | no |
+| auth\_token\_update\_strategy | How a token change is applied: ROTATE keeps the old token valid too, SET makes the current token the only one. null leaves the provider default. Set by bin/rotate-secret. | `string` | `null` | no |
 | cache\_port | n/a | `number` | `6379` | no |
 | engine\_version | n/a | `string` | `"7.1"` | no |
 | kms\_key\_arn | Customer managed KMS key for encryption at rest. null (default) = the AWS-managed key. Changing it on an existing cache REPLACES the replication group (data is lost). | `string` | `null` | no |
@@ -49,6 +51,7 @@ No modules.
 | Name | Description |
 | ---- | ----------- |
 | auth\_token | Generated Redis AUTH token |
+| auth\_token\_rotation | Where token rotation stands: the token generation and the update strategy last applied (bin/rotate-secret). |
 | port | n/a |
 | primary\_endpoint | Redis primary endpoint hostname |
 <!-- END_TF_DOCS -->

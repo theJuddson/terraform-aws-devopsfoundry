@@ -29,6 +29,9 @@ resource "aws_elasticache_subnet_group" "main" {
 resource "random_password" "auth_token" {
   length  = 48
   special = false
+  # bin/rotate-secret bumps auth_token_generation to make a new token. Null at 0,
+  # so roots from before rotation existed plan no change.
+  keepers = var.auth_token_generation == 0 ? null : { generation = tostring(var.auth_token_generation) }
 }
 
 resource "aws_elasticache_replication_group" "main" {
@@ -46,6 +49,9 @@ resource "aws_elasticache_replication_group" "main" {
   kms_key_id                 = var.kms_key_arn
   transit_encryption_enabled = true
   auth_token                 = random_password.auth_token.result
+  # ROTATE keeps the previous token valid alongside the new one; SET makes the
+  # current token the only one. The provider applies either change immediately.
+  auth_token_update_strategy = var.auth_token_update_strategy
   automatic_failover_enabled = var.num_cache_clusters > 1
   multi_az_enabled           = var.num_cache_clusters > 1
   snapshot_retention_limit   = 0

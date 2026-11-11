@@ -52,3 +52,25 @@ variable "kms_key_arn" {
     error_message = "kms_key_arn must be a KMS key ARN (arn:aws:kms:<region>:<account>:key/<id>), not an alias."
   }
 }
+
+variable "auth_token_generation" {
+  description = "Bump to generate a new auth token (bin/rotate-secret does this). 0 keeps the token made at creation."
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = var.auth_token_generation >= 0 && floor(var.auth_token_generation) == var.auth_token_generation
+    error_message = "auth_token_generation must be a whole number, 0 or more."
+  }
+}
+
+variable "auth_token_update_strategy" {
+  description = "How a token change is applied: ROTATE keeps the old token valid too, SET makes the current token the only one. null leaves the provider default. Set by bin/rotate-secret."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.auth_token_update_strategy == null || contains(["ROTATE", "SET"], coalesce(var.auth_token_update_strategy, "-"))
+    error_message = "auth_token_update_strategy must be ROTATE, SET or null."
+  }
+}

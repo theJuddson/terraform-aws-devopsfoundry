@@ -434,3 +434,26 @@ run "platform_name_must_be_a_slug" {
 
   expect_failures = [var.platform_name]
 }
+
+run "rotation_state_reaches_the_cache_and_email_modules" {
+  command = plan
+
+  variables {
+    enable_cache                     = true
+    enable_email                     = true
+    dmarc_rua_email                  = "dmarc@example.com"
+    cache_auth_token_generation      = 2
+    cache_auth_token_update_strategy = "SET"
+    smtp_active_key                  = "b"
+    smtp_standby_key                 = "inactive"
+  }
+
+  assert {
+    condition     = module.cache[0].auth_token_rotation == { generation = 2, strategy = "SET" }
+    error_message = "The Redis rotation inputs must reach the cache module."
+  }
+  assert {
+    condition     = module.email[0].smtp_keys == { active = "b", status = { a = "Inactive", b = "Active" } }
+    error_message = "The SMTP key slots must reach the email module."
+  }
+}

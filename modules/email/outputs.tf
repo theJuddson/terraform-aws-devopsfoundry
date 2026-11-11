@@ -21,3 +21,11 @@ output "dmarc_report_authorization" {
     created = var.dmarc_report_zone_id != ""
   } : null
 }
+
+output "smtp_keys" {
+  description = "Status of each SMTP key slot (Active or Inactive), and which slot the secret holds (bin/rotate-secret)."
+  value = {
+    active = var.smtp_active_key
+    status = { for slot, key in aws_iam_access_key.ses_smtp : slot => key.status }
+  }
+}
