@@ -84,21 +84,29 @@ if [[ "$YES" != true ]]; then
   read -r -p "Deploy to $URL? (y/N) " c; [[ "$c" == [yY] ]] || { echo "Aborted."; exit 0; }
 fi
 
-# ── Sync: hashed assets get a long immutable cache; index.html never caches ──
+# ── Sync: assets get a long immutable cache; HTML pages never cache ──
+# Every *.html, not just the root index.html: a site's other pages (privacy.html,
+# about/index.html) are not content-hashed, so a year-long browser cache would
+# pin visitors to a stale copy that a CloudFront invalidation cannot reach.
 step "Syncing assets"
 OUT=$(aws s3 sync "$BUILD_DIR" "s3://$BUCKET" --delete \
-  --exclude "index.html" \
+  --exclude "*.html" \
   --cache-control "max-age=31536000,public,immutable" 2>&1) \
   || die "S3 sync failed: $OUT"
 pass "Assets synced"
 
-if [[ -f "$BUILD_DIR/index.html" ]]; then
-  step "Uploading index.html (no-cache)"
-  OUT=$(aws s3 cp "$BUILD_DIR/index.html" "s3://$BUCKET/index.html" \
-    --cache-control "no-cache,no-store,must-revalidate" \
-    --content-type "text/html" 2>&1) || die "index.html upload failed: $OUT"
-  pass "index.html uploaded"
-fi
+step "Uploading HTML (no-cache)"
+# cp, not sync: sync skips unchanged files, so a page first uploaded with the
+# long cache would keep it. The follow-up sync only deletes removed pages.
+OUT=$(aws s3 cp "$BUILD_DIR" "s3://$BUCKET" --recursive \
+  --exclude "*" --include "*.html" \
+  --cache-control "no-cache,no-store,must-revalidate" \
+  --content-type "text/html" 2>&1) || die "HTML upload failed: $OUT"
+OUT=$(aws s3 sync "$BUILD_DIR" "s3://$BUCKET" --delete \
+  --exclude "*" --include "*.html" \
+  --cache-control "no-cache,no-store,must-revalidate" \
+  --content-type "text/html" 2>&1) || die "HTML cleanup failed: $OUT"
+pass "HTML uploaded"
 
 # ── Invalidate CloudFront ──────────────────────────────
 step "Invalidating CloudFront"

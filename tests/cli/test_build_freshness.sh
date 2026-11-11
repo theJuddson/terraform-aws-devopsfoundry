@@ -106,6 +106,16 @@ t_a_hand_written_site_can_be_its_own_source() {
   assert_called "^aws s3 sync "
 }
 
+t_every_html_page_is_uploaded_uncached_and_assets_are_long_cached() {
+  make_site 'SRC_DIR="./dist"'
+  echo '<p>privacy</p>' > "$PROJ/dist/privacy.html"
+  deploy || fail "deploy must succeed: $OUT"
+  assert_called "^aws s3 sync [^ ]+ s3://example-bucket --delete --exclude \*\.html --cache-control max-age=31536000"
+  assert_called "^aws s3 cp [^ ]+ s3://example-bucket --recursive --exclude \* --include \*\.html --cache-control no-cache"
+  assert_called "^aws s3 sync [^ ]+ s3://example-bucket --delete --exclude \* --include \*\.html --cache-control no-cache"
+  assert_not_called "exclude index\.html"
+}
+
 t_uncommitted_source_changes_are_warned_about() {
   make_site
   touch -t "$OLD" "$PROJ/src/app.js"; touch -t "$NEW" "$PROJ/dist/index.html"
