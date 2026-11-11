@@ -2,17 +2,24 @@
 # deploy — build (optional) + sync a site's static files to S3 + invalidate
 #          CloudFront. Reads sites/<domain>/site.env for BUILD_DIR/BUILD_CMD.
 #
-# Usage: bin/deploy <domain> [--yes]
+# Usage: bin/deploy <domain> [--yes] [--allow-stale]
+#
+# Without a BUILD_CMD, BUILD_DIR is uploaded as it is, so deploy first checks it
+# is at least as new as its source (SRC_DIR, else BUILD_DIR's parent, plus any
+# BUILD_INPUTS) and stops before uploading if a source file changed after the
+# last build. --allow-stale deploys anyway.
 set -euo pipefail
 DF_SCRIPT_NAME="deploy"
 source "$(cd "$(dirname "$0")/.." && pwd)/lib/common.sh"
 df_load_env
 
-DOMAIN=""; YES=false
+DOMAIN=""; YES=false; ALLOW_STALE=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --yes|-y) YES=true; shift ;;
-    *) DOMAIN="$1"; shift ;;
+    --yes|-y)      YES=true; shift ;;
+    --allow-stale) ALLOW_STALE=true; shift ;;
+    -*)            die "Unknown flag: $1" ;;
+    *)             DOMAIN="$1"; shift ;;
   esac
 done
 df_validate_domain "$DOMAIN"
@@ -44,6 +51,31 @@ if [[ -n "${BUILD_CMD:-}" ]]; then
 fi
 
 [[ -d "$BUILD_DIR" ]] || die "BUILD_DIR not found: $BUILD_DIR (set it in $SITE_DIR/site.env)"
+
+# ── Is the upload what the source says it should be? ──
+SRC="${SRC_DIR:-$(dirname "$BUILD_DIR")}"
+[[ -d "$SRC" ]] || die "SRC_DIR not found: $SRC (set it in $SITE_DIR/site.env)"
+if [[ -n "${BUILD_CMD:-}" ]]; then
+  :   # built just now
+elif [[ "$ALLOW_STALE" == true ]]; then
+  warn "Not checking that $BUILD_DIR is newer than its source (--allow-stale)"
+else
+  step "Checking $BUILD_DIR is newer than its source ($SRC${BUILD_INPUTS:+ + $BUILD_INPUTS})"
+  # shellcheck disable=SC2086  # BUILD_INPUTS is a space-separated list
+  FRESHNESS="$(df_build_freshness "$BUILD_DIR" "$SRC" ${BUILD_INPUTS:-})"
+  case "$FRESHNESS" in
+    FRESH*)   pass "Build is newer than its source (newest source file: ${FRESHNESS#FRESH })" ;;
+    SELF)     pass "BUILD_DIR is its own source (SRC_DIR = BUILD_DIR); nothing to compare" ;;
+    EMPTY)    die "$BUILD_DIR holds no files; build the site first" ;;
+    MISSING*) die "BUILD_INPUTS path not found: ${FRESHNESS#MISSING } (set in $SITE_DIR/site.env)" ;;
+    STALE*)   die "$BUILD_DIR is older than its source: ${FRESHNESS#STALE } changed after the last build. Rebuild it (or set BUILD_CMD in $SITE_DIR/site.env so deploy builds first), then deploy again; --allow-stale deploys it anyway. Nothing was uploaded." ;;
+    *)        die "Could not compare $BUILD_DIR with its source: $FRESHNESS" ;;
+  esac
+fi
+if df_git_dirty "$SRC"; then
+  warn "Uncommitted changes in $SRC: the live site won't match any commit"
+fi
+
 [[ -f "$BUILD_DIR/index.html" ]] || warn "No index.html in $BUILD_DIR — SPA fallback may 404"
 SIZE=$(du -sh "$BUILD_DIR" | cut -f1)
 pass "Deploying $BUILD_DIR ($SIZE)"

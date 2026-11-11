@@ -50,6 +50,8 @@ t_release_wires_an_old_app_root_before_touching_state() {
   "$DF/bin/release-nameservers" --config "$APP" --yes || fail "release should succeed"
   [[ "$(app_arg)" == "var.manage_nameservers" ]] || fail "main.tf must now pass manage_nameservers to the module"
   grep -q '^variable "manage_nameservers"' "$APP/variables.tf" || fail "variables.tf must declare it"
+  [[ "$(awk '/^variable "manage_nameservers"/,/^}/' "$APP/variables.tf" | grep -c '^$')" == 0 ]] \
+    || fail "the variable block must have no blank lines"$'\n'"$(cat "$APP/variables.tf")"
   assert_before " validate " "state rm"
   [[ "$(tfvar manage_nameservers)" == "false" ]] || fail "app.tfvars must end with manage_nameservers = false"
   [[ ! -e "$APP/main.tf.release-bak" ]] || fail "backups must be cleaned up"

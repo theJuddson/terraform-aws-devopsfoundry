@@ -3,6 +3,17 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.7.0
+
+- `bin/deploy` refuses to upload a stale static build (#43). Without a `BUILD_CMD`, it compares the newest file in
+  `BUILD_DIR` with its source (`SRC_DIR`, else `BUILD_DIR`'s parent, skipping `.git` and `node_modules`) and any
+  new `BUILD_INPUTS` paths, and stops before uploading if a source file is newer, naming it. `--allow-stale` deploys
+  anyway; `SRC_DIR` = `BUILD_DIR` marks a hand-written site with no build. A passing check is printed, and
+  uncommitted source changes are warned about. The newest build file, not the oldest, marks the last build:
+  builds often copy static assets with their original times.
+- `deploy-app` tags an image built with uncommitted changes to tracked files `git-<sha>-dirty`, with a warning.
+- Fix: `release-nameservers` left a blank line between every line of the `manage_nameservers` variable it adds.
+
 ## v1.6.0
 
 - Shared platforms can be renamed (#30). `full-stack` takes an opt-in `platform_name`: the host then publishes a
