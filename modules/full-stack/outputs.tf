@@ -90,3 +90,8 @@ output "platform_descriptor_name" {
   description = "SSM parameter publishing this stack as a shared platform (platform_name), or null"
   value       = one(aws_ssm_parameter.platform_descriptor[*].name)
 }
+
+output "dmarc_report_authorization" {
+  description = "With enable_email and dmarc_rua_email on another domain: the TXT record that domain must publish to receive reports, and whether it was created. Null otherwise."
+  value       = one(module.email[*].dmarc_report_authorization)
+}

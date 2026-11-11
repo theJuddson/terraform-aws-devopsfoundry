@@ -3,6 +3,22 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.8.0
+
+- Email: DMARC reports sent to another domain (#26). Receivers only send aggregate reports to a `dmarc_rua_email`
+  on another domain once that domain publishes `<sender>._report._dmarc.<report domain> TXT "v=DMARC1"`
+  (RFC 7489 7.1). New `dmarc_report_zone_id` on `email` and `full-stack` creates it in that zone; without it
+  nothing changes and the new `dmarc_report_authorization` output gives the record to add. A parent or subdomain of
+  the sender counts as the same domain. Existing app roots: add the variable, the `module "app"` argument and the
+  output from `templates/full-stack` to use them.
+- New `bin/email-status` (#25): whether SES in a region has production access, a review pending, a denial, or is
+  still in the sandbox, plus an app's DMARC report record. `--request-production --website-url URL --use-case
+  TEXT` asks AWS for production access (TRANSACTIONAL); it asks first unless `--yes`, and only sends from the
+  sandbox. `new-app --enable-email` ends with the same report, and `bin/preflight` shows the SES status.
+- Tests for `acm-cert`, `namecheap-ns`, `route53-zone` and `static-site` (#23): the certificate's names and DNS
+  validation, the nameservers sent to Namecheap, validation records deduplicated per name, and the site bucket
+  readable only by its own distribution through origin access control.
+
 ## v1.7.1
 
 - `bin/check-readme-pins` fails CI when the root README's `?ref=` or `--module-ref` examples pin an older release

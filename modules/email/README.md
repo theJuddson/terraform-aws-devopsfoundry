@@ -29,6 +29,7 @@ No modules.
 | [aws_iam_user_policy.ses_send](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_user_policy) | resource |
 | [aws_route53_record.dkim](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
 | [aws_route53_record.dmarc](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
+| [aws_route53_record.dmarc_report_auth](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
 | [aws_route53_record.mail_from_mx](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
 | [aws_route53_record.mail_from_spf](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
 | [aws_route53_record.ses_verification](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
@@ -56,6 +57,7 @@ No modules.
 | sender\_zone\_id | Route53 hosted zone ID for sender\_domain | `string` | n/a | yes |
 | aws\_region | Region (the SES SMTP endpoint is region-scoped) | `string` | `"us-east-1"` | no |
 | dmarc\_policy | DMARC policy applied to the domain + subdomains: none \| quarantine \| reject | `string` | `"none"` | no |
+| dmarc\_report\_zone\_id | Route53 zone of dmarc\_rua\_email's domain, when that is another domain: creates the <sender\_domain>.\_report.\_dmarc.<report domain> TXT record receivers need before they send reports there. Empty = create nothing; the dmarc\_report\_authorization output gives the record to add by hand. | `string` | `""` | no |
 | enable\_notifications | Create an SNS topic wired to SES Bounce/Complaint (subscription left to the caller) | `bool` | `false` | no |
 | kms\_key\_arn | Customer managed KMS key for the SMTP credentials secret. null (default) = the AWS-managed key. Whatever reads the secret also needs kms:Decrypt on it. | `string` | `null` | no |
 | mail\_from\_subdomain | Label for a custom MAIL FROM subdomain (e.g. 'mail' -> mail.<sender\_domain>), giving SPF alignment. Empty = SES default (amazonses.com), DKIM-only DMARC alignment. | `string` | `""` | no |
@@ -64,6 +66,7 @@ No modules.
 
 | Name | Description |
 | ---- | ----------- |
+| dmarc\_report\_authorization | When dmarc\_rua\_email is on another domain: the TXT record that domain must publish before receivers send it reports, and whether this module created it (dmarc\_report\_zone\_id). Null when no record is needed. |
 | notifications\_topic\_arn | SNS topic ARN for SES bounce/complaint (null when disabled) |
 | smtp\_host | n/a |
 | smtp\_secret\_arn | Secrets Manager ARN holding SMTP creds (JSON: username/password/host/port) |

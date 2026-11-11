@@ -80,6 +80,7 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | db\_skip\_final\_snapshot | n/a | `bool` | `true` | no |
 | desired\_count | n/a | `number` | `1` | no |
 | dmarc\_policy | DMARC policy: none \| quarantine \| reject | `string` | `"none"` | no |
+| dmarc\_report\_zone\_id | Route53 zone of dmarc\_rua\_email's domain when it is another domain: creates the report authorization record there. Empty = none (the dmarc\_report\_authorization output gives the record to add). | `string` | `""` | no |
 | dmarc\_rua\_email | DMARC report address (required when enable\_email=true) | `string` | `""` | no |
 | dns\_query\_log\_retention\_days | n/a | `number` | `30` | no |
 | enable\_cache | n/a | `bool` | `false` | no |
@@ -124,6 +125,7 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | db\_master\_secret\_arn | Secrets Manager ARN of the RDS-managed master credential (rotates every 7 days by default) |
 | db\_name | n/a |
 | db\_port | n/a |
+| dmarc\_report\_authorization | With enable\_email and dmarc\_rua\_email on another domain: the TXT record that domain must publish to receive reports, and whether it was created. Null otherwise. |
 | dns\_query\_log\_group\_name | CloudWatch log group (us-east-1) with the zone's DNS query logs (null when off) |
 | dnssec\_ds\_record | DS record to publish at the registrar when enable\_dnssec = true (null otherwise) |
 | dnssec\_ds\_record\_fields | The DS record's parts for registrars that ask for them separately, such as Namecheap (null when DNSSEC is off) |

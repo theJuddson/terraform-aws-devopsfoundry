@@ -26,8 +26,8 @@ or straight from git, over HTTPS or SSH, pinned to a release tag (the newest is 
 [Releases page](https://github.com/theJuddson/terraform-aws-devopsfoundry/releases)):
 
 ```hcl
-source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.7.1"
-source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.7.1"
+source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.8.0"
+source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.8.0"
 ```
 
 Each module's README lists its inputs and outputs, and the building blocks have a runnable example under
@@ -86,6 +86,7 @@ shares state with anything else.
 | `bin/new-app <domain> --config <dir>` | Zone + NS + ACM + VPC + Fargate stack at `desired_count = 0`; shows each phase's plan and asks before applying it (`--yes` skips, `--plan-only` applies nothing) |
 | `bin/deploy-app --config <dir>` | Build image → ECR → apply → roll service → verify |
 | `bin/put-secret <name> --env ENV_NAME` | Store an app secret from a hidden prompt or stdin (never argv or history); prints the `app.tfvars` line |
+| `bin/email-status [--config <dir>]` | Whether SES in the app's region can send to anyone yet (or is in the sandbox), and the DMARC report record to add; `--request-production` asks AWS for production access |
 | `bin/release-nameservers --config <dir>` | Stop managing a live Namecheap delegation in Terraform, so deploys never call Namecheap (`new-app` runs it) |
 | `bin/destroy-app --config <dir>` | Tear down the app stack; reverts the delegation unless `--keep-ns` |
 
@@ -169,6 +170,20 @@ the record leaves the state, then `manage_nameservers = false`), so `deploy-app`
 whitelisted IP. For an app made before this, run `bin/release-nameservers --config <dir>` once. `destroy-app` still
 reverts the delegation; it re-adopts the record first.
 
+**Email.** With `--enable-email`, `new-app` ends by saying whether SES in the app's region is still in the
+**sandbox**, where mail only reaches verified addresses. Production access is per account and region, so most
+accounts only ask for it once:
+
+```bash
+bin/email-status --config ../MyApp/.devopsfoundry --request-production \
+  --website-url https://example.com --use-case "Sign-in links and receipts for registered users"
+```
+
+It asks before sending and only sends from the sandbox; AWS reviews the request. If `dmarc_rua_email` is on
+another domain, receivers only send that domain reports once it publishes `<domain>._report._dmarc.<report domain>
+TXT "v=DMARC1"`. Set `dmarc_report_zone_id` to that domain's zone and the module creates the record; otherwise
+`new-app` and `email-status` print the record to add.
+
 **CPU architecture.** Tasks run on X86_64 by default. Set `cpu_architecture = "ARM64"` in `app.tfvars` to run on
 Graviton (about 20% cheaper per vCPU-hour); `deploy-app` then builds `linux/arm64` images, which on Apple Silicon
 means native builds instead of slow, sometimes crashing amd64 emulation. Native dependencies must support arm64. Either
@@ -214,7 +229,7 @@ serving and `--enable-email` are refused in this mode, and `destroy-app` removes
 
 ```bash
 bin/new-app example.com --subdomain app --existing-zone example.com \
-  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.7.1
+  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.8.0
 ```
 
 #### App-owned state
@@ -349,7 +364,7 @@ templates/static/      site-root stamped into sites/<domain>/ by new-site
 templates/full-stack/  app-root stamped into a repo's .devopsfoundry/ by new-app
 sites/<domain>/        generated static Terraform root (own remote-state key) + site.env
 bin/            sites: preflight · new-site · deploy · destroy-site
-                apps:  new-app · deploy-app · destroy-app
+                apps:  new-app · deploy-app · destroy-app · email-status · release-nameservers
                 repo:  check-modules (fmt/validate/tflint/checkov) · check-compat (offline no-change proof) · check-readme-pins · soci-index
 lib/common.sh   shared shell helpers (logging, slug, tf wrappers)
 backend.tfvars.example  shared S3 state backend; copy to backend.tfvars (key is per-site / per-app)

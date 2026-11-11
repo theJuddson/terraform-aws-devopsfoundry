@@ -35,3 +35,8 @@ output "dnssec_ds_record_fields" {
 }
 
 output "cpu_architecture" { value = module.app.cpu_architecture }
+
+output "dmarc_report_authorization" {
+  description = "With email and a report address on another domain: the TXT record that domain must publish"
+  value       = module.app.dmarc_report_authorization
+}

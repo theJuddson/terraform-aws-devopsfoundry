@@ -225,6 +225,12 @@ variable "dmarc_rua_email" {
   default = ""
 }
 
+variable "dmarc_report_zone_id" {
+  description = "Route53 zone of dmarc_rua_email's domain, when that is another domain you control: creates the record that lets it receive reports"
+  type        = string
+  default     = ""
+}
+
 variable "shared_platform" {
   description = "Platform to share the VPC/NAT/ALB/ECS cluster of: a host's platform_name, or the host app's slug; empty = dedicated"
   type        = string

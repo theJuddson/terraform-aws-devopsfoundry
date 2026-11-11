@@ -193,6 +193,12 @@ variable "dmarc_rua_email" {
   default     = ""
 }
 
+variable "dmarc_report_zone_id" {
+  description = "Route53 zone of dmarc_rua_email's domain when it is another domain: creates the report authorization record there. Empty = none (the dmarc_report_authorization output gives the record to add)."
+  type        = string
+  default     = ""
+}
+
 variable "dmarc_policy" {
   description = "DMARC policy: none | quarantine | reject"
   type        = string
