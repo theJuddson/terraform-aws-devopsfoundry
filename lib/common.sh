@@ -155,6 +155,31 @@ df_dmarc_report() {
   fi
 }
 
+# Warn about each app's Redis or SMTP secret (tagged Project=devopsfoundry) whose
+# current value is older than DF_SECRET_MAX_AGE_DAYS (default 90). Information
+# only: it never fails. Values are never read. Usage: df_secret_age_report <region>
+df_secret_age_report() {
+  local region="$1" max="${DF_SECRET_MAX_AGE_DAYS:-90}" names name created age app kind old=0
+  names="$(aws secretsmanager list-secrets --region "$region" \
+      --filters Key=tag-key,Values=Project Key=tag-value,Values=devopsfoundry \
+      --query 'SecretList[].Name' --output json 2>/dev/null \
+    | jq -r '.[] | select(endswith("/redis/auth") or endswith("/ses/smtp"))' 2>/dev/null)" || return 0
+  [[ -n "$names" ]] || return 0
+  while IFS= read -r name; do
+    created="$(aws secretsmanager list-secret-version-ids --secret-id "$name" --region "$region" --output json 2>/dev/null \
+      | jq -r '[.Versions[] | select(.VersionStages | index("AWSCURRENT")) | .CreatedDate][0]
+               | if type == "number" then floor else (.[0:19] + "Z" | fromdateiso8601) end' 2>/dev/null)" || continue
+    [[ "$created" =~ ^[0-9]+$ ]] || continue
+    age=$(( ($(date +%s) - created) / 86400 ))
+    if (( age > max )); then
+      app="${name%%/*}"; kind=$([[ "$name" == */redis/auth ]] && echo redis || echo smtp)
+      warn "$name is $age days old: bin/rotate-secret --config <$app's .devopsfoundry> $kind"
+      old=$((old + 1))
+    fi
+  done <<<"$names"
+  (( old > 0 )) || pass "App Redis/SMTP secrets rotated within $max days"
+}
+
 df_app_state_key() { echo "devopsfoundry/app/$1/terraform.tfstate"; }
 
 # Resolve a --config dir to an abspath and assert it's a DevOpsFoundry app root.

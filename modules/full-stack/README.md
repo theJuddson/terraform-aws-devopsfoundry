@@ -57,6 +57,8 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | alb\_deletion\_protection | Block deleting the ALB; turn off again before destroy-app. Ignored in shared-platform mode. | `bool` | `false` | no |
 | aws\_region | n/a | `string` | `"us-east-1"` | no |
 | az\_count | n/a | `number` | `2` | no |
+| cache\_auth\_token\_generation | Bump to generate a new Redis auth token. Managed by bin/rotate-secret. | `number` | `0` | no |
+| cache\_auth\_token\_update\_strategy | ROTATE keeps the previous Redis token valid while tasks restart; SET retires it. null = provider default. Managed by bin/rotate-secret. | `string` | `null` | no |
 | cache\_engine\_version | n/a | `string` | `"7.1"` | no |
 | cache\_node\_type | ── Cache tuning ─────────────────────────────────────── | `string` | `"cache.t4g.micro"` | no |
 | cache\_num\_cache\_clusters | Redis nodes; 2 or more adds replicas with Multi-AZ automatic failover. | `number` | `1` | no |
@@ -107,6 +109,8 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | secrets | n/a | `map(string)` | `{}` | no |
 | service\_name | Short container/service name | `string` | `"app"` | no |
 | shared\_platform | Name of an EXISTING DevOpsFoundry platform whose VPC, NAT gateway, ALB and<br/>ECS cluster this app should share: the host's platform\_name, or the host<br/>app's slug (e.g. "other-app-com"). Empty (the default) provisions dedicated<br/>infrastructure.<br/><br/>Sharing removes the two largest fixed costs — NAT (~$33/mo) and ALB<br/>(~$16/mo) — at the price of a shared failure domain with the host platform.<br/>A database, when enabled, is still this app's own. | `string` | `""` | no |
+| smtp\_active\_key | SMTP key slot (a or b) in the <name>/ses/smtp secret. Managed by bin/rotate-secret. | `string` | `"a"` | no |
+| smtp\_standby\_key | The other SMTP key slot: none, active (previous key still works) or inactive (retired). Managed by bin/rotate-secret. | `string` | `"none"` | no |
 | subdomain | Subdomain fronting the service (api -> api.example.com). Empty or "@" serves at the apex (example.com). | `string` | `"api"` | no |
 | tasks\_in\_public\_subnets | Run ECS tasks in public subnets with public IPs (no NAT needed). Inbound stays ALB-only. In shared-platform mode this must match the host: true if the host has no NAT gateway (the plan fails otherwise). | `bool` | `false` | no |
 | vpc\_cidr | ── Networking ───────────────────────────────────────── | `string` | `"10.0.0.0/16"` | no |

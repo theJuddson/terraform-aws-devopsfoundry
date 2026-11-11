@@ -218,6 +218,9 @@ module "cache" {
   engine_version          = var.cache_engine_version
   num_cache_clusters      = var.cache_num_cache_clusters
   kms_key_arn             = var.kms_key_arn
+
+  auth_token_generation      = var.cache_auth_token_generation
+  auth_token_update_strategy = var.cache_auth_token_update_strategy
 }
 
 # Composite owns the Redis auth secret (cache module only generates the token).
@@ -247,6 +250,9 @@ module "email" {
 
   dmarc_report_zone_id = var.dmarc_report_zone_id
   kms_key_arn          = var.kms_key_arn
+
+  smtp_active_key  = var.smtp_active_key
+  smtp_standby_key = var.smtp_standby_key
 }
 
 # ── The service ───────────────────────────────────────

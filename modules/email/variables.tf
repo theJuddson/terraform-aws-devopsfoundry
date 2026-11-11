@@ -71,3 +71,25 @@ variable "kms_key_arn" {
     error_message = "kms_key_arn must be a KMS key ARN (arn:aws:kms:<region>:<account>:key/<id>), not an alias."
   }
 }
+
+variable "smtp_active_key" {
+  description = "Key slot (a or b) whose SMTP credentials are in the secret. Set by bin/rotate-secret."
+  type        = string
+  default     = "a"
+
+  validation {
+    condition     = contains(["a", "b"], var.smtp_active_key)
+    error_message = "smtp_active_key must be \"a\" or \"b\"."
+  }
+}
+
+variable "smtp_standby_key" {
+  description = "The other key slot: none (no second key yet), active (the previous key still works while tasks restart) or inactive (retired, replaced at the next rotation). Set by bin/rotate-secret."
+  type        = string
+  default     = "none"
+
+  validation {
+    condition     = contains(["none", "active", "inactive"], var.smtp_standby_key)
+    error_message = "smtp_standby_key must be none, active or inactive."
+  }
+}

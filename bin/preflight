@@ -35,6 +35,11 @@ if [[ -n "$SES_REGION" ]] && [[ -n "${ACCT:-}" ]]; then
   df_ses_report "$SES_REGION" "$(df_ses_account_status "$SES_REGION")"
 fi
 
+# ── Secret age (informational: bin/rotate-secret rotates them) ──
+if [[ -n "$SES_REGION" ]] && [[ -n "${ACCT:-}" ]]; then
+  df_secret_age_report "$SES_REGION"
+fi
+
 # ── State backend reachability ─────────────────────────
 [[ -f "$DF_ROOT/backend.tfvars" ]] || die "No backend.tfvars. Copy backend.tfvars.example to backend.tfvars and fill in your state bucket."
 BACKEND_BUCKET=$(awk -F'"' '/^[[:space:]]*bucket[[:space:]]*=/{print $2}' "$DF_ROOT/backend.tfvars")

@@ -90,6 +90,9 @@ enable_email    = __ENABLE_EMAIL__   # SES          -> injects MAIL_HOST/MAIL_PO
 # cache_node_type        = "cache.t4g.micro"
 # dmarc_rua_email        = "postmaster@__DOMAIN__"   # required if enable_email
 # dmarc_report_zone_id   = "Z0..."   # rua on another domain you own: its zone, for the report authorization record
+# Redis and SMTP secret rotation: bin/rotate-secret --config <dir> redis|smtp
+# writes cache_auth_token_generation, cache_auth_token_update_strategy,
+# smtp_active_key and smtp_standby_key here. Leave them to it.
 
 # ── Observability and protection (all off; each is billed) ──
 # enable_flow_logs                = true   # VPC flow logs to CloudWatch, per GB

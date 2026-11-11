@@ -26,8 +26,8 @@ or straight from git, over HTTPS or SSH, pinned to a release tag (the newest is 
 [Releases page](https://github.com/theJuddson/terraform-aws-devopsfoundry/releases)):
 
 ```hcl
-source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.8.0"
-source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.8.0"
+source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.9.0"
+source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.9.0"
 ```
 
 Each module's README lists its inputs and outputs, and the building blocks have a runnable example under
@@ -87,6 +87,7 @@ shares state with anything else.
 | `bin/deploy-app --config <dir>` | Build image → ECR → apply → roll service → verify |
 | `bin/put-secret <name> --env ENV_NAME` | Store an app secret from a hidden prompt or stdin (never argv or history); prints the `app.tfvars` line |
 | `bin/email-status [--config <dir>]` | Whether SES in the app's region can send to anyone yet (or is in the sandbox), and the DMARC report record to add; `--request-production` asks AWS for production access |
+| `bin/rotate-secret --config <dir> redis\|smtp` | Rotate the app's Redis auth token or SMTP password with no failed requests: publish a new one while the old still works, roll the service, retire the old one; `bin/preflight` warns once one is over 90 days old |
 | `bin/release-nameservers --config <dir>` | Stop managing a live Namecheap delegation in Terraform, so deploys never call Namecheap (`new-app` runs it) |
 | `bin/destroy-app --config <dir>` | Tear down the app stack; reverts the delegation unless `--keep-ns` |
 
@@ -184,6 +185,21 @@ another domain, receivers only send that domain reports once it publishes `<doma
 TXT "v=DMARC1"`. Set `dmarc_report_zone_id` to that domain's zone and the module creates the record; otherwise
 `new-app` and `email-status` print the record to add.
 
+**Rotating secrets.** The Redis auth token and the SMTP password are made by Terraform and read by tasks when they
+start. `bin/rotate-secret` replaces either without a failed request:
+
+```bash
+bin/rotate-secret --config ../MyApp/.devopsfoundry redis   # or smtp
+```
+
+It publishes a new credential while the old one still works (Redis accepts both tokens during a `ROTATE`; SMTP
+uses a second IAM key), forces a new deployment and waits until every task has the new one, then retires the old
+one (`SET`; the old SMTP key becomes Inactive and is replaced at the next rotation). Each apply is planned first,
+shown, and refused if it would change anything else. Progress is kept in `app.tfvars`, so after a failure a re-run
+carries on; commit `app.tfvars` afterwards. `bin/preflight` names any of these secrets older than 90 days
+(`DF_SECRET_MAX_AGE_DAYS` changes the limit). App roots made before v1.9.0 need the "Secret rotation" variables
+from `templates/full-stack/variables.tf` and the matching lines of `main.tf.tmpl`.
+
 **CPU architecture.** Tasks run on X86_64 by default. Set `cpu_architecture = "ARM64"` in `app.tfvars` to run on
 Graviton (about 20% cheaper per vCPU-hour); `deploy-app` then builds `linux/arm64` images, which on Apple Silicon
 means native builds instead of slow, sometimes crashing amd64 emulation. Native dependencies must support arm64. Either
@@ -229,7 +245,7 @@ serving and `--enable-email` are refused in this mode, and `destroy-app` removes
 
 ```bash
 bin/new-app example.com --subdomain app --existing-zone example.com \
-  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.8.0
+  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.9.0
 ```
 
 #### App-owned state
@@ -364,7 +380,7 @@ templates/static/      site-root stamped into sites/<domain>/ by new-site
 templates/full-stack/  app-root stamped into a repo's .devopsfoundry/ by new-app
 sites/<domain>/        generated static Terraform root (own remote-state key) + site.env
 bin/            sites: preflight · new-site · deploy · destroy-site
-                apps:  new-app · deploy-app · destroy-app · email-status · release-nameservers
+                apps:  new-app · deploy-app · destroy-app · email-status · rotate-secret · release-nameservers
                 repo:  check-modules (fmt/validate/tflint/checkov) · check-compat (offline no-change proof) · check-readme-pins · soci-index
 lib/common.sh   shared shell helpers (logging, slug, tf wrappers)
 backend.tfvars.example  shared S3 state backend; copy to backend.tfvars (key is per-site / per-app)

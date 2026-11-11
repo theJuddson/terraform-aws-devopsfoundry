@@ -127,4 +127,10 @@ module "app" {
 
   dmarc_rua_email      = var.dmarc_rua_email
   dmarc_report_zone_id = var.dmarc_report_zone_id
+
+  # Secret rotation state, written by bin/rotate-secret (needs the module at v1.9.0 or later)
+  cache_auth_token_generation      = var.cache_auth_token_generation
+  cache_auth_token_update_strategy = var.cache_auth_token_update_strategy
+  smtp_active_key                  = var.smtp_active_key
+  smtp_standby_key                 = var.smtp_standby_key
 }
