@@ -29,6 +29,12 @@ else
   warn "AWS credentials invalid — run: aws configure (or set AWS_PROFILE)"; fails=$((fails + 1))
 fi
 
+# ── SES (informational: only apps with --enable-email send mail) ──
+SES_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-$(aws configure get region 2>/dev/null || true)}}"
+if [[ -n "$SES_REGION" ]] && [[ -n "${ACCT:-}" ]]; then
+  df_ses_report "$SES_REGION" "$(df_ses_account_status "$SES_REGION")"
+fi
+
 # ── State backend reachability ─────────────────────────
 [[ -f "$DF_ROOT/backend.tfvars" ]] || die "No backend.tfvars. Copy backend.tfvars.example to backend.tfvars and fill in your state bucket."
 BACKEND_BUCKET=$(awk -F'"' '/^[[:space:]]*bucket[[:space:]]*=/{print $2}' "$DF_ROOT/backend.tfvars")

@@ -244,7 +244,9 @@ module "email" {
   dmarc_rua_email     = var.dmarc_rua_email
   dmarc_policy        = var.dmarc_policy
   mail_from_subdomain = var.mail_from_subdomain
-  kms_key_arn         = var.kms_key_arn
+
+  dmarc_report_zone_id = var.dmarc_report_zone_id
+  kms_key_arn          = var.kms_key_arn
 }
 
 # ── The service ───────────────────────────────────────

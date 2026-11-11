@@ -89,6 +89,7 @@ enable_email    = __ENABLE_EMAIL__   # SES          -> injects MAIL_HOST/MAIL_PO
 # db_deletion_protection = false   # set true for production data
 # cache_node_type        = "cache.t4g.micro"
 # dmarc_rua_email        = "postmaster@__DOMAIN__"   # required if enable_email
+# dmarc_report_zone_id   = "Z0..."   # rua on another domain you own: its zone, for the report authorization record
 
 # ── Observability and protection (all off; each is billed) ──
 # enable_flow_logs                = true   # VPC flow logs to CloudWatch, per GB

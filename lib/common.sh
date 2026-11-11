@@ -115,6 +115,46 @@ df_git_dirty() {
 }
 
 # ── App (full-stack) helpers ───────────────────────────
+# SES account status in a region: PRODUCTION, PENDING (a production access
+# review is open), DENIED, SANDBOX, or UNKNOWN when it can't be read.
+# Usage: df_ses_account_status <region>
+df_ses_account_status() {
+  local out
+  out="$(aws sesv2 get-account --region "$1" --output json 2>/dev/null)" || { echo UNKNOWN; return 0; }
+  jq -r 'if .ProductionAccessEnabled == true then "PRODUCTION"
+         else ((.Details.ReviewDetails.Status // "") | ascii_upcase) as $s
+              | if $s == "PENDING" then "PENDING" elif $s == "DENIED" then "DENIED" else "SANDBOX" end
+         end' <<<"$out" 2>/dev/null || echo UNKNOWN
+}
+
+# One line on what an SES status means for sending. Usage: df_ses_report <region> <status>
+df_ses_report() {
+  case "$2" in
+    PRODUCTION) pass "SES in $1: production access, so mail reaches any address" ;;
+    PENDING)    info "SES in $1: sandbox, with a production access review pending (AWS replies within a day or so)" ;;
+    DENIED)     warn "SES in $1: sandbox; production access was denied. Reply in the AWS Support case it opened." ;;
+    SANDBOX)    warn "SES in $1: sandbox, so mail only reaches verified addresses. To request production access:"
+                echo "    bin/email-status --region $1 --request-production --website-url https://<your site> --use-case \"<what you send>\"" ;;
+    *)          warn "SES in $1: could not read the account status (aws sesv2 get-account)" ;;
+  esac
+}
+
+# If an app's DMARC reports go to another domain, says whether the record that
+# authorizes it was created or prints the one to add. Silent otherwise, and for
+# app roots made before the output existed. Usage: df_dmarc_report <config>
+df_dmarc_report() {
+  local j
+  j="$(df_tf_at "$1" output -json dmarc_report_authorization 2>/dev/null)" || return 0
+  [[ -n "$j" && "$j" != null ]] || return 0
+  if [[ "$(jq -r .created <<<"$j")" == true ]]; then
+    pass "DMARC report authorization record created: $(jq -r .name <<<"$j")"
+  else
+    warn "DMARC reports go to another domain, which must authorize them or receivers drop them. Add to its DNS:"
+    jq -r '"    \(.name)  \(.type)  \"\(.value)\""' <<<"$j"
+    echo "  (or set dmarc_report_zone_id in app.tfvars when that zone is in this account)"
+  fi
+}
+
 df_app_state_key() { echo "devopsfoundry/app/$1/terraform.tfstate"; }
 
 # Resolve a --config dir to an abspath and assert it's a DevOpsFoundry app root.

@@ -28,6 +28,12 @@ variable "dmarc_rua_email" {
   }
 }
 
+variable "dmarc_report_zone_id" {
+  description = "Route53 zone of dmarc_rua_email's domain, when that is another domain: creates the <sender_domain>._report._dmarc.<report domain> TXT record receivers need before they send reports there. Empty = create nothing; the dmarc_report_authorization output gives the record to add by hand."
+  type        = string
+  default     = ""
+}
+
 variable "dmarc_policy" {
   description = "DMARC policy applied to the domain + subdomains: none | quarantine | reject"
   type        = string

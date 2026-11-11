@@ -221,6 +221,30 @@ run "backing_services_follow_their_toggles" {
   }
 }
 
+run "dmarc_report_zone_reaches_the_email_module" {
+  command = plan
+
+  variables {
+    enable_email         = true
+    dmarc_rua_email      = "dmarc@example.net"
+    dmarc_report_zone_id = "Z999REPORTS"
+  }
+
+  assert {
+    condition     = output.dmarc_report_authorization == { name = "example.com._report._dmarc.example.net", type = "TXT", value = "v=DMARC1", created = true }
+    error_message = "dmarc_report_zone_id must reach the email module, and its authorization record must be output."
+  }
+}
+
+run "no_dmarc_report_authorization_without_email" {
+  command = plan
+
+  assert {
+    condition     = output.dmarc_report_authorization == null
+    error_message = "Without email there is no report authorization record."
+  }
+}
+
 run "flow_logs_reach_the_network_module" {
   command = plan
 

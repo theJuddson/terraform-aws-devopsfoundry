@@ -19,6 +19,18 @@ locals {
   smtp_host        = "email-smtp.${var.aws_region}.amazonaws.com"
   use_mail_from    = var.mail_from_subdomain != ""
   mail_from_domain = local.use_mail_from ? "${var.mail_from_subdomain}.${var.sender_domain}" : ""
+
+  # Receivers send aggregate reports to a different domain only if that domain
+  # authorizes it (RFC 7489 7.1). The same domain, a parent or a subdomain of the
+  # sender is taken as the same organization and needs no authorization.
+  sender_domain_lc = lower(var.sender_domain)
+  rua_domain       = lower(split("@", var.dmarc_rua_email)[1])
+  rua_external = !(
+    local.rua_domain == local.sender_domain_lc ||
+    endswith(local.rua_domain, ".${local.sender_domain_lc}") ||
+    endswith(local.sender_domain_lc, ".${local.rua_domain}")
+  )
+  dmarc_report_auth_name = "${local.sender_domain_lc}._report._dmarc.${local.rua_domain}"
 }
 
 resource "aws_ses_domain_identity" "sender" {
@@ -57,6 +69,17 @@ resource "aws_route53_record" "dmarc" {
   type    = "TXT"
   ttl     = 600
   records = ["v=DMARC1; p=${var.dmarc_policy}; sp=${var.dmarc_policy}; rua=mailto:${var.dmarc_rua_email}"]
+}
+
+# Authorizes the report domain to receive this domain's aggregate reports. Only
+# in a zone the caller names: the report domain often belongs to someone else.
+resource "aws_route53_record" "dmarc_report_auth" {
+  count   = local.rua_external && var.dmarc_report_zone_id != "" ? 1 : 0
+  zone_id = var.dmarc_report_zone_id
+  name    = local.dmarc_report_auth_name
+  type    = "TXT"
+  ttl     = 600
+  records = ["v=DMARC1"]
 }
 
 # ── Custom MAIL FROM domain (optional) ────────────────

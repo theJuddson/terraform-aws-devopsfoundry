@@ -249,6 +249,11 @@ echo "────────────────────────�
 pass "Provisioned $DOMAIN (service at 0 tasks — no image yet)"
 echo "  Service URL: $(df_tf_at "$CONFIG" output -raw service_url)"
 echo "  ECR repo:    $(df_tf_at "$CONFIG" output -raw ecr_repository_url)"
+if [[ "$(df_tfvar "$CONFIG/app.tfvars" enable_email)" == true ]]; then
+  echo ""
+  df_ses_report "$(df_tfvar "$CONFIG/app.tfvars" aws_region)" "$(df_ses_account_status "$(df_tfvar "$CONFIG/app.tfvars" aws_region)")"
+  df_dmarc_report "$CONFIG"
+fi
 echo ""
 echo "  Next: ensure a Dockerfile exists, then:"
 echo "    bin/deploy-app --config $CONFIG"
