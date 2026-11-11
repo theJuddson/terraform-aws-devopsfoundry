@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Checks that the root README's release pins (`?ref=vX.Y.Z` and `--module-ref vX.Y.Z`)
+# name the newest release in CHANGELOG.md, so a release PR can't leave them behind.
+# Run by .github/workflows/checks.yml.
+#
+#   bin/check-readme-pins           # fail, naming each stale line
+#   bin/check-readme-pins --fix     # rewrite the pins to the newest release
+set -euo pipefail
+root="$(cd "$(dirname "$0")/.." && pwd)"
+readme="$root/README.md"; changelog="$root/CHANGELOG.md"
+fix=false
+case "${1:-}" in
+  "") ;;
+  --fix) fix=true ;;
+  *) echo "usage: bin/check-readme-pins [--fix]" >&2; exit 2 ;;
+esac
+
+newest="$(sed -nE 's/^## (v[0-9]+\.[0-9]+\.[0-9]+)[[:space:]]*$/\1/p' "$changelog" | head -1)"
+[[ -n "$newest" ]] || { echo "CHANGELOG.md has no '## vX.Y.Z' heading" >&2; exit 1; }
+
+pin='(\?ref=|--module-ref[ =])v[0-9]+\.[0-9]+\.[0-9]+'
+# A README with no pins at all means the pattern no longer matches what it says:
+# fail rather than pass by checking nothing.
+grep -qE -- "$pin" "$readme" || { echo "README.md has no ?ref= or --module-ref pins to check" >&2; exit 1; }
+
+stale="$(grep -nE -- "$pin" "$readme" | grep -vE -- "(\?ref=|--module-ref[ =])${newest//./\\.}([^0-9.]|$)" || true)"
+[[ -n "$stale" ]] || { echo "README.md pins $newest, the newest release in CHANGELOG.md"; exit 0; }
+
+if [[ "$fix" == true ]]; then
+  tmp="$(mktemp)"
+  sed -E "s/(\?ref=|--module-ref[ =])v[0-9]+\.[0-9]+\.[0-9]+/\1$newest/g" "$readme" > "$tmp"
+  cat "$tmp" > "$readme"; rm -f "$tmp"
+  echo "README.md now pins $newest"
+  exit 0
+fi
+
+echo "README.md pins an older release than $newest, the newest in CHANGELOG.md:" >&2
+printf '%s\n' "$stale" | sed 's/^/  README.md:/' >&2
+echo "Run bin/check-readme-pins --fix to update them." >&2
+exit 1

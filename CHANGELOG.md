@@ -3,6 +3,11 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.7.1
+
+- `bin/check-readme-pins` fails CI when the root README's `?ref=` or `--module-ref` examples pin an older release
+  than the newest in `CHANGELOG.md` (#24); `--fix` bumps them. The README pinned v1.6.0 after v1.7.0 shipped.
+
 ## v1.7.0
 
 - `bin/deploy` refuses to upload a stale static build (#43). Without a `BUILD_CMD`, it compares the newest file in
