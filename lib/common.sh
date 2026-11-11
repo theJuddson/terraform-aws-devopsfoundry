@@ -63,6 +63,57 @@ df_validate_domain() {
 # Run terraform in a site dir. Usage: df_tf <domain> <args...>
 df_tf() { local d="$1"; shift; terraform -chdir="$(df_site_dir "$d")" "$@"; }
 
+# ── Static-site build freshness (bin/deploy) ───────────
+# "<mtime> <path>" for every file under the given paths (files or directories),
+# skipping .git, node_modules and .DS_Store, and the directory <prune> (an
+# absolute path, or "" for none). Usage: df_file_mtimes <prune> <path>...
+df_file_mtimes() {
+  local prune="$1"; shift
+  local st=(stat -f '%m %N')
+  stat -c %Y / >/dev/null 2>&1 && st=(stat -c '%Y %n')   # GNU stat (Linux)
+  local skip=()
+  [[ -n "$prune" ]] && skip=(-path "$prune" -prune -o)
+  find "$@" ${skip[@]+"${skip[@]}"} \( -name .git -o -name node_modules \) -prune \
+    -o -type f ! -name .DS_Store -exec "${st[@]}" {} +
+}
+
+# Whether a build directory is at least as new as its source. Prints one line:
+#   FRESH <newest source file>   no source file changed after the last build
+#   STALE <newest source file>   that file changed after the last build
+#   SELF                         the source is the build directory itself
+#   EMPTY                        the build directory holds no files
+#   MISSING <path>               an extra input path does not exist
+# The last build's time is the NEWEST file in the build directory: builds often
+# copy static assets with their original times, so the oldest would flag fresh
+# builds. Usage: df_build_freshness <build_dir> <src_dir> [extra input path...]
+df_build_freshness() {
+  local build src i newest_build newest_src
+  build="$(cd "$1" && pwd)"; src="$(cd "$2" && pwd)"; shift 2
+  [[ "$src" != "$build" ]] || { echo SELF; return 0; }
+  newest_build="$(df_file_mtimes "" "$build" | sort -n | tail -1)"
+  [[ -n "$newest_build" ]] || { echo EMPTY; return 0; }
+  local inputs=("$src")
+  for i in "$@"; do
+    [[ -e "$i" ]] || { echo "MISSING $i"; return 0; }
+    inputs+=("$(cd "$(dirname "$i")" && pwd)/$(basename "$i")")
+  done
+  newest_src="$(df_file_mtimes "$build" "${inputs[@]}" | sort -n | tail -1)"
+  [[ -n "$newest_src" ]] || { echo "FRESH (no source files)"; return 0; }
+  if [[ "${newest_src%% *}" -gt "${newest_build%% *}" ]]; then
+    echo "STALE ${newest_src#* }"
+  else
+    echo "FRESH ${newest_src#* }"
+  fi
+}
+
+# Whether a git work tree has uncommitted changes to tracked files under <dir>.
+# Untracked files don't count (editor and Finder litter would flag every deploy).
+# False outside a git work tree. Usage: df_git_dirty <dir>
+df_git_dirty() {
+  git -C "$1" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 1
+  [[ -n "$(git -C "$1" status --porcelain --untracked-files=no -- . 2>/dev/null)" ]]
+}
+
 # ── App (full-stack) helpers ───────────────────────────
 df_app_state_key() { echo "devopsfoundry/app/$1/terraform.tfstate"; }
 

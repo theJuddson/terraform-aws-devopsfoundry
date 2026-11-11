@@ -133,6 +133,15 @@ propagation race on a fresh domain:
 If propagation is slow and step 2 times out, resume with
 `bin/new-site example.com --resume --yes`.
 
+`bin/deploy` uploads `BUILD_DIR` from `sites/<domain>/site.env`. With a
+`BUILD_CMD` it builds first. Without one it uploads the directory as it is, so it
+first checks the build is at least as new as its source: `SRC_DIR` (default:
+`BUILD_DIR`'s parent, minus `BUILD_DIR`, `.git` and `node_modules`) plus any
+`BUILD_INPUTS`, the other files the build reads. If a source file changed after
+the newest file in `BUILD_DIR`, it stops before uploading and names the file;
+`--allow-stale` deploys anyway. For a hand-written site with no build, set
+`SRC_DIR` to `BUILD_DIR`. Uncommitted changes in the source get a warning.
+
 #### Email
 
 `bin/new-site example.com --email --dkim "<google-dkim-key>"` adds Google
@@ -234,6 +243,8 @@ Note what a failure here means. The rollout completed and the new image *is* liv
 this is not a failed deploy, it is a deploy that succeeded and produced a broken
 app. Fix forward, or roll back by re-tagging a previous `git-<sha>` image (every
 deploy pushes both `git-<sha>` and `latest`; the task definition pulls `latest`).
+An image built with uncommitted changes to tracked files is tagged
+`git-<sha>-dirty` instead, since it isn't exactly that commit.
 
 #### Shared platform (cheap mode)
 

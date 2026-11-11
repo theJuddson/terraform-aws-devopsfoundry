@@ -51,6 +51,11 @@ pass "ECS: $CLUSTER / $SERVICE"
 
 # Image tags: git-<sha> (immutable record) + latest (what the task def pulls).
 SHA="$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo manual)"
+# An image built from uncommitted changes isn't that commit, so its tag says so.
+if [[ "$SHA" != manual ]] && df_git_dirty "$REPO_ROOT"; then
+  warn "Uncommitted changes in $REPO_ROOT: tagging this image git-$SHA-dirty"
+  SHA="$SHA-dirty"
+fi
 TAG_SHA="$ECR_URL:git-$SHA"; TAG_LATEST="$ECR_URL:latest"
 
 # manage_nameservers = false with the Namecheap record still in state would make

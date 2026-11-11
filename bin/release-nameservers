@@ -46,7 +46,8 @@ wire_root() {
   if [[ -z "$(app_arg)" ]]; then
     step "Wiring manage_nameservers into this app root (main.tf, variables.tf)"
     cp "$MAIN" "$MAIN.release-bak"; cp "$VARS" "$VARS.release-bak"
-    grep -q '^variable "manage_nameservers"' "$VARS" || printf '\n%s\n' \
+    # One format per line: printf repeats a '\n%s\n' format for every argument.
+    grep -q '^variable "manage_nameservers"' "$VARS" || printf '\n%s\n%s\n%s\n%s\n%s\n' \
       'variable "manage_nameservers" {' \
       '  description = "Whether Terraform manages the Namecheap delegation; bin/release-nameservers sets false once it is live"' \
       '  type        = bool' \
