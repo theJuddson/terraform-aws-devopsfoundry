@@ -297,3 +297,9 @@ variable "existing_zone_name" {
   type        = string
   default     = ""
 }
+
+variable "deployment_circuit_breaker" {
+  description = "Stop a deployment whose tasks keep failing and roll back to the last working one. On for new app roots (bin/deploy-app then fails fast on a rolled-back deploy)."
+  type        = bool
+  default     = true
+}

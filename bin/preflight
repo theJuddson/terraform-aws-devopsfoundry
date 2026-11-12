@@ -21,12 +21,34 @@ done
 echo "  terraform: $(terraform version -json 2>/dev/null | jq -r .terraform_version 2>/dev/null || terraform version | head -1)"
 
 # ── AWS ────────────────────────────────────────────────
-if aws sts get-caller-identity &>/dev/null; then
-  ACCT=$(aws sts get-caller-identity --query Account --output text)
+# An expired sign-in (aws login, IAM Identity Center) and missing credentials
+# need different fixes, so say which it is (#58).
+PROFILE="${AWS_PROFILE:-default}"
+if STS_ERR="$(aws sts get-caller-identity --query Account --output text 2>&1)"; then
+  ACCT="$STS_ERR"
   if [[ -z "$EXPECTED_ACCOUNT" || "$ACCT" == "$EXPECTED_ACCOUNT" ]]; then pass "AWS account: $ACCT"
   else warn "AWS account is $ACCT (expected $EXPECTED_ACCOUNT — check AWS_PROFILE)"; fi
+  # Masked by the CLI: only the credential source is read, never the key.
+  # Newer CLIs separate the columns with " : ", older ones with spaces.
+  KEY_SOURCE="$(aws configure list 2>/dev/null | awk '/^[[:space:]]*access_key/ {
+    if (index($0, ":")) { split($0, f, ":"); t = f[3] } else { t = $3 }
+    gsub(/[[:space:]]/, "", t); print t }')"
+  if [[ "$KEY_SOURCE" == shared-credentials-file ]]; then
+    info "Profile $PROFILE uses long-term access keys from ~/.aws/credentials; aws login or IAM Identity Center gives short-lived ones"
+  fi
 else
-  warn "AWS credentials invalid — run: aws configure (or set AWS_PROFILE)"; fails=$((fails + 1))
+  ACCT=""
+  case "$STS_ERR" in
+    # ExpiredToken(Exception), "token ... is expired", "Token has expired", and an
+    # SSO token that can't be refreshed.
+    *[Ee]xpired*|*"Error when retrieving token from sso"*)
+      warn "AWS sign-in for profile $PROFILE has expired. Run: aws login --profile $PROFILE (or aws sso login --profile $PROFILE for IAM Identity Center)" ;;
+    *"Unable to locate credentials"*|*"could not be found"*)
+      warn "No AWS credentials for profile $PROFILE. Sign in: aws login --profile $PROFILE (or aws configure sso), and set AWS_PROFILE in .env" ;;
+    *)
+      warn "AWS rejected the credentials for profile $PROFILE: $(head -1 <<<"$STS_ERR" | sed 's/^[[:space:]]*//')" ;;
+  esac
+  fails=$((fails + 1))
 fi
 
 # ── SES (informational: only apps with --enable-email send mail) ──

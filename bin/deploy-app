@@ -103,13 +103,15 @@ pass "Applied"
 
 # Roll tasks to pull the new :latest (the task-def image tag is unchanged, so
 # apply alone won't redeploy on subsequent runs).
-step "Rolling ECS service"
-aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" \
-  --force-new-deployment --region "$REGION" \
-  --query 'service.deployments[0].{status:status,rollout:rolloutState}' --output table || die "update-service failed"
-step "Waiting for service to stabilize"
-aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE" --region "$REGION" \
-  || die "Service did not stabilize — check logs: $(df_tf_at "$CONFIG" output -raw log_group 2>/dev/null)"
+step "Rolling ECS service and waiting for it to stabilize"
+LOGS="$(df_tf_at "$CONFIG" output -raw log_group 2>/dev/null || echo "the service's log group")"
+roll_rc=0; df_roll_service "$CLUSTER" "$SERVICE" "$REGION" || roll_rc=$?
+case "$roll_rc" in
+  0) ;;
+  1) die "update-service failed" ;;
+  2) die "The new deployment failed and ECS rolled the service back to the previous one, which is still serving. Image git-$SHA did not go live; check its tasks' logs: $LOGS" ;;
+  *) die "Service did not stabilize — check logs: $LOGS" ;;
+esac
 pass "Service stable"
 log "INFO" "Deployed app $SERVICE ($SHA)"
 

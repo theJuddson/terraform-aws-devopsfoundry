@@ -6,8 +6,13 @@
 # ses_account <get-account JSON>: what `aws sesv2 get-account` answers.
 ses_account() {
   printf '%s' "$1" > "$TMP/ses.json"
-  stub aws "case \"\$*\" in *'sesv2 get-account'*) cat '$TMP/ses.json' ;; esac; exit 0"
+  printf '%s' "${2-$READY_IDENTITY}" > "$TMP/identity.json"
+  stub aws "case \"\$*\" in
+  *'sesv2 get-account'*) cat '$TMP/ses.json' ;;
+  *'sesv2 get-email-identity'*) if [[ -s '$TMP/identity.json' ]]; then cat '$TMP/identity.json'; else echo 'An error occurred (NotFoundException)' >&2; exit 254; fi ;;
+esac; exit 0"
 }
+READY_IDENTITY='{"VerifiedForSendingStatus":true,"DkimAttributes":{"Status":"SUCCESS"},"MailFromAttributes":{"MailFromDomain":"mail.example.com","MailFromDomainStatus":"SUCCESS"}}'
 SANDBOX_JSON='{"ProductionAccessEnabled":false,"SendingEnabled":true}'
 
 status() { OUT="$("$DF/bin/email-status" "$@" 2>&1)"; }
@@ -56,7 +61,7 @@ t_no_region_is_refused() {
 # ── --request-production ───────────────────────────────
 t_request_from_the_sandbox_sends_it_after_asking() {
   ses_account "$SANDBOX_JSON"
-  OUT="$(echo y | "$DF/bin/email-status" --region us-east-1 --request-production \
+  OUT="$(echo y | "$DF/bin/email-status" --region us-east-1 --domain example.com --request-production \
     --website-url https://example.com --use-case "Sign-in links to registered users" 2>&1)" || fail "request must succeed: $OUT"
   assert_called "^aws sesv2 put-account-details --region us-east-1 --production-access-enabled --mail-type TRANSACTIONAL --website-url https://example.com --use-case-description Sign-in links to registered users --contact-language EN$"
   assert_contains "$OUT" "Requested"
@@ -64,7 +69,7 @@ t_request_from_the_sandbox_sends_it_after_asking() {
 
 t_answering_no_sends_nothing() {
   ses_account "$SANDBOX_JSON"
-  OUT="$(echo n | "$DF/bin/email-status" --region us-east-1 --request-production \
+  OUT="$(echo n | "$DF/bin/email-status" --region us-east-1 --domain example.com --request-production \
     --website-url https://example.com --use-case "Receipts" 2>&1)" || fail "declining must not fail: $OUT"
   assert_contains "$OUT" "Not sent."
   assert_not_called "put-account-details"
@@ -76,10 +81,10 @@ t_no_request_is_sent_unless_in_the_sandbox() {
               '{"ProductionAccessEnabled":false,"Details":{"ReviewDetails":{"Status":"PENDING"}}}' \
               '{"ProductionAccessEnabled":false,"Details":{"ReviewDetails":{"Status":"DENIED"}}}'; do
     ses_account "$json"
-    status --region us-east-1 --request-production --website-url https://example.com --use-case "Receipts" --yes || true
+    status --region us-east-1 --domain example.com --request-production --website-url https://example.com --use-case "Receipts" --yes || true
   done
   stub aws 'exit 255'
-  status --region us-east-1 --request-production --website-url https://example.com --use-case "Receipts" --yes \
+  status --region us-east-1 --domain example.com --request-production --website-url https://example.com --use-case "Receipts" --yes \
     && fail "an unreadable status must not be taken as the sandbox"
   assert_not_called "put-account-details"
 }
@@ -157,4 +162,43 @@ t_preflight_reports_ses_without_failing() {
   OUT="$(AWS_REGION=us-west-2 NAMECHEAP_USER_NAME=u NAMECHEAP_API_USER=u NAMECHEAP_API_KEY=k "$DF/bin/preflight" 2>&1)" || true
   assert_contains "$OUT" "SES in us-west-2: sandbox"
   assert_not_contains "$OUT" "hard check"
+}
+
+# ── The sending domain must be ready before a request (#57) ─────────────
+t_a_request_needs_a_domain_before_asking_aws_anything() {
+  ses_account "$SANDBOX_JSON"
+  status --region us-east-1 --request-production --website-url https://example.com --use-case "Receipts" --yes && fail "no domain must fail"
+  assert_contains "$OUT" "--domain"
+  assert_not_called "^aws sesv2"
+}
+
+t_an_unverified_domain_blocks_the_request_and_says_what_is_missing() {
+  ses_account "$SANDBOX_JSON" '{"VerifiedForSendingStatus":false,"DkimAttributes":{"Status":"PENDING"},"MailFromAttributes":{"MailFromDomain":"mail.example.com","MailFromDomainStatus":"PENDING"}}'
+  status --region us-east-1 --domain example.com --request-production --website-url https://example.com --use-case "Receipts" --yes && fail "an unready domain must block the request"
+  assert_contains "$OUT" "example.com is not verified for sending"
+  assert_contains "$OUT" "DKIM for example.com is PENDING"
+  assert_contains "$OUT" "MAIL FROM mail.example.com is PENDING"
+  assert_contains "$OUT" "Not requesting production access until example.com is ready"
+  assert_not_called "put-account-details"
+}
+
+t_a_domain_that_is_not_an_identity_blocks_the_request() {
+  ses_account "$SANDBOX_JSON" ""
+  status --region us-east-1 --domain example.com --request-production --website-url https://example.com --use-case "Receipts" --yes && fail "must block"
+  assert_contains "$OUT" "example.com is not an SES identity in us-east-1 yet"
+  assert_not_called "put-account-details"
+}
+
+t_a_domain_without_a_custom_mail_from_is_ready() {
+  ses_account '{"ProductionAccessEnabled":true}' '{"VerifiedForSendingStatus":true,"DkimAttributes":{"Status":"SUCCESS"},"MailFromAttributes":{"MailFromDomain":"","BehaviorOnMxFailure":"USE_DEFAULT_VALUE"}}'
+  status --region us-east-1 --domain example.com || fail "must succeed: $OUT"
+  assert_contains "$OUT" "SES can send as example.com"
+}
+
+t_the_app_domain_is_checked_with_config() {
+  dmarc_app '{"name":"x","type":"TXT","value":"v=DMARC1","created":true}'
+  ses_account '{"ProductionAccessEnabled":true}'
+  status --config "$APP" || fail "must succeed: $OUT"
+  assert_called "sesv2 get-email-identity --email-identity example.com --region us-east-1"
+  assert_contains "$OUT" "SES can send as example.com"
 }

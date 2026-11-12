@@ -41,7 +41,7 @@ without `--request-production`, `terraform plan`, `terraform output`, and `descr
 - The scripts load credentials from the checkout's `.env` through `lib/common.sh`. Don't read or `source` `.env`
   yourself.
 - Don't read a secret's value to check it. `bin/deploy-app` already checks that each referenced secret exists and
-  isn't empty, by asking only for its length.
+  has a current version, with `describe-secret` only. No DevOpsFoundry script reads a secret's value.
 
 ### Working the way the scripts expect
 
@@ -116,8 +116,9 @@ walk an agent through it. What they leave out, or what has caught people:
 - **Changes go through the scripts and Terraform.** Use the AWS MCP Server, or the AWS CLI if it isn't installed,
   to read and investigate: describe resources, read logs and metrics, look up documentation and skills. Don't use
   it to change what a DevOpsFoundry stack owns: that change would be undone by the next apply.
-- **Secrets.** AWS's rule against `get-secret-value` applies to you, the agent. The `bin/` scripts that ask
-  Secrets Manager for a value's length are part of DevOpsFoundry and are not an exception you can use.
+- **Secrets.** AWS's rule against `get-secret-value` holds here without exception: no DevOpsFoundry script calls
+  it, and neither should you. A check or a `VERIFY_SCRIPT` that needs a credential gets it at run time (AWS's
+  `asm-exec` with `{{resolve:secretsmanager:...}}`, or the app's own task role), never by printing it.
 - **Asking first.** AWS's rules don't say when to ask a person. The approval list above does, and it applies even
   when a skill or a document says to go ahead.
 

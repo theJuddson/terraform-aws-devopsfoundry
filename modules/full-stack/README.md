@@ -80,6 +80,7 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | db\_name | ── Database tuning ──────────────────────────────────── | `string` | `"appdb"` | no |
 | db\_performance\_insights\_enabled | Performance Insights, kept for the free 7 days. | `bool` | `false` | no |
 | db\_skip\_final\_snapshot | n/a | `bool` | `true` | no |
+| deployment\_circuit\_breaker | Stop a deployment whose tasks keep failing and roll back to the last working one. Off by default so existing services plan no change; new app roots from bin/new-app turn it on. | `bool` | `false` | no |
 | desired\_count | n/a | `number` | `1` | no |
 | dmarc\_policy | DMARC policy: none \| quarantine \| reject | `string` | `"none"` | no |
 | dmarc\_report\_zone\_id | Route53 zone of dmarc\_rua\_email's domain when it is another domain: creates the report authorization record there. Empty = none (the dmarc\_report\_authorization output gives the record to add). | `string` | `""` | no |

@@ -84,6 +84,7 @@ A containerized service on ECS Fargate behind an HTTPS ALB, framework-neutral: y
 | create\_alb | Create a dedicated ALB. False = attach to an existing one via existing\_*. | `bool` | `true` | no |
 | create\_cluster | Create a dedicated ECS cluster. False = run in an existing one. | `bool` | `true` | no |
 | create\_waf | Create a regional WAF web ACL and attach it to the ALB: a per-IP rate limit<br/>plus the AWS managed rule groups in waf\_managed\_rule\_groups. Costs about<br/>$5/month per web ACL + $1/month per rule + $0.60 per million requests.<br/>Ignored when create\_alb = false. | `bool` | `false` | no |
+| deployment\_circuit\_breaker | Stop a deployment whose tasks keep failing and roll back to the last working one. Off by default so existing services plan no change; new app roots from bin/new-app turn it on. | `bool` | `false` | no |
 | desired\_count | Running task count. new-app provisions at 0; deploy-app scales up. | `number` | `1` | no |
 | env | Plaintext environment variables injected into the container | `map(string)` | `{}` | no |
 | existing\_alb\_dns\_name | DNS name of the shared ALB (required when create\_alb = false) | `string` | `""` | no |

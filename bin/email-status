@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # email-status — whether SES can send to anyone yet, and what DMARC still needs.
 #
-# Usage: bin/email-status [--config <dir> | --region <region>]
+# Usage: bin/email-status [--config <dir> | --region <region>] [--domain <domain>]
 #                         [--request-production --website-url URL --use-case TEXT [--yes]]
 #
 # Reports the region's SES account status: production access, a review pending,
@@ -11,17 +11,20 @@
 #
 # --request-production asks AWS for production access, for TRANSACTIONAL mail.
 # It is account-wide for the region, outward-facing and reviewed by AWS, so it
-# only runs when asked, only from the sandbox, and asks first unless --yes.
+# only runs when asked, only from the sandbox, only once the sending domain is
+# ready (verified, DKIM and MAIL FROM passing: AWS reviews against it, #57), and
+# asks first unless --yes. The domain is --domain, else the app's domain_name.
 set -euo pipefail
 DF_SCRIPT_NAME="email-status"
 source "$(cd "$(dirname "$0")/.." && pwd)/lib/common.sh"
 df_load_env
 
-CONFIG=""; REGION=""; REQUEST=false; WEBSITE_URL=""; USE_CASE=""; YES=false
+CONFIG=""; REGION=""; DOMAIN=""; REQUEST=false; WEBSITE_URL=""; USE_CASE=""; YES=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --config)             CONFIG="$2"; shift 2 ;;
     --region)             REGION="$2"; shift 2 ;;
+    --domain)             DOMAIN="$2"; shift 2 ;;
     --request-production) REQUEST=true; shift ;;
     --website-url)        WEBSITE_URL="$2"; shift 2 ;;
     --use-case)           USE_CASE="$2"; shift 2 ;;
@@ -34,6 +37,7 @@ if [[ -n "$CONFIG" ]]; then
   CONFIG="$(df_resolve_config "$CONFIG")"
   df_ensure_app_init "$CONFIG"
   [[ -n "$REGION" ]] || REGION="$(df_tfvar "$CONFIG/app.tfvars" aws_region 2>/dev/null || true)"
+  [[ -n "$DOMAIN" ]] || DOMAIN="$(df_tfvar "$CONFIG/app.tfvars" domain_name 2>/dev/null || true)"
 fi
 [[ -n "$REGION" ]] || REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-}}"
 [[ -n "$REGION" ]] || die "No region: pass --region or --config, or set AWS_REGION"
@@ -43,12 +47,22 @@ if $REQUEST; then
   [[ "$WEBSITE_URL" =~ ^https?://[^[:space:]]+$ ]] || die "--request-production needs --website-url https://..."
   [[ -n "${USE_CASE//[[:space:]]/}" ]] || die "--request-production needs --use-case \"<the mail you send, who gets it, how they sign up, how bounces are handled>\""
   (( ${#USE_CASE} <= 5000 )) || die "--use-case is longer than the 5000 characters SES accepts"
+  [[ -n "$DOMAIN" ]] || die "--request-production needs the sending domain: pass --config <dir> or --domain <domain>"
 elif [[ -n "$WEBSITE_URL$USE_CASE" ]]; then
   die "--website-url and --use-case only go with --request-production"
 fi
 
 STATUS="$(df_ses_account_status "$REGION")"
 df_ses_report "$REGION" "$STATUS"
+
+DOMAIN_READY=false
+if [[ -n "$DOMAIN" ]]; then
+  if df_ses_identity_status "$DOMAIN" "$REGION"; then
+    DOMAIN_READY=true; pass "SES can send as $DOMAIN: verified, DKIM and MAIL FROM passing"
+  else
+    warn "SES can't send as $DOMAIN yet; the lines above say what's missing"
+  fi
+fi
 
 if $REQUEST; then
   case "$STATUS" in
@@ -57,6 +71,7 @@ if $REQUEST; then
     DENIED)     die "Not resubmitting a denied request; reply in its AWS Support case instead." ;;
     UNKNOWN)    die "Not requesting production access while the account status can't be read." ;;
     SANDBOX)
+      $DOMAIN_READY || die "Not requesting production access until $DOMAIN is ready: AWS reviews the request against it. Fix what's listed above (bin/new-app's email records), then re-run."
       echo "  This asks AWS to let SES in $REGION send TRANSACTIONAL mail to any address, account-wide:"
       echo "    website: $WEBSITE_URL"
       echo "    use case: $USE_CASE"

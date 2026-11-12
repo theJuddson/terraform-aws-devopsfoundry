@@ -17,6 +17,10 @@ module "org" {
 - Each account needs an email no other AWS account uses; a plus-address works.
 - An organization that already exists is imported (`import { to = module.org.aws_organizations_organization.this
   id = "o-..." }`), as are existing accounts (`id = "<account id>"`).
+- `service_access_principals` is authoritative. A service given organization trusted access outside Terraform (from
+  the console, or by its own setup, as Compute Optimizer and Cost Optimization Hub do) is switched off at the next
+  apply. The plan warns first, naming each one; add them to the list to keep them. List the live ones with
+  `aws organizations list-aws-service-access-for-organization`.
 - Terraform never destroys an account (`prevent_destroy`, `close_on_deletion = false`). Closing one takes 90 days.
   To stop managing one, use a `removed` block, then close it in the console if you mean to.
 - AWS creates `OrganizationAccountAccessRole` in each new account, trusting the management account. Build inside a
@@ -57,7 +61,7 @@ No modules.
 | enabled\_policy\_types | Organization policy types to turn on, e.g. SERVICE\_CONTROL\_POLICY. Empty by default: SCPs never apply to the management account, so they only matter once workloads live in member accounts. | `list(string)` | `[]` | no |
 | member\_admin\_role\_name | Role AWS creates in each new member account, trusting the management account with full admin. Used only until Identity Center access works, and for break-glass. | `string` | `"OrganizationAccountAccessRole"` | no |
 | organizational\_units | Organizational units directly under the root, by name. Empty = accounts sit at the root. | `set(string)` | `[]` | no |
-| service\_access\_principals | AWS services trusted across the organization. sso.amazonaws.com is what IAM Identity Center needs; account.amazonaws.com lets the management account manage members' contact details. | `list(string)` | <pre>[<br/>  "sso.amazonaws.com",<br/>  "account.amazonaws.com"<br/>]</pre> | no |
+| service\_access\_principals | Every AWS service trusted across the organization: this list is authoritative, so a service given access outside Terraform loses it at the next apply (the plan warns first). sso.amazonaws.com is what IAM Identity Center needs; account.amazonaws.com lets the management account manage members' contact details. List the live ones with: aws organizations list-aws-service-access-for-organization. | `list(string)` | <pre>[<br/>  "sso.amazonaws.com",<br/>  "account.amazonaws.com"<br/>]</pre> | no |
 
 ## Outputs
 

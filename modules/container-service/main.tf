@@ -508,6 +508,18 @@ resource "aws_ecs_service" "app" {
   deployment_minimum_healthy_percent = 100
   deployment_maximum_percent         = 200
 
+  # With the circuit breaker, a deployment whose tasks keep failing (a crashing
+  # image, an unreadable secret) is stopped and rolled back to the last working
+  # one in minutes, instead of retrying until ECS gives up. Absent when off, so
+  # services made before it existed plan no change.
+  dynamic "deployment_circuit_breaker" {
+    for_each = var.deployment_circuit_breaker ? [1] : []
+    content {
+      enable   = true
+      rollback = true
+    }
+  }
+
   # Blocks apply until the task set is steady. With desired_count=0 (bootstrap)
   # the service is steady immediately; deploy-app scales it up after the first
   # image is pushed.

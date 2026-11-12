@@ -26,8 +26,8 @@ or straight from git, over HTTPS or SSH, pinned to a release tag (the newest is 
 [Releases page](https://github.com/theJuddson/terraform-aws-devopsfoundry/releases)):
 
 ```hcl
-source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.10.2"
-source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.10.2"
+source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.11.0"
+source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.11.0"
 ```
 
 Each module's README lists its inputs and outputs, and the building blocks have a runnable example under
@@ -88,8 +88,8 @@ shares state with anything else.
 | `bin/destroy-site <domain>` | Tear down; reverts nameservers to Namecheap default |
 | `bin/new-app <domain> --config <dir>` | Zone + NS + ACM + VPC + Fargate stack at `desired_count = 0`; shows each phase's plan and asks before applying it (`--yes` skips, `--plan-only` applies nothing) |
 | `bin/deploy-app --config <dir>` | Build image → ECR → apply → roll service → verify |
-| `bin/put-secret <name> --env ENV_NAME` | Store an app secret from a hidden prompt or stdin (never argv or history); prints the `app.tfvars` line |
-| `bin/email-status [--config <dir>]` | Whether SES in the app's region can send to anyone yet (or is in the sandbox), and the DMARC report record to add; `--request-production` asks AWS for production access |
+| `bin/put-secret <name> --env ENV_NAME` | Store an app secret from a hidden prompt or stdin (never argv or history), tagged with its app, optionally under your own KMS key (`--kms-key`); prints the `app.tfvars` line |
+| `bin/email-status [--config <dir>]` | Whether SES in the app's region can send to anyone yet (or is in the sandbox), whether the app's domain is verified (DKIM, MAIL FROM), and the DMARC report record to add; `--request-production` asks AWS for production access, once the domain is ready |
 | `bin/rotate-secret --config <dir> redis\|smtp` | Rotate the app's Redis auth token or SMTP password with no failed requests: publish a new one while the old still works, roll the service, retire the old one; `bin/preflight` warns once one is over 90 days old |
 | `bin/release-nameservers --config <dir>` | Stop managing a live Namecheap delegation in Terraform, so deploys never call Namecheap (`new-app` runs it) |
 | `bin/destroy-app --config <dir>` | Tear down the app stack; reverts the delegation unless `--keep-ns` |
@@ -248,7 +248,7 @@ serving and `--enable-email` are refused in this mode, and `destroy-app` removes
 
 ```bash
 bin/new-app example.com --subdomain app --existing-zone example.com \
-  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.10.2
+  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.11.0
 ```
 
 #### App-owned state
