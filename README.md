@@ -26,8 +26,8 @@ or straight from git, over HTTPS or SSH, pinned to a release tag (the newest is 
 [Releases page](https://github.com/theJuddson/terraform-aws-devopsfoundry/releases)):
 
 ```hcl
-source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.14.0"
-source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.14.0"
+source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.15.0"
+source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.15.0"
 ```
 
 Each module's README lists its inputs and outputs, and the building blocks have a runnable example under
@@ -249,7 +249,7 @@ serving and `--enable-email` are refused in this mode, and `destroy-app` removes
 
 ```bash
 bin/new-app example.com --subdomain app --existing-zone example.com \
-  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.14.0
+  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.15.0
 ```
 
 #### App-owned state
@@ -280,6 +280,16 @@ app. Fix forward, or roll back by re-tagging a previous `git-<sha>` image (every
 deploy pushes both `git-<sha>` and `latest`; the task definition pulls `latest`).
 An image built with uncommitted changes to tracked files is tagged
 `git-<sha>-dirty` instead, since it isn't exactly that commit.
+
+#### WAF
+
+`create_waf = true` puts an AWS WAF web ACL in front of a dedicated ALB: a per-IP rate limit (`waf_rate_limit`) and
+AWS's managed rule groups (IP reputation, core rule set, known bad inputs), about $5/month plus $1 per rule and $0.60
+per million requests. On a live app, start with `waf_count_only = true` and `waf_logging = true`: rules only count,
+and the log group `aws-waf-logs-<app>-alb` records which rule matched which request (only blocked and counted
+requests, with the Authorization and Cookie headers redacted; billed per GB, kept `waf_log_retention_days`, 30 by
+default). When the counts look right, set `waf_count_only = false` to enforce, and exempt any rule that catches real
+traffic with `waf_rule_overrides`. In shared-platform mode the WAF belongs to the platform that owns the ALB.
 
 #### Alarms
 

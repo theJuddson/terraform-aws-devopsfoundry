@@ -119,5 +119,6 @@ enable_email    = __ENABLE_EMAIL__   # SES          -> injects MAIL_HOST/MAIL_PO
 # ALB, and every guest app is covered.
 # create_waf     = true
 # waf_count_only = true
+# waf_logging    = true   # log blocked and counted requests while tuning (billed per GB)
 # waf_rate_limit = 2000   # per IP per 5 minutes, across every host on the ALB
 # waf_rule_overrides = { AWSManagedRulesCommonRuleSet = ["SizeRestrictions_BODY"] }   # bodies over 8 KB

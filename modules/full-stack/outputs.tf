@@ -95,3 +95,8 @@ output "dmarc_report_authorization" {
   description = "With enable_email and dmarc_rua_email on another domain: the TXT record that domain must publish to receive reports, and whether it was created. Null otherwise."
   value       = one(module.email[*].dmarc_report_authorization)
 }
+
+output "waf_log_group" {
+  description = "The WAF request log group, when waf_logging is on"
+  value       = module.container_service.waf_log_group
+}

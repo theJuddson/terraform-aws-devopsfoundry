@@ -291,7 +291,7 @@ resource "aws_s3_bucket_policy" "alb_logs" {
 # A per-IP rate limit first (cheapest to evaluate), then the AWS managed rule
 # groups. waf_count_only runs everything in count mode for a safe first rollout.
 resource "aws_wafv2_web_acl" "alb" {
-  #checkov:skip=CKV2_AWS_31:Request logging is billed per GB; CloudWatch metrics and sampled requests are on
+  #checkov:skip=CKV2_AWS_31:Request logging is opt-in (waf_logging; billed per GB); CloudWatch metrics and sampled requests are always on
   #checkov:skip=CKV_AWS_192:Rule groups are dynamic; the default list includes AWSManagedRulesKnownBadInputsRuleSet (Log4j)
   count       = local.waf_create ? 1 : 0
   name        = "${local.name_prefix}-alb"
@@ -380,6 +380,59 @@ resource "aws_wafv2_web_acl" "alb" {
   }
 
   tags = { Name = "${local.name_prefix}-alb" }
+}
+
+# ── WAF request logging (opt-in, #66) ─────────────────
+# AWS's advice is to have logging on before tuning rules in count mode: the
+# logs say which rule matched which request. The log group name must start
+# with aws-waf-logs-. Authorization and Cookie headers are redacted so
+# credentials never reach the logs. By default only requests a rule blocked or
+# counted are kept, which is what tuning needs and a fraction of the volume.
+resource "aws_cloudwatch_log_group" "waf" {
+  #checkov:skip=CKV_AWS_338:Retention is waf_log_retention_days (30 by default); a year of request logs is costly and rarely needed for tuning
+  count             = local.waf_create && var.waf_logging ? 1 : 0
+  name              = "aws-waf-logs-${local.name_prefix}-alb"
+  retention_in_days = var.waf_log_retention_days
+  kms_key_id        = var.log_kms_key_arn
+  tags              = { Name = "aws-waf-logs-${local.name_prefix}-alb" }
+}
+
+resource "aws_wafv2_web_acl_logging_configuration" "alb" {
+  count                   = local.waf_create && var.waf_logging ? 1 : 0
+  resource_arn            = aws_wafv2_web_acl.alb[0].arn
+  log_destination_configs = [aws_cloudwatch_log_group.waf[0].arn]
+
+  redacted_fields {
+    single_header {
+      name = "authorization"
+    }
+  }
+  redacted_fields {
+    single_header {
+      name = "cookie"
+    }
+  }
+
+  dynamic "logging_filter" {
+    for_each = var.waf_log_all_requests ? [] : [1]
+    content {
+      default_behavior = "DROP"
+      filter {
+        behavior    = "KEEP"
+        requirement = "MEETS_ANY"
+        condition {
+          action_condition {
+            action = "BLOCK"
+          }
+        }
+        condition {
+          action_condition {
+            action = "COUNT"
+          }
+        }
+      }
+    }
+  }
 }
 
 resource "aws_wafv2_web_acl_association" "alb" {

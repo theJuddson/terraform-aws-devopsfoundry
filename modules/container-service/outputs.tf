@@ -61,3 +61,8 @@ output "alarm_names" {
     one(aws_cloudwatch_metric_alarm.no_healthy_targets[*].alarm_name),
   ])
 }
+
+output "waf_log_group" {
+  description = "The WAF request log group, when waf_logging is on (null otherwise)"
+  value       = one(aws_cloudwatch_log_group.waf[*].name)
+}

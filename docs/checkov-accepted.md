@@ -63,7 +63,8 @@ The defaults still match v1.1.0, so checkov keeps reporting these for the defaul
 | route53-zone-security | CKV_AWS_7, CKV_AWS_109, CKV_AWS_111, CKV_AWS_356 | KMS cannot rotate the asymmetric DNSSEC key; `Resource: "*"` in a key policy means the key itself |
 | route53-zone-security | CKV_AWS_158, CKV_AWS_338 | The query log group uses CloudWatch default encryption unless `kms_key_arn` is set, and `query_log_retention_days` |
 | ecr-repository | CKV_AWS_51 | Tags are immutable by default; `container-service` keeps `MUTABLE` for its `:latest` deploy flow |
-| container-service | CKV2_AWS_31 | The opt-in WAF doesn't log requests (billed per GB); CloudWatch metrics and sampled requests are on |
+| container-service | CKV2_AWS_31 | The opt-in WAF logs requests only when asked (`waf_logging`, v1.15.0; billed per GB); CloudWatch metrics and sampled requests are always on |
+| container-service | CKV_AWS_338 (inline skip) | WAF request logs kept under a year | `waf_log_retention_days` (30 by default): a year of request logs is costly and rarely needed for tuning |
 | container-service | CKV_AWS_192, CKV2_AWS_76 | The WAF's managed rule groups are a variable; the default list includes `AWSManagedRulesKnownBadInputsRuleSet`, which blocks Log4j lookups |
 
 ## tflint
