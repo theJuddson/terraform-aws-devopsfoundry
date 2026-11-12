@@ -26,8 +26,8 @@ or straight from git, over HTTPS or SSH, pinned to a release tag (the newest is 
 [Releases page](https://github.com/theJuddson/terraform-aws-devopsfoundry/releases)):
 
 ```hcl
-source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.15.0"
-source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.15.0"
+source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.16.0"
+source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.16.0"
 ```
 
 Each module's README lists its inputs and outputs, and the building blocks have a runnable example under
@@ -75,17 +75,19 @@ They read `.env` and `backend.tfvars` from the checkout's root (both gitignored)
 `DevOpsFoundry`: scaffolds made without `--module-ref` find the modules at the sibling path
 `../../DevOpsFoundry/modules/full-stack`.
 
-Two tracks. A **static site** — S3 + CloudFront, generated into `sites/<domain>/`.
-A **containerized app** — ECS Fargate behind an HTTPS ALB, configured from the app
-repo's own `.devopsfoundry/`. Each gets its own Terraform state key, so nothing
-shares state with anything else.
+Two tracks. A **static site** — S3 + CloudFront. A **containerized app** — ECS
+Fargate behind an HTTPS ALB. Both are configured from the consuming repo's own
+`.devopsfoundry/`, passed as `--config`, so the config is committed with the code
+it deploys. Each gets its own Terraform state key, so nothing shares state with
+anything else. (Sites can still live in this checkout's gitignored
+`sites/<domain>/` and be named by domain, as before v1.15.0.)
 
 | Command | Does |
 |---|---|
 | `bin/preflight` | Toolchain, AWS auth, Namecheap API, IP whitelist |
-| `bin/new-site <domain> --build-dir ./dist` | Zone + NS delegation + ACM + S3 + CloudFront |
-| `bin/deploy <domain>` | Build, sync to S3, invalidate CloudFront. Files with a content hash in their name are cached for a year, HTML never, everything else is revalidated on each request |
-| `bin/destroy-site <domain>` | Tear down; reverts nameservers to Namecheap default |
+| `bin/new-site <domain> --config <dir> --module-ref vX.Y.Z` | Zone + NS delegation + ACM + S3 + CloudFront |
+| `bin/deploy --config <dir>` | Build, sync to S3, invalidate CloudFront. Files with a content hash in their name are cached for a year, HTML never, everything else is revalidated on each request |
+| `bin/destroy-site --config <dir>` | Tear down; reverts nameservers to Namecheap default |
 | `bin/new-app <domain> --config <dir>` | Zone + NS + ACM + VPC + Fargate stack at `desired_count = 0`; shows each phase's plan and asks before applying it (`--yes` skips, `--plan-only` applies nothing) |
 | `bin/deploy-app --config <dir>` | Build image → ECR → apply → roll service → verify |
 | `bin/put-secret <name> --env ENV_NAME` | Store an app secret from a hidden prompt or stdin (never argv or history), tagged with its app, optionally under your own KMS key (`--kms-key`); prints the `app.tfvars` line |
@@ -125,10 +127,17 @@ exercise the Namecheap path against the free sandbox with no eligibility gate.
 
 ```bash
 bin/preflight                                   # check toolchain + AWS + Namecheap + IP whitelist
-bin/new-site example.com --build-dir ./dist     # scaffold + two-phase provision
-bin/deploy   example.com                        # build (optional) + sync + invalidate
-bin/destroy-site example.com                     # tear down; reverts NS to default
+bin/new-site example.com --config ../MySite/.devopsfoundry --module-ref v1.16.0 --build-dir dist
+                                                # scaffold + two-phase provision
+bin/deploy --config ../MySite/.devopsfoundry    # build (optional) + sync + invalidate
+bin/destroy-site --config ../MySite/.devopsfoundry   # tear down; reverts NS to default
 ```
+
+Commit the site repo's `.devopsfoundry/`; its `.gitignore` keeps `.terraform/` out.
+Paths in its `site.env` are relative to the directory holding `.devopsfoundry/`.
+Without `--config`, `new-site <domain>` scaffolds into this checkout's
+`sites/<domain>/` (gitignored, so nothing commits it) and the other scripts take
+the domain instead of `--config`.
 
 `bin/new-site` runs in **two phases** to avoid the cert-validation-vs-NS-
 propagation race on a fresh domain:
@@ -136,13 +145,13 @@ propagation race on a fresh domain:
 2. Poll `dig NS … @8.8.8.8` until delegation propagates, then validate the ACM
    cert, build CloudFront, and add the alias records.
 
-If propagation is slow and step 2 times out, resume with
-`bin/new-site example.com --resume --yes`.
+If propagation is slow and step 2 times out, resume with the same command plus
+`--resume --yes`.
 
-`bin/deploy` uploads `BUILD_DIR` from `sites/<domain>/site.env`. With a
+`bin/deploy` uploads `BUILD_DIR` from the site root's `site.env`. With a
 `BUILD_CMD` it builds first. Without one it uploads the directory as it is, so it
 first checks the build is at least as new as its source: `SRC_DIR` (default:
-`BUILD_DIR`'s parent, minus `BUILD_DIR`, `.git` and `node_modules`) plus any
+`BUILD_DIR`'s parent, minus `BUILD_DIR`, `.git`, `node_modules` and `.devopsfoundry`) plus any
 `BUILD_INPUTS`, the other files the build reads. If a source file changed after
 the newest file in `BUILD_DIR`, it stops before uploading and names the file;
 `--allow-stale` deploys anyway. For a hand-written site with no build, set
@@ -152,7 +161,22 @@ the newest file in `BUILD_DIR`, it stops before uploading and names the file;
 
 `bin/new-site example.com --email --dkim "<google-dkim-key>"` adds Google
 Workspace MX + DKIM records (or edit `enable_google_email` / `google_dkim_key`
-in the generated `sites/<domain>/terraform.tfvars`).
+in the site root's `terraform.tfvars`).
+
+#### Moving a site root out of `sites/`
+
+The state key doesn't depend on where the root lives, so a root moves without
+touching AWS:
+
+1. Copy `*.tf`, `terraform.tfvars` and `site.env` from `sites/<domain>/` into the
+   site repo's `.devopsfoundry/` (not `.terraform/` or the lock file), and add the
+   `.gitignore` from `templates/static/gitignore.tmpl`.
+2. Change each `source = "../../modules/<name>"` to
+   `"git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/<name>?ref=vX.Y.Z"`,
+   and make the `site.env` paths relative to the repo.
+3. `terraform -chdir=<dir> init -backend-config=<DevOpsFoundry>/backend.tfvars`, then
+   `plan`. It must report no changes; if it doesn't, pin the release the site was
+   applied with. Then commit, and delete `sites/<domain>/`.
 
 ### Apps (full-stack container services)
 
@@ -249,7 +273,7 @@ serving and `--enable-email` are refused in this mode, and `destroy-app` removes
 
 ```bash
 bin/new-app example.com --subdomain app --existing-zone example.com \
-  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.15.0
+  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.16.0
 ```
 
 #### App-owned state
@@ -437,9 +461,9 @@ plugins/        the agent plugin: deploying-with-devopsfoundry skill and approva
 main.tf         empty root module (the Terraform Registry requires one; use the submodules)
 examples/       one root per building-block module (validated in CI, never applied)
 tests/          offline compatibility and validation fixtures for bin/check-*
-templates/static/      site-root stamped into sites/<domain>/ by new-site
+templates/static/      site-root stamped into a repo's .devopsfoundry/ (or sites/<domain>/) by new-site
 templates/full-stack/  app-root stamped into a repo's .devopsfoundry/ by new-app
-sites/<domain>/        generated static Terraform root (own remote-state key) + site.env
+sites/<domain>/        legacy, gitignored static roots (new-site without --config)
 bin/            sites: preflight · new-site · deploy · destroy-site
                 apps:  new-app · deploy-app · destroy-app · email-status · rotate-secret · estimate-cost · release-nameservers
                 repo:  check-modules (fmt/validate/tflint/checkov) · check-compat (offline no-change proof) · check-readme-pins · check-plugin · soci-index

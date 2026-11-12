@@ -49,6 +49,8 @@ df_detect_ip() {
 # domain.com -> domain-com  (S3-bucket / resource-name safe slug)
 df_slug() { echo "$1" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-' | sed 's/--*/-/g; s/^-//; s/-$//'; }
 
+# Legacy site root inside this checkout. A site's own repo can hold its root in
+# .devopsfoundry/ instead, passed as --config (see df_resolve_site_config).
 df_site_dir()  { echo "$DF_ROOT/sites/$1"; }
 df_state_key() { echo "devopsfoundry/$1/terraform.tfstate"; }
 
@@ -65,7 +67,8 @@ df_tf() { local d="$1"; shift; terraform -chdir="$(df_site_dir "$d")" "$@"; }
 
 # ── Static-site build freshness (bin/deploy) ───────────
 # "<mtime> <path>" for every file under the given paths (files or directories),
-# skipping .git, node_modules and .DS_Store, and the directory <prune> (an
+# skipping .git, node_modules, .devopsfoundry (the deploy config, whose
+# .terraform/ changes on every init) and .DS_Store, and the directory <prune> (an
 # absolute path, or "" for none). Usage: df_file_mtimes <prune> <path>...
 df_file_mtimes() {
   local prune="$1"; shift
@@ -73,7 +76,7 @@ df_file_mtimes() {
   stat -c %Y / >/dev/null 2>&1 && st=(stat -c '%Y %n')   # GNU stat (Linux)
   local skip=()
   [[ -n "$prune" ]] && skip=(-path "$prune" -prune -o)
-  find "$@" ${skip[@]+"${skip[@]}"} \( -name .git -o -name node_modules \) -prune \
+  find "$@" ${skip[@]+"${skip[@]}"} \( -name .git -o -name node_modules -o -name .devopsfoundry \) -prune \
     -o -type f ! -name .DS_Store -exec "${st[@]}" {} +
 }
 
@@ -238,13 +241,31 @@ df_resolve_config() {
   echo "$c"
 }
 
-# The state backend an app root uses: its own backend.tfvars (e.g. a venture's
+# Resolve a site's --config dir to an abspath and assert it's a static-site root.
+# Usage: df_resolve_site_config <dir>
+df_resolve_site_config() {
+  local c="$1"
+  [[ -n "$c" ]] || die "No --config <dir> given (the site's .devopsfoundry directory)"
+  [[ -d "$c" ]] || die "Config dir not found: $c"
+  c="$(cd "$c" && pwd)"
+  [[ -f "$c/main.tf" && -f "$c/site.env" ]] || die "Not a DevOpsFoundry site root (needs main.tf and site.env): $c"
+  [[ -f "$c/terraform.tfvars" ]] || die "Missing $c/terraform.tfvars"
+  echo "$c"
+}
+
+# A site.env path made absolute against <base> (the repo holding .devopsfoundry/).
+# Absolute paths and "" pass through. Usage: df_path_from <base> <path>
+df_path_from() {
+  case "$2" in ""|/*) echo "$2" ;; *) echo "$1/${2#./}" ;; esac
+}
+
+# The state backend an app or site root uses: its own backend.tfvars (e.g. a venture's
 # own bucket), else the shared one. Usage: df_app_backend_file <config_dir>
 df_app_backend_file() {
   if [[ -f "$1/backend.tfvars" ]]; then echo "$1/backend.tfvars"; else echo "$DF_ROOT/backend.tfvars"; fi
 }
 
-# Initialize an app root this checkout hasn't initialized yet. .terraform/ is
+# Initialize an app or site root this checkout hasn't initialized yet. .terraform/ is
 # gitignored, so a fresh clone or a repo moved to a new path has the app's
 # .devopsfoundry/ but no backend or modules, and every plan fails (#45).
 # Usage: df_ensure_app_init <config_dir>
