@@ -94,6 +94,45 @@ data "aws_iam_policy_document" "ecs_tasks_assume" {
   }
 }
 
+# The task role (the app's own AWS identity) only trusts ECS acting for this
+# account: AWS's confused-deputy guidance for ecs-tasks.amazonaws.com (#65).
+# AWS documents no such conditions for the execution role, so it keeps the
+# plain trust above. Account, region and partition come from the cluster's ARN,
+# so nothing is looked up at plan time. Off with trust_policy_source_conditions.
+locals {
+  # try(): an empty existing_cluster_arn is refused by the service's own
+  # precondition, which should be the error people see.
+  cluster_partition = try(split(":", local.cluster_arn)[1], "aws")
+  cluster_region    = try(split(":", local.cluster_arn)[3], "")
+  cluster_account   = try(split(":", local.cluster_arn)[4], "")
+}
+
+data "aws_iam_policy_document" "task_assume" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
+    dynamic "condition" {
+      for_each = var.trust_policy_source_conditions ? [1] : []
+      content {
+        test     = "StringEquals"
+        variable = "aws:SourceAccount"
+        values   = [local.cluster_account]
+      }
+    }
+    dynamic "condition" {
+      for_each = var.trust_policy_source_conditions ? [1] : []
+      content {
+        test     = "ArnLike"
+        variable = "aws:SourceArn"
+        values   = ["arn:${local.cluster_partition}:ecs:${local.cluster_region}:${local.cluster_account}:*"]
+      }
+    }
+  }
+}
+
 resource "aws_iam_role" "task_execution" {
   name               = "${local.name_prefix}-${var.service_name}-exec"
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume.json
@@ -135,7 +174,7 @@ resource "aws_iam_role_policy" "task_execution_secrets" {
 
 resource "aws_iam_role" "task" {
   name               = "${local.name_prefix}-${var.service_name}-task"
-  assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume.json
+  assume_role_policy = data.aws_iam_policy_document.task_assume.json
 }
 
 # ── ALB ───────────────────────────────────────────────

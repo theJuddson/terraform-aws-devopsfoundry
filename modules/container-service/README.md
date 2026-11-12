@@ -64,6 +64,7 @@ A containerized service on ECS Fargate behind an HTTPS ALB, framework-neutral: y
 | [aws_elb_service_account.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/elb_service_account) | data source |
 | [aws_iam_policy_document.alb_logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.ecs_tasks_assume](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
+| [aws_iam_policy_document.task_assume](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.task_execution_secrets](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_region.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/region) | data source |
 
@@ -119,6 +120,7 @@ A containerized service on ECS Fargate behind an HTTPS ALB, framework-neutral: y
 | service\_name | Container/service short name (used in ECR repo, log group, container name) | `string` | `"app"` | no |
 | subdomain | Subdomain that fronts the service (api -> api.example.com). Empty or "@" serves at the apex (example.com). | `string` | `"api"` | no |
 | tasks\_in\_public\_subnets | Run ECS tasks in the public subnets with public IPs, so the VPC needs no NAT<br/>gateway. Pair with networking's `enable_nat_gateway = false`.<br/><br/>Safe because the task security group admits inbound traffic only from the<br/>ALB. Do not enable if anything downstream allowlists this app's outbound IP —<br/>egress moves from the NAT's stable Elastic IP to per-task ephemeral IPs. | `bool` | `false` | no |
+| trust\_policy\_source\_conditions | Limit the task role's trust to ECS acting for to this account (aws:SourceAccount and aws:SourceArn), AWS's confused-deputy protection. On by default; set false to restore the unconditioned trust policy if a role can't be assumed. | `bool` | `true` | no |
 | waf\_count\_only | Run every WAF rule in count mode: matches are counted in CloudWatch metrics<br/>and sampled requests, nothing is blocked. Start here on a live ALB, check the<br/>counts, then set false to enforce. | `bool` | `false` | no |
 | waf\_log\_all\_requests | Keep every request in the WAF log, allowed ones too, not only blocked and counted. Much more volume. | `bool` | `false` | no |
 | waf\_log\_retention\_days | Days to keep WAF request logs. | `number` | `30` | no |

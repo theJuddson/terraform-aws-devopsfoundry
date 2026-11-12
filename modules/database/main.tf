@@ -111,6 +111,25 @@ data "aws_iam_policy_document" "monitoring_assume" {
       type        = "Service"
       identifiers = ["monitoring.rds.amazonaws.com"]
     }
+    # AWS's confused-deputy guidance for Enhanced Monitoring (#65): only for this
+    # instance. Account, region and partition come from the subnet group's ARN,
+    # which exists before the instance (the instance needs this role first).
+    dynamic "condition" {
+      for_each = var.trust_policy_source_conditions ? [1] : []
+      content {
+        test     = "StringEquals"
+        variable = "aws:SourceAccount"
+        values   = [split(":", aws_db_subnet_group.main.arn)[4]]
+      }
+    }
+    dynamic "condition" {
+      for_each = var.trust_policy_source_conditions ? [1] : []
+      content {
+        test     = "StringLike"
+        variable = "aws:SourceArn"
+        values   = ["arn:${split(":", aws_db_subnet_group.main.arn)[1]}:rds:${split(":", aws_db_subnet_group.main.arn)[3]}:${split(":", aws_db_subnet_group.main.arn)[4]}:db:${local.name_prefix}-postgres"]
+      }
+    }
   }
 }
 

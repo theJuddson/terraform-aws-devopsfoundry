@@ -18,10 +18,12 @@ mkdir -p "$TF_PLUGIN_CACHE_DIR"
 
 git -C "$ROOT" worktree add -q --detach "$WORK/old" "$OLD"
 
-plan() { # $1 label, $2 modules dir
+plan() { # $1 label, $2 modules dir, [$3 extra module argument line]
   local dir="$WORK/$1"
   mkdir -p "$dir"
   cp tests/compat/main.tf "$dir/"
+  # An argument only the working tree's module knows, added to module "svc".
+  [[ -z "${3:-}" ]] || awk -v line="  $3" '{ print } /^module "svc" \{/ { print line }' tests/compat/main.tf > "$dir/main.tf"
   cp tests/compat/ecr-state-made-by-v1.1.0.json "$dir/terraform.tfstate"
   ln -s "$2" "$dir/mod"
   (cd "$dir" && retry terraform init -input=false -no-color >/dev/null \
@@ -30,11 +32,28 @@ plan() { # $1 label, $2 modules dir
 }
 
 plan old "$WORK/old/modules"
-plan new "$ROOT/modules"
+# v1.17.0's confused-deputy conditions on the task role's trust policy (#65) are
+# the one deliberate change an upgrade plans. With them switched off the plan
+# must be identical; with the default, they must be the only difference.
+plan new "$ROOT/modules" "trust_policy_source_conditions = false"
+plan default "$ROOT/modules"
 
 if diff -u "$WORK/old.norm" "$WORK/new.norm"; then
-  echo "OK: $OLD -> working tree plans identically for container-service"
+  echo "OK: $OLD -> working tree plans identically for container-service (trust_policy_source_conditions = false)"
 else
   echo "FAIL: plans differ"; exit 1
 fi
 grep -q '"no-op"' "$WORK/new.norm" || { echo "FAIL: ECR resources not carried over"; exit 1; }
+
+python3 -I - "$WORK/old.norm" "$WORK/default.norm" <<'PY' || exit 1
+import json, sys
+old, new = (json.load(open(f)) for f in sys.argv[1:3])
+allowed = {"module.svc.aws_iam_role.task", "module.svc.data.aws_iam_policy_document.task_assume"}
+changed = sorted(a for a in set(old) | set(new) if old.get(a) != new.get(a))
+extra = [a for a in changed if a not in allowed]
+if extra:
+    print("FAIL: with the default settings the upgrade also changes:", ", ".join(extra)); sys.exit(1)
+if "module.svc.aws_iam_role.task" not in changed:
+    print("FAIL: the task role's trust policy was expected to change (#65)"); sys.exit(1)
+print("OK: with the defaults, the only change is the task role's trust policy (#65)")
+PY

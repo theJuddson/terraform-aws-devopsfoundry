@@ -155,3 +155,9 @@ variable "alarm_cpu_credit_balance" {
     error_message = "alarm_cpu_credit_balance can't be negative."
   }
 }
+
+variable "trust_policy_source_conditions" {
+  description = "Limit the Enhanced Monitoring role's trust to this instance in to this account (aws:SourceAccount and aws:SourceArn), AWS's confused-deputy protection. On by default; set false to restore the unconditioned trust policy if a role can't be assumed."
+  type        = bool
+  default     = true
+}

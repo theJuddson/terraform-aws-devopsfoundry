@@ -62,6 +62,7 @@ No modules.
 | multi\_az | n/a | `bool` | `false` | no |
 | performance\_insights\_enabled | Turn on Performance Insights, kept for the free 7 days. | `bool` | `false` | no |
 | skip\_final\_snapshot | Skip the final snapshot on destroy (true = easy teardown) | `bool` | `true` | no |
+| trust\_policy\_source\_conditions | Limit the Enhanced Monitoring role's trust to this instance in to this account (aws:SourceAccount and aws:SourceArn), AWS's confused-deputy protection. On by default; set false to restore the unconditioned trust policy if a role can't be assumed. | `bool` | `true` | no |
 
 ## Outputs
 

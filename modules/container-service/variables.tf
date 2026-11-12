@@ -397,3 +397,9 @@ variable "waf_log_retention_days" {
     error_message = "waf_log_retention_days must be a retention period CloudWatch Logs accepts (1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, ...)."
   }
 }
+
+variable "trust_policy_source_conditions" {
+  description = "Limit the task role's trust to ECS acting for to this account (aws:SourceAccount and aws:SourceArn), AWS's confused-deputy protection. On by default; set false to restore the unconditioned trust policy if a role can't be assumed."
+  type        = bool
+  default     = true
+}

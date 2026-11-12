@@ -96,3 +96,9 @@ variable "flow_log_kms_key_arn" {
     error_message = "flow_log_kms_key_arn must be a KMS key ARN (arn:aws:kms:<region>:<account>:key/<id>), not an alias."
   }
 }
+
+variable "trust_policy_source_conditions" {
+  description = "Limit the flow logs role's trust to flow logs in to this account (aws:SourceAccount and aws:SourceArn), AWS's confused-deputy protection. On by default; set false to restore the unconditioned trust policy if a role can't be assumed."
+  type        = bool
+  default     = true
+}

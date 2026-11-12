@@ -75,11 +75,13 @@ walk an agent through it. What they leave out, or what has caught people:
   flag in 2.35.9. Older versions fail with `Found invalid choice 'agent-toolkit'`. Check `aws --version`, then
   upgrade (`brew upgrade awscli`, or AWS's installer) before running the wizard. Retrying without `--yes` doesn't
   fix it on a version older than 2.35.0.
-- **Two steps need the person.** They run in their own terminal app, because an agent's shell (and Claude Code's
-  `!` prefix) can't open a browser or answer a prompt:
-  - a sign-in: `aws login --region <region> --profile <profile>` for an IAM user, or `aws configure sso` then
-    `aws sso login --profile <profile>` for IAM Identity Center. Both work with the AWS MCP server;
-  - `aws configure agent-toolkit --yes --region us-east-1 --profile <profile>`, an interactive wizard.
+- **The person signs in; anything that asks questions runs in their own terminal app.** An agent's shell, and
+  Claude Code's `!` prefix, can open a browser but can't answer a prompt:
+  - a sign-in: `aws login --region <region> --profile <profile>` for an IAM user, or `aws sso login --profile
+    <profile>` for IAM Identity Center. Both work with the AWS MCP server, and both work with `!` unless they ask a
+    question (`aws login` does when it offers to repoint the profile);
+  - one-time setup that asks questions, so it needs a real terminal: `aws configure sso`, and
+    `aws configure agent-toolkit --yes --region us-east-1 --profile <profile>`.
 - **`aws login` signs in as whoever the browser is signed in as.** If the browser holds a session for another
   account (an IAM Identity Center portal, say), it offers to repoint the profile at that account; answer `n` and
   sign the browser in to the right account first.
@@ -89,8 +91,9 @@ walk an agent through it. What they leave out, or what has caught people:
   `"env": { "AWS_MCP_PROXY_PROFILES": "<profile>" }` to each `aws-mcp` entry the wizard wrote; without it the server
   looks for `default` and fails to start with `JSON-RPC error: -32602`. Leave every other field and server as it is.
   More accounts: add their profiles to that space-separated list. Then restart the AI tool.
-- **An expired sign-in gives the same `-32602`.** `aws sts get-caller-identity --profile <profile>` says "Your session
-  has expired"; the person signs in again in their terminal, then reconnects the server (`/mcp` in Claude Code).
+- **An expired sign-in gives the same `-32602`,** or, mid-session, every AWS MCP tool answering "Unknown tool".
+  `aws sts get-caller-identity --profile <profile>` says the session or token has expired; the person signs in
+  again, then reconnects the server (`/mcp` in Claude Code). Identity Center tokens have lasted about two hours here.
   AWS says `aws login` sessions last 12 hours and renew for up to 90 days; in practice one still expired and needed
   the browser again, so don't promise it won't.
 - **Check the install** with `aws agent-toolkit list-available-skills --region us-east-1 --profile <profile>`.
@@ -103,7 +106,9 @@ walk an agent through it. What they leave out, or what has caught people:
 - **Upgrades must plan no change.** Existing app roots can't be forced to change: add an input with a default
   that keeps today's behavior, rename with a `moved` block, and never add a `keepers` or a `ForceNew` attribute to
   something that exists. `bin/check-compat` proves this for container-service. For other modules, plan an
-  old-release state with the old and the new modules and compare.
+  old-release state with the old and the new modules and compare. A deliberate exception (a security fix that must
+  reach everyone) gets an input that restores the old behavior, a CHANGELOG entry that names it, and a
+  `check-compat` assertion that it's the only change, as v1.17.0's trust policies did.
 - **Test what you change.** A new behavior gets a test that fails without it. Module tests use `mock_provider`,
   with `override_during = plan` where the plan needs known values. CLI tests use `tests/cli/lib.sh`'s `stub`,
   `assert_called` and `assert_before`.
