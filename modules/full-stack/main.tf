@@ -206,6 +206,11 @@ module "database" {
   monitoring_interval                 = var.db_monitoring_interval
   iam_database_authentication_enabled = var.db_iam_database_authentication_enabled
   log_min_duration_ms                 = var.db_log_min_duration_ms
+
+  # The database alarms go to the service's alarm topic (when alarm_emails made
+  # one) and any topics given.
+  alarms_enabled       = length(var.alarm_emails) > 0 || length(var.alarm_sns_topic_arns) > 0
+  alarm_sns_topic_arns = compact(concat([module.container_service.alarm_topic_arn], var.alarm_sns_topic_arns))
 }
 
 module "cache" {
@@ -295,8 +300,11 @@ module "container_service" {
   cpu_architecture           = var.cpu_architecture
   container_insights         = var.container_insights
   deployment_circuit_breaker = var.deployment_circuit_breaker
-  alb_deletion_protection    = var.alb_deletion_protection
-  log_kms_key_arn            = var.kms_key_arn
+
+  alarm_emails            = var.alarm_emails
+  alarm_sns_topic_arns    = var.alarm_sns_topic_arns
+  alb_deletion_protection = var.alb_deletion_protection
+  log_kms_key_arn         = var.kms_key_arn
 
   alb_access_logs                = var.alb_access_logs
   alb_access_logs_bucket         = var.alb_access_logs_bucket

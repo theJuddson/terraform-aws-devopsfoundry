@@ -54,7 +54,8 @@ said yes in this conversation. Reading is always fine: `bin/preflight`, `bin/ema
    - the port, a health path that returns 200, and a Dockerfile, proposing one if there isn't;
    - Postgres (`--enable-db`), Redis (`--enable-cache`), email (`--enable-email`);
    - every environment variable, and which are secrets;
-   - a `VERIFY_SCRIPT` that proves real behavior.
+   - a `VERIFY_SCRIPT` that proves real behavior;
+   - who should get alarms (`alarm_emails`), for an app people rely on.
 
    Propose `app.tfvars` and `app.env` values, the cost (see [references/costs-and-modes.md](references/costs-and-modes.md)),
    and the exact command, then wait for approval.

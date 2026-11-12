@@ -110,3 +110,48 @@ variable "log_min_duration_ms" {
     error_message = "log_min_duration_ms must be null (off) or a whole number of milliseconds, 0 or more."
   }
 }
+
+variable "alarm_sns_topic_arns" {
+  description = "SNS topics for the baseline alarms (free storage, CPU, and CPU credits on db.t* classes). Empty = no alarms."
+  type        = list(string)
+  default     = []
+}
+
+variable "alarms_enabled" {
+  description = "Turn the baseline alarms on or off explicitly. null (default) = on when alarm_sns_topic_arns is set. Set it when the topic ARNs are only known after apply (a topic created in the same configuration)."
+  type        = bool
+  default     = null
+}
+
+variable "alarm_free_storage_percent" {
+  description = "Alarm when free storage falls below this percentage of allocated_storage."
+  type        = number
+  default     = 10
+
+  validation {
+    condition     = var.alarm_free_storage_percent > 0 && var.alarm_free_storage_percent < 100
+    error_message = "alarm_free_storage_percent must be between 0 and 100."
+  }
+}
+
+variable "alarm_cpu_percent" {
+  description = "Alarm when average CPU stays over this percentage for 15 minutes."
+  type        = number
+  default     = 80
+
+  validation {
+    condition     = var.alarm_cpu_percent > 0 && var.alarm_cpu_percent <= 100
+    error_message = "alarm_cpu_percent must be above 0 and at most 100."
+  }
+}
+
+variable "alarm_cpu_credit_balance" {
+  description = "On db.t* classes, alarm when the CPU credit balance falls below this."
+  type        = number
+  default     = 20
+
+  validation {
+    condition     = var.alarm_cpu_credit_balance >= 0
+    error_message = "alarm_cpu_credit_balance can't be negative."
+  }
+}

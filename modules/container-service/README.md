@@ -27,6 +27,10 @@ A containerized service on ECS Fargate behind an HTTPS ALB, framework-neutral: y
 | Name | Type |
 | ---- | ---- |
 | [aws_cloudwatch_log_group.app](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_log_group) | resource |
+| [aws_cloudwatch_metric_alarm.error_rate](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm) | resource |
+| [aws_cloudwatch_metric_alarm.latency_p99](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm) | resource |
+| [aws_cloudwatch_metric_alarm.no_healthy_targets](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm) | resource |
+| [aws_cloudwatch_metric_alarm.unhealthy_targets](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm) | resource |
 | [aws_ecs_cluster.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ecs_cluster) | resource |
 | [aws_ecs_cluster_capacity_providers.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ecs_cluster_capacity_providers) | resource |
 | [aws_ecs_service.app](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ecs_service) | resource |
@@ -50,6 +54,8 @@ A containerized service on ECS Fargate behind an HTTPS ALB, framework-neutral: y
 | [aws_s3_bucket_policy.alb_logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_policy) | resource |
 | [aws_s3_bucket_public_access_block.alb_logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_public_access_block) | resource |
 | [aws_s3_bucket_server_side_encryption_configuration.alb_logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_server_side_encryption_configuration) | resource |
+| [aws_sns_topic.alarms](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/sns_topic) | resource |
+| [aws_sns_topic_subscription.alarm_email](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/sns_topic_subscription) | resource |
 | [aws_wafv2_web_acl.alb](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/wafv2_web_acl) | resource |
 | [aws_wafv2_web_acl_association.alb](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/wafv2_web_acl_association) | resource |
 | [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
@@ -72,6 +78,12 @@ A containerized service on ECS Fargate behind an HTTPS ALB, framework-neutral: y
 | public\_subnet\_ids | n/a | `list(string)` | n/a | yes |
 | vpc\_id | ── Networking wiring ────────────────────────────────── | `string` | n/a | yes |
 | zone\_id | Route53 hosted zone ID for the domain | `string` | n/a | yes |
+| alarm\_5xx\_percent | Alarm when more than this percentage of the app's responses are 5xx (in 2 of 3 minutes). | `number` | `5` | no |
+| alarm\_emails | Email addresses for the baseline alarms (5xx rate, p99 latency, unhealthy and no healthy targets). Creates an SNS topic; each address must confirm AWS's subscription email. Empty, with alarm\_sns\_topic\_arns empty, means no alarms. | `list(string)` | `[]` | no |
+| alarm\_min\_requests | Minutes with fewer requests than this count as a 0% error rate, so a single failure in a quiet minute doesn't alarm. | `number` | `20` | no |
+| alarm\_p99\_seconds | Alarm when the app's p99 response time is over this many seconds (in 2 of 3 minutes). Tune to about twice your normal p99. | `number` | `2` | no |
+| alarm\_sns\_topic\_arns | Existing SNS topics the baseline alarms also notify (a team's topic, a chat integration). Setting this alone turns the alarms on without creating a topic. | `list(string)` | `[]` | no |
+| alarm\_topic\_kms\_key\_arn | Customer managed KMS key for the alarm topic. Its key policy must let cloudwatch.amazonaws.com use it (kms:Decrypt, kms:GenerateDataKey*); the AWS-managed SNS key doesn't work with CloudWatch alarms. null = unencrypted. | `string` | `null` | no |
 | alb\_access\_logs | Write ALB access logs to S3. Creates a private, SSE-S3 encrypted bucket <name>-alb-logs-<account> unless alb\_access\_logs\_bucket names one. Ignored when create\_alb = false. | `bool` | `false` | no |
 | alb\_access\_logs\_bucket | Existing bucket for the ALB access logs, which must already allow ELB log delivery (see AWS's ALB access logs guide). Empty (default) = create one. | `string` | `""` | no |
 | alb\_access\_logs\_retention\_days | Days to keep access logs in the bucket this module creates. | `number` | `90` | no |
@@ -115,6 +127,8 @@ A containerized service on ECS Fargate behind an HTTPS ALB, framework-neutral: y
 
 | Name | Description |
 | ---- | ----------- |
+| alarm\_names | Names of the baseline alarms (empty when they're off) |
+| alarm\_topic\_arn | The SNS topic the baseline alarms notify, when alarm\_emails created one (null otherwise) |
 | alb\_arn | ARN of the ALB this stack created, or empty when it uses a shared one |
 | alb\_dns\_name | The ALB serving this app — dedicated or shared |
 | cpu\_architecture | CPU architecture the tasks run on (X86\_64 or ARM64); build images for it |

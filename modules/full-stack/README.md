@@ -51,6 +51,8 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | ---- | ----------- | ---- | ------- | :------: |
 | domain\_name | Apex domain registered at Namecheap | `string` | n/a | yes |
 | name | Resource-name prefix / app slug (e.g. myapp-com) | `string` | n/a | yes |
+| alarm\_emails | Email addresses for the baseline alarms: the service's 5xx rate, p99 latency and unhealthy targets, and the database's free storage and CPU. Each address confirms AWS's subscription email. Empty, with alarm\_sns\_topic\_arns empty, means no alarms. | `list(string)` | `[]` | no |
+| alarm\_sns\_topic\_arns | Existing SNS topics the baseline alarms also notify. Setting this alone turns the alarms on. | `list(string)` | `[]` | no |
 | alb\_access\_logs | Write ALB access logs to S3 (a private bucket <name>-alb-logs-<account>, unless alb\_access\_logs\_bucket names one). Ignored in shared-platform mode. | `bool` | `false` | no |
 | alb\_access\_logs\_bucket | Existing bucket for the access logs; it must already allow ELB log delivery. Empty = create one. | `string` | `""` | no |
 | alb\_access\_logs\_retention\_days | n/a | `number` | `90` | no |

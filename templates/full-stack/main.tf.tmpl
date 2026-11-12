@@ -108,6 +108,8 @@ module "app" {
   enable_flow_logs                       = var.enable_flow_logs
   container_insights                     = var.container_insights
   deployment_circuit_breaker             = var.deployment_circuit_breaker # needs the module at v1.11.0 or later
+  alarm_emails                           = var.alarm_emails           # needs the module at v1.13.0 or later
+  alarm_sns_topic_arns                   = var.alarm_sns_topic_arns
   alb_deletion_protection                = var.alb_deletion_protection
   db_performance_insights_enabled        = var.db_performance_insights_enabled
   db_monitoring_interval                 = var.db_monitoring_interval

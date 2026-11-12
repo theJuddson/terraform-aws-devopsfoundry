@@ -24,6 +24,9 @@ No modules.
 
 | Name | Type |
 | ---- | ---- |
+| [aws_cloudwatch_metric_alarm.cpu](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm) | resource |
+| [aws_cloudwatch_metric_alarm.cpu_credits](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm) | resource |
+| [aws_cloudwatch_metric_alarm.free_storage](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm) | resource |
 | [aws_db_instance.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/db_instance) | resource |
 | [aws_db_parameter_group.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/db_parameter_group) | resource |
 | [aws_db_subnet_group.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/db_subnet_group) | resource |
@@ -39,6 +42,11 @@ No modules.
 | name | Resource-name prefix (app slug) | `string` | n/a | yes |
 | private\_subnet\_ids | n/a | `list(string)` | n/a | yes |
 | rds\_security\_group\_id | n/a | `string` | n/a | yes |
+| alarm\_cpu\_credit\_balance | On db.t* classes, alarm when the CPU credit balance falls below this. | `number` | `20` | no |
+| alarm\_cpu\_percent | Alarm when average CPU stays over this percentage for 15 minutes. | `number` | `80` | no |
+| alarm\_free\_storage\_percent | Alarm when free storage falls below this percentage of allocated\_storage. | `number` | `10` | no |
+| alarm\_sns\_topic\_arns | SNS topics for the baseline alarms (free storage, CPU, and CPU credits on db.t* classes). Empty = no alarms. | `list(string)` | `[]` | no |
+| alarms\_enabled | Turn the baseline alarms on or off explicitly. null (default) = on when alarm\_sns\_topic\_arns is set. Set it when the topic ARNs are only known after apply (a topic created in the same configuration). | `bool` | `null` | no |
 | allocated\_storage | n/a | `number` | `20` | no |
 | backup\_retention\_days | n/a | `number` | `1` | no |
 | db\_name | Initial database name (Postgres identifier: letters/digits/underscore) | `string` | `"appdb"` | no |
@@ -60,6 +68,7 @@ No modules.
 | Name | Description |
 | ---- | ----------- |
 | address | RDS hostname |
+| alarm\_names | Names of the baseline alarms (empty when they're off) |
 | db\_name | n/a |
 | master\_user\_secret\_arn | ARN of the RDS-managed master password secret (JSON: username/password) |
 | port | n/a |
