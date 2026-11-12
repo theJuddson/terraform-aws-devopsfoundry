@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 # deploy — build (optional) + sync a site's static files to S3 + invalidate
-#          CloudFront. Reads sites/<domain>/site.env for BUILD_DIR/BUILD_CMD.
+#          CloudFront. Reads site.env from the site root for BUILD_DIR/BUILD_CMD.
 #
-# Usage: bin/deploy <domain> [--yes] [--allow-stale]
+# Usage: bin/deploy --config <dir> [--yes] [--allow-stale]
+#        bin/deploy <domain>       [--yes] [--allow-stale]   (root in sites/<domain>)
+#
+# --config is the site repo's .devopsfoundry directory. Relative paths in its
+# site.env are relative to the directory holding .devopsfoundry/; with the
+# <domain> form they are relative to where deploy runs.
 #
 # Without a BUILD_CMD, BUILD_DIR is uploaded as it is, so deploy first checks it
 # is at least as new as its source (SRC_DIR, else BUILD_DIR's parent, plus any
@@ -13,22 +18,41 @@ DF_SCRIPT_NAME="deploy"
 source "$(cd "$(dirname "$0")/.." && pwd)/lib/common.sh"
 df_load_env
 
-DOMAIN=""; YES=false; ALLOW_STALE=false
+DOMAIN=""; CONFIG=""; YES=false; ALLOW_STALE=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --config)      CONFIG="$2"; shift 2 ;;
     --yes|-y)      YES=true; shift ;;
     --allow-stale) ALLOW_STALE=true; shift ;;
     -*)            die "Unknown flag: $1" ;;
     *)             DOMAIN="$1"; shift ;;
   esac
 done
-df_validate_domain "$DOMAIN"
 
-SITE_DIR="$(df_site_dir "$DOMAIN")"
-[[ -d "$SITE_DIR" ]] || die "No site dir for $DOMAIN — run: bin/new-site $DOMAIN"
+if [[ -n "$CONFIG" ]]; then
+  [[ -z "$DOMAIN" ]] || die "Pass --config or a domain, not both"
+  SITE_DIR="$(df_resolve_site_config "$CONFIG")"
+  DOMAIN="$(df_tfvar "$SITE_DIR/terraform.tfvars" domain_name)"
+  df_validate_domain "$DOMAIN"
+  df_ensure_app_init "$SITE_DIR"
+else
+  df_validate_domain "$DOMAIN"
+  SITE_DIR="$(df_site_dir "$DOMAIN")"
+  [[ -d "$SITE_DIR" ]] || die "No site dir for $DOMAIN — run: bin/new-site $DOMAIN"
+fi
 [[ -f "$SITE_DIR/site.env" ]] || die "Missing $SITE_DIR/site.env"
+BUILD_DIR=""; BUILD_CMD=""; SRC_DIR=""; BUILD_INPUTS=""
 # shellcheck disable=SC1091
 source "$SITE_DIR/site.env"
+if [[ -n "$CONFIG" ]]; then
+  BASE="$(dirname "$SITE_DIR")"
+  BUILD_DIR="$(df_path_from "$BASE" "$BUILD_DIR")"
+  SRC_DIR="$(df_path_from "$BASE" "$SRC_DIR")"
+  resolved=""
+  # shellcheck disable=SC2086  # BUILD_INPUTS is a space-separated list
+  for i in ${BUILD_INPUTS:-}; do resolved="${resolved:+$resolved }$(df_path_from "$BASE" "$i")"; done
+  BUILD_INPUTS="$resolved"
+fi
 
 echo ""
 echo "DevOpsFoundry — Deploy $DOMAIN"
@@ -36,9 +60,9 @@ echo "────────────────────────�
 
 # ── Read infra coordinates from this site's terraform state ──
 step "Reading Terraform outputs"
-BUCKET=$(df_tf "$DOMAIN" output -raw bucket 2>/dev/null)   || die "Could not read 'bucket' output — is the site provisioned?"
-DIST=$(df_tf "$DOMAIN" output -raw cloudfront_id 2>/dev/null) || die "Could not read 'cloudfront_id' output"
-URL=$(df_tf "$DOMAIN" output -raw url 2>/dev/null)         || die "Could not read 'url' output"
+BUCKET=$(df_tf_at "$SITE_DIR" output -raw bucket 2>/dev/null)   || die "Could not read 'bucket' output — is the site provisioned?"
+DIST=$(df_tf_at "$SITE_DIR" output -raw cloudfront_id 2>/dev/null) || die "Could not read 'cloudfront_id' output"
+URL=$(df_tf_at "$SITE_DIR" output -raw url 2>/dev/null)         || die "Could not read 'url' output"
 pass "Bucket: $BUCKET"
 pass "Distribution: $DIST"
 

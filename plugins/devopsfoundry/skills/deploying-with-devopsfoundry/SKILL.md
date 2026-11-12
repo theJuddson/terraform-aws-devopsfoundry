@@ -77,7 +77,9 @@ said yes in this conversation. Reading is always fine: `bin/preflight`, `bin/ema
 7. **Verify**: `https://<host><health_check_path>` answers 200 with a valid certificate, `VERIFY_SCRIPT` passed, and
    the ECS service shows running == desired.
 
-For a static site the steps are `bin/new-site <domain> --build-dir <dir>`, then `bin/deploy <domain>`.
+For a static site the steps are `bin/new-site <domain> --config <site repo>/.devopsfoundry --module-ref vX.Y.Z
+--build-dir <dir>`, then `bin/deploy --config <site repo>/.devopsfoundry`. The `--build-dir` and the paths in
+`site.env` are relative to the site repo (the directory holding `.devopsfoundry/`). Commit `.devopsfoundry/`.
 
 ## Operating an app
 

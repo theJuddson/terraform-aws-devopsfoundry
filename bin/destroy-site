@@ -6,25 +6,39 @@
 # nameservers. Use --keep-ns to leave the delegation in place (drops it from
 # state before destroy) so the domain keeps pointing at a now-empty zone.
 #
-# Usage: bin/destroy-site <domain> [--keep-ns] [--purge] [--yes]
+# Usage: bin/destroy-site --config <dir> [--keep-ns] [--purge] [--yes]
+#        bin/destroy-site <domain>       [--keep-ns] [--purge] [--yes]   (root in sites/<domain>)
+#
+# --purge removes the site root. With --config that is the repo's
+# .devopsfoundry/ directory, so it is only removed after the typed confirmation.
 set -euo pipefail
 DF_SCRIPT_NAME="destroy-site"
 source "$(cd "$(dirname "$0")/.." && pwd)/lib/common.sh"
 df_load_env
 
-DOMAIN=""; KEEP_NS=false; PURGE=false; YES=false
+DOMAIN=""; CONFIG=""; KEEP_NS=false; PURGE=false; YES=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --config)  CONFIG="$2"; shift 2 ;;
     --keep-ns) KEEP_NS=true; shift ;;
     --purge)   PURGE=true; shift ;;
     --yes|-y)  YES=true; shift ;;
+    -*)        die "Unknown flag: $1" ;;
     *) DOMAIN="$1"; shift ;;
   esac
 done
-df_validate_domain "$DOMAIN"
-
-SITE_DIR="$(df_site_dir "$DOMAIN")"
-[[ -d "$SITE_DIR" ]] || die "No site dir for $DOMAIN"
+if [[ -n "$CONFIG" ]]; then
+  [[ -z "$DOMAIN" ]] || die "Pass --config or a domain, not both"
+  SITE_DIR="$(df_resolve_site_config "$CONFIG")"
+  DOMAIN="$(df_tfvar "$SITE_DIR/terraform.tfvars" domain_name)"
+  df_validate_domain "$DOMAIN"
+  df_ensure_app_init "$SITE_DIR"
+  $PURGE && $YES && die "--purge with --config deletes $SITE_DIR from its repo; run it without --yes and confirm"
+else
+  df_validate_domain "$DOMAIN"
+  SITE_DIR="$(df_site_dir "$DOMAIN")"
+  [[ -d "$SITE_DIR" ]] || die "No site dir for $DOMAIN"
+fi
 
 # Namecheap provider needs a client IP even for destroy.
 if [[ -z "${NAMECHEAP_CLIENT_IP:-}" ]]; then
@@ -42,11 +56,11 @@ fi
 
 if $KEEP_NS; then
   step "Dropping namecheap_ns from state (delegation will persist)"
-  df_tf "$DOMAIN" state rm module.namecheap_ns 2>/dev/null || warn "namecheap_ns not in state"
+  df_tf_at "$SITE_DIR" state rm module.namecheap_ns 2>/dev/null || warn "namecheap_ns not in state"
 fi
 
 step "terraform destroy"
-df_tf "$DOMAIN" destroy -input=false -auto-approve
+df_tf_at "$SITE_DIR" destroy -input=false -auto-approve
 log "INFO" "Destroyed $DOMAIN (keep_ns=$KEEP_NS)"
 pass "AWS resources destroyed"
 

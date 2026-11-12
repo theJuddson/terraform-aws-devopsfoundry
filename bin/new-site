@@ -4,18 +4,29 @@
 #            phases to dodge the cert-validation-vs-NS-propagation race.
 #
 # Usage:
-#   bin/new-site <domain> [--build-dir DIR] [--email --dkim KEY]
+#   bin/new-site <domain> --config <dir> --module-ref GITREF
+#                         [--build-dir DIR] [--email --dkim KEY]
 #                         [--sandbox] [--resume] [--yes]
+#   --config scaffolds the site root into <dir>, the site repo's .devopsfoundry
+#     directory (commit it). Its modules come from the release --module-ref
+#     names, or from --module-path DIR (a DevOpsFoundry checkout, as seen from
+#     <dir>). --build-dir is then relative to <dir>'s parent.
+#   Without --config the root goes in sites/<domain> in this checkout, which
+#   nothing commits.
 set -euo pipefail
 DF_SCRIPT_NAME="new-site"
 source "$(cd "$(dirname "$0")/.." && pwd)/lib/common.sh"
 df_load_env
 
 # ── Args ───────────────────────────────────────────────
-DOMAIN=""; BUILD_DIR="./dist"; SANDBOX=false; RESUME=false; YES=false
+DOMAIN=""; CONFIG=""; MODULE_REF=""; MODULE_PATH=""
+BUILD_DIR="./dist"; SANDBOX=false; RESUME=false; YES=false
 ENABLE_EMAIL=false; DKIM_KEY=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --config)      CONFIG="$2"; shift 2 ;;
+    --module-ref)  MODULE_REF="$2"; shift 2 ;;
+    --module-path) MODULE_PATH="$2"; shift 2 ;;
     --build-dir) BUILD_DIR="$2"; shift 2 ;;
     --dkim)      DKIM_KEY="$2"; shift 2 ;;
     --email)     ENABLE_EMAIL=true; shift ;;
@@ -29,8 +40,18 @@ done
 
 df_validate_domain "$DOMAIN"
 SLUG="$(df_slug "$DOMAIN")"
-SITE_DIR="$(df_site_dir "$DOMAIN")"
 STATE_KEY="$(df_state_key "$DOMAIN")"
+if [[ -n "$CONFIG" ]]; then
+  [[ -n "$MODULE_REF" || -n "$MODULE_PATH" ]] || die "--config needs --module-ref vX.Y.Z (or --module-path DIR)"
+  mkdir -p "$CONFIG"; SITE_DIR="$(cd "$CONFIG" && pwd)"
+  if [[ -n "$MODULE_REF" ]]; then
+    MODULES="git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules"; MODULE_QUERY="?ref=$MODULE_REF"
+  else
+    MODULES="${MODULE_PATH%/}/modules"; MODULE_QUERY=""
+  fi
+else
+  SITE_DIR="$(df_site_dir "$DOMAIN")"; MODULES="../../modules"; MODULE_QUERY=""
+fi
 
 # ── Namecheap env ──────────────────────────────────────
 $SANDBOX && export NAMECHEAP_USE_SANDBOX=true
@@ -47,6 +68,7 @@ echo "DevOpsFoundry — Provision $DOMAIN"
 echo "  slug:       $SLUG"
 echo "  site dir:   ${SITE_DIR/$HOME/\~}"
 echo "  state key:  $STATE_KEY"
+echo "  modules:    $MODULES/<name>$MODULE_QUERY"
 echo "  build dir:  $BUILD_DIR"
 $SANDBOX && echo "  MODE:       SANDBOX (NS delegation only; AWS provisioning skipped)"
 echo "─────────────────────────────────────"
@@ -58,10 +80,12 @@ render() {
   content="${content//__SITE_NAME__/$SLUG}"
   content="${content//__STATE_KEY__/$STATE_KEY}"
   content="${content//__BUILD_DIR__/$BUILD_DIR}"
+  content="${content//__MODULES__/$MODULES}"
+  content="${content//__MODULE_QUERY__/$MODULE_QUERY}"
   printf '%s\n' "$content" > "$2"
 }
 
-if [[ -d "$SITE_DIR" ]]; then
+if [[ -f "$SITE_DIR/main.tf" ]]; then
   $RESUME || die "Site dir already exists: ${SITE_DIR/$HOME/\~} (use --resume to continue, or destroy-site first)"
   info "Resuming existing site dir"
 else
@@ -69,8 +93,11 @@ else
   mkdir -p "$SITE_DIR"
   for f in "$DF_ROOT/templates/static/"*; do
     base="$(basename "$f")"
-    if [[ "$base" == *.tmpl ]]; then render "$f" "$SITE_DIR/${base%.tmpl}"
-    else cp "$f" "$SITE_DIR/$base"; fi
+    case "$base" in
+      gitignore.tmpl) if [[ -n "$CONFIG" ]]; then render "$f" "$SITE_DIR/.gitignore"; fi ;;
+      *.tmpl)         render "$f" "$SITE_DIR/${base%.tmpl}" ;;
+      *)              cp "$f" "$SITE_DIR/$base" ;;
+    esac
   done
   # Apply optional email flags to the generated tfvars.
   if $ENABLE_EMAIL; then
@@ -83,7 +110,7 @@ fi
 
 # ── Terraform init ─────────────────────────────────────
 step "terraform init"
-df_tf_init "$(df_site_dir "$DOMAIN")" -input=false -backend-config="$DF_ROOT/backend.tfvars" || die "terraform init failed"
+df_tf_init "$SITE_DIR" -input=false -backend-config="$(df_app_backend_file "$SITE_DIR")" || die "terraform init failed"
 pass "Initialized"
 
 if [[ "$YES" != true ]]; then
@@ -95,16 +122,16 @@ fi
 #     the zone's for_each is keyed on) are unknown until the cert exists, so a
 #     single targeted apply of the zone would fail "Invalid for_each argument".
 step "Phase 1a — create ACM certificate"
-df_tf "$DOMAIN" apply -input=false -auto-approve -target=module.acm_cert
+df_tf_at "$SITE_DIR" apply -input=false -auto-approve -target=module.acm_cert
 # 1b: now the validation-record names are known -> create zone + delegate NS.
 step "Phase 1b — Route53 zone + Namecheap nameserver delegation"
-df_tf "$DOMAIN" apply -input=false -auto-approve \
+df_tf_at "$SITE_DIR" apply -input=false -auto-approve \
   -target=module.route53_zone -target=module.namecheap_ns
 log "INFO" "Phase 1 applied for $DOMAIN"
 
 NS=()
 while IFS= read -r ns_line; do NS+=("$ns_line"); done \
-  < <(df_tf "$DOMAIN" output -json name_servers | jq -r '.[]')
+  < <(df_tf_at "$SITE_DIR" output -json name_servers | jq -r '.[]')
 echo "  Route53 nameservers:"; printf '    %s\n' "${NS[@]}"
 
 if $SANDBOX; then
@@ -131,22 +158,22 @@ done
 
 if ! $propagated; then
   warn "Nameservers not visible after 15m. Registrar updates can lag — re-run when ready:"
-  echo "    bin/new-site $DOMAIN --resume --yes"
+  echo "    bin/new-site $DOMAIN${CONFIG:+ --config $SITE_DIR${MODULE_REF:+ --module-ref $MODULE_REF}${MODULE_PATH:+ --module-path $MODULE_PATH}} --resume --yes"
   exit 75   # EX_TEMPFAIL
 fi
 pass "Nameservers propagated"
 
 # ── Phase 2: cert validation + CloudFront + records ────
 step "Phase 2 — validate cert, build CloudFront, add DNS records"
-df_tf "$DOMAIN" apply -input=false -auto-approve
+df_tf_at "$SITE_DIR" apply -input=false -auto-approve
 log "INFO" "Phase 2 applied for $DOMAIN"
 
 echo ""
 echo "─────────────────────────────────────"
 pass "Provisioned $DOMAIN"
-echo "  URL:        $(df_tf "$DOMAIN" output -raw url)"
-echo "  Bucket:     $(df_tf "$DOMAIN" output -raw bucket)"
-echo "  CloudFront: $(df_tf "$DOMAIN" output -raw cloudfront_id)"
+echo "  URL:        $(df_tf_at "$SITE_DIR" output -raw url)"
+echo "  Bucket:     $(df_tf_at "$SITE_DIR" output -raw bucket)"
+echo "  CloudFront: $(df_tf_at "$SITE_DIR" output -raw cloudfront_id)"
 echo ""
 echo "  Next: put your built files in '$BUILD_DIR' (edit $SITE_DIR/site.env if needed), then:"
-echo "    bin/deploy $DOMAIN"
+if [[ -n "$CONFIG" ]]; then echo "    bin/deploy --config $SITE_DIR"; else echo "    bin/deploy $DOMAIN"; fi

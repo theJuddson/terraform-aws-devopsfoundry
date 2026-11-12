@@ -1,5 +1,6 @@
-# Per-site remote state. Bucket/table/region come from ../../backend.tfvars
-# via `terraform init -backend-config`; the key is unique per site.
+# Per-site remote state. Bucket/table/region come from `terraform init -backend-config`:
+# this directory's backend.tfvars if present, else DevOpsFoundry/backend.tfvars.
+# The key is unique per site, and stays the same if the root moves.
 terraform {
   backend "s3" {
     key = "__STATE_KEY__"

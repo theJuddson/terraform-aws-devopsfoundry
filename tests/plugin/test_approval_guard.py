@@ -29,7 +29,9 @@ class Asks(unittest.TestCase):
                     "cd ~/DevOpsFoundry && bin/rotate-secret --config x redis --yes",
                     "AWS_PROFILE=main bin/release-nameservers --config x --yes",
                     "bash bin/new-site example.com --build-dir dist --yes",
-                    "bin/deploy example.com --yes"):
+                    "bin/deploy example.com --yes",
+                    "bin/deploy --config ../site/.devopsfoundry --yes",
+                    "bin/destroy-site --config ../site/.devopsfoundry --yes"):
             self.assertEqual(run(cmd), "ask", cmd)
 
     def test_ses_production_request_asks(self):
