@@ -3,6 +3,19 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.10.0
+
+- Access for other people, two ways. Both need Terraform 1.9 or later.
+  - **Their own account (recommended when a project needs a real boundary).** New `organization` module: an AWS
+    Organization run from the account it's applied in, with member accounts, optional organizational units, and
+    `OrganizationAccountAccessRole` ARNs for building inside each member. Accounts are never destroyed by Terraform.
+    New `identity-center` module: IAM Identity Center users, groups, permission sets and account assignments, so
+    people sign in with AWS's own portal and MFA and get rights in named accounts only.
+  - **A tag boundary in a shared account.** New `project-access` module: a role limited to resources tagged with
+    the project (SSM shells and commands on its instances, its log groups, ECS and ECR reads, optional Cost Explorer),
+    no tagging rights, MFA to assume, and an optional IAM user that can only assume it. Its README lists what a tag
+    boundary can't hide.
+
 ## v1.9.0
 
 - Secret rotation (#22). New `bin/rotate-secret --config <dir> redis|smtp` replaces an app's Redis auth token or

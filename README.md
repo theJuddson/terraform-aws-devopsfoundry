@@ -26,8 +26,8 @@ or straight from git, over HTTPS or SSH, pinned to a release tag (the newest is 
 [Releases page](https://github.com/theJuddson/terraform-aws-devopsfoundry/releases)):
 
 ```hcl
-source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.9.0"
-source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.9.0"
+source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.10.0"
+source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.10.0"
 ```
 
 Each module's README lists its inputs and outputs, and the building blocks have a runnable example under
@@ -43,6 +43,9 @@ Each module's README lists its inputs and outputs, and the building blocks have 
 | [ecr-repository](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/ecr-repository) | ECR repository with scan on push and a lifecycle policy |
 | [ec2-host](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/ec2-host) | SSM-only EC2 instance with a data volume that survives replacement, and scheduled snapshots |
 | [budget-alarm](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/budget-alarm) | Monthly AWS Budgets alarm to email or SNS |
+| [organization](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/organization) | An AWS Organization and member accounts, one per venture that needs its own boundary |
+| [identity-center](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/identity-center) | IAM Identity Center users, groups, permission sets and account assignments: who can do what in which account |
+| [project-access](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/project-access) | A role (and optional MFA-only IAM user) limited to one project's tagged resources in a shared account |
 | [route53-zone-security](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/route53-zone-security) | DNSSEC signing and DNS query logging for a hosted zone (us-east-1) |
 | **Web stack** | |
 | [networking](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/networking) | VPC, public and private subnets, optional NAT gateway, security groups |
@@ -245,7 +248,7 @@ serving and `--enable-email` are refused in this mode, and `destroy-app` removes
 
 ```bash
 bin/new-app example.com --subdomain app --existing-zone example.com \
-  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.9.0
+  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.10.0
 ```
 
 #### App-owned state
