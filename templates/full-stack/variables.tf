@@ -321,3 +321,9 @@ variable "waf_logging" {
   type        = bool
   default     = false
 }
+
+variable "trust_policy_source_conditions" {
+  description = "Limit the service roles' trust (ECS task role, flow logs, RDS Enhanced Monitoring) to this account with aws:SourceAccount and aws:SourceArn. On by default; false restores the plain trust policies."
+  type        = bool
+  default     = true
+}

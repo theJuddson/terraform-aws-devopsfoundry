@@ -65,6 +65,7 @@ No modules.
 | flow\_log\_kms\_key\_arn | Customer managed KMS key for the flow log group. null (default) = CloudWatch's default encryption. The key policy must allow logs.<region>.amazonaws.com. | `string` | `null` | no |
 | flow\_log\_retention\_days | Days to keep flow logs. Must be a value CloudWatch Logs accepts (1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, ...). | `number` | `30` | no |
 | flow\_log\_traffic\_type | Which traffic the flow logs record: ACCEPT, REJECT or ALL. REJECT is the cheapest way to see blocked connections. | `string` | `"ALL"` | no |
+| trust\_policy\_source\_conditions | Limit the flow logs role's trust to flow logs in to this account (aws:SourceAccount and aws:SourceArn), AWS's confused-deputy protection. On by default; set false to restore the unconditioned trust policy if a role can't be assumed. | `bool` | `true` | no |
 | vpc\_cidr | CIDR block for the VPC | `string` | `"10.0.0.0/16"` | no |
 
 ## Outputs

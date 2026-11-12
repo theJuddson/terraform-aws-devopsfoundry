@@ -3,7 +3,26 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
-## v1.16.0
+## v1.17.0
+
+- Confused-deputy protection on the service roles' trust policies (#65), as AWS documents for each service. **The one
+  deliberate change an upgrade plans:** an in-place update to these trust policies, nothing replaced or restarted.
+  `trust_policy_source_conditions = false` (on `container-service`, `networking`, `database` and `full-stack`)
+  restores the old policies exactly.
+  - `container-service`: the **task role** trusts `ecs-tasks.amazonaws.com` only with `aws:SourceAccount` equal to the
+    account and `aws:SourceArn` like `arn:aws:ecs:<region>:<account>:*` (AWS doesn't support naming one cluster).
+    The execution role keeps its plain trust, since AWS documents no conditions for it; the two no longer share one
+    policy document.
+  - `networking`: the flow logs role trusts `vpc-flow-logs.amazonaws.com` only for `vpc-flow-log/*` in the account.
+  - `database`: the Enhanced Monitoring role trusts `monitoring.rds.amazonaws.com` only for this instance's ARN.
+  - Account, region and partition come from ARNs the modules already have (cluster, VPC, DB subnet group), so nothing
+    is looked up at plan time. `ec2-host`'s instance and DLM roles are unchanged: EC2 instance roles don't support
+    these conditions.
+  - `bin/check-compat` now proves both: with the switch off an upgrade plans nothing, and with the default the task
+    role's trust policy is the only change.
+  - Existing app roots get the protection on their next apply; to hold it back, add the variable and `module "app"`
+    argument from `templates/full-stack` and set it false.
+
 
 - `container-service` and `full-stack`: opt-in WAF request logging, `waf_logging` (#66). With `create_waf`, the web
   ACL logs to the CloudWatch log group `aws-waf-logs-<name>-alb` (the prefix WAF requires), with the Authorization

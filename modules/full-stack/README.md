@@ -116,6 +116,7 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | smtp\_standby\_key | The other SMTP key slot: none, active (previous key still works) or inactive (retired). Managed by bin/rotate-secret. | `string` | `"none"` | no |
 | subdomain | Subdomain fronting the service (api -> api.example.com). Empty or "@" serves at the apex (example.com). | `string` | `"api"` | no |
 | tasks\_in\_public\_subnets | Run ECS tasks in public subnets with public IPs (no NAT needed). Inbound stays ALB-only. In shared-platform mode this must match the host: true if the host has no NAT gateway (the plan fails otherwise). | `bool` | `false` | no |
+| trust\_policy\_source\_conditions | Limit the service roles' trust (ECS task role, flow logs, RDS Enhanced Monitoring) to this account with aws:SourceAccount and aws:SourceArn. On by default; false restores the plain trust policies. | `bool` | `true` | no |
 | vpc\_cidr | ── Networking ───────────────────────────────────────── | `string` | `"10.0.0.0/16"` | no |
 | waf\_count\_only | Count WAF matches without blocking. Start here on a live ALB, then set false to enforce. | `bool` | `false` | no |
 | waf\_logging | Log the WAF's blocked and counted requests to CloudWatch Logs (Authorization and Cookie redacted). Only with create\_waf; billed per GB. | `bool` | `false` | no |

@@ -34,6 +34,7 @@ them in `app.tfvars` `env` and `secrets`; those override the injected ones.
 ## Upgrading
 
 Change `--module-ref` in the app root's `main.tf` source to the newer release, read that release's CHANGELOG entry,
-and run `terraform plan`: upgrades are meant to plan no change. New opt-in features (such as
+and run `terraform plan`: upgrades are meant to plan no change, apart from any deliberate change that release's
+CHANGELOG names (v1.17.0, for instance, tightens three roles' trust policies in place). New opt-in features (such as
 `deployment_circuit_breaker`) need their variable and `module "app"` argument copied from
 `$DOF/templates/full-stack` into older app roots.

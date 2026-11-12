@@ -103,7 +103,9 @@ walk an agent through it. What they leave out, or what has caught people:
 - **Upgrades must plan no change.** Existing app roots can't be forced to change: add an input with a default
   that keeps today's behavior, rename with a `moved` block, and never add a `keepers` or a `ForceNew` attribute to
   something that exists. `bin/check-compat` proves this for container-service. For other modules, plan an
-  old-release state with the old and the new modules and compare.
+  old-release state with the old and the new modules and compare. A deliberate exception (a security fix that must
+  reach everyone) gets an input that restores the old behavior, a CHANGELOG entry that names it, and a
+  `check-compat` assertion that it's the only change, as v1.17.0's trust policies did.
 - **Test what you change.** A new behavior gets a test that fails without it. Module tests use `mock_provider`,
   with `override_during = plan` where the plan needs known values. CLI tests use `tests/cli/lib.sh`'s `stub`,
   `assert_called` and `assert_before`.

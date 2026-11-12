@@ -158,15 +158,16 @@ resource "aws_acm_certificate_validation" "main" {
 
 # ── Network ───────────────────────────────────────────
 module "networking" {
-  source             = "../networking"
-  count              = local.use_shared ? 0 : 1
-  name               = var.name
-  vpc_cidr           = var.vpc_cidr
-  az_count           = var.az_count
-  container_port     = var.container_port
-  enable_database    = var.enable_database
-  enable_cache       = var.enable_cache
-  enable_nat_gateway = var.enable_nat_gateway
+  source                         = "../networking"
+  trust_policy_source_conditions = var.trust_policy_source_conditions
+  count                          = local.use_shared ? 0 : 1
+  name                           = var.name
+  vpc_cidr                       = var.vpc_cidr
+  az_count                       = var.az_count
+  container_port                 = var.container_port
+  enable_database                = var.enable_database
+  enable_cache                   = var.enable_cache
+  enable_nat_gateway             = var.enable_nat_gateway
 
   enable_flow_logs        = var.enable_flow_logs
   flow_log_traffic_type   = var.flow_log_traffic_type
@@ -188,19 +189,20 @@ module "shared_platform" {
 }
 
 module "database" {
-  source                = "../database"
-  count                 = var.enable_database ? 1 : 0
-  name                  = var.name
-  private_subnet_ids    = local.net.private_subnet_ids
-  rds_security_group_id = local.net.rds_security_group_id
-  db_name               = var.db_name
-  instance_class        = var.db_instance_class
-  allocated_storage     = var.db_allocated_storage
-  engine_version        = var.db_engine_version
-  multi_az              = var.db_multi_az
-  backup_retention_days = var.db_backup_retention_days
-  deletion_protection   = var.db_deletion_protection
-  skip_final_snapshot   = var.db_skip_final_snapshot
+  source                         = "../database"
+  trust_policy_source_conditions = var.trust_policy_source_conditions
+  count                          = var.enable_database ? 1 : 0
+  name                           = var.name
+  private_subnet_ids             = local.net.private_subnet_ids
+  rds_security_group_id          = local.net.rds_security_group_id
+  db_name                        = var.db_name
+  instance_class                 = var.db_instance_class
+  allocated_storage              = var.db_allocated_storage
+  engine_version                 = var.db_engine_version
+  multi_az                       = var.db_multi_az
+  backup_retention_days          = var.db_backup_retention_days
+  deletion_protection            = var.db_deletion_protection
+  skip_final_snapshot            = var.db_skip_final_snapshot
 
   performance_insights_enabled        = var.db_performance_insights_enabled
   monitoring_interval                 = var.db_monitoring_interval
@@ -262,13 +264,14 @@ module "email" {
 
 # ── The service ───────────────────────────────────────
 module "container_service" {
-  source          = "../container-service"
-  name            = var.name
-  service_name    = var.service_name
-  domain_name     = var.domain_name
-  subdomain       = var.subdomain
-  zone_id         = local.zone_id
-  certificate_arn = aws_acm_certificate_validation.main.certificate_arn
+  source                         = "../container-service"
+  trust_policy_source_conditions = var.trust_policy_source_conditions
+  name                           = var.name
+  service_name                   = var.service_name
+  domain_name                    = var.domain_name
+  subdomain                      = var.subdomain
+  zone_id                        = local.zone_id
+  certificate_arn                = aws_acm_certificate_validation.main.certificate_arn
 
   vpc_id                = local.net.vpc_id
   public_subnet_ids     = local.net.public_subnet_ids

@@ -249,6 +249,24 @@ data "aws_iam_policy_document" "flow_logs_assume" {
       type        = "Service"
       identifiers = ["vpc-flow-logs.amazonaws.com"]
     }
+    # AWS's confused-deputy guidance for flow logs (#65): only for this account's
+    # flow logs. Account, region and partition come from the VPC's ARN.
+    dynamic "condition" {
+      for_each = var.trust_policy_source_conditions ? [1] : []
+      content {
+        test     = "StringEquals"
+        variable = "aws:SourceAccount"
+        values   = [split(":", aws_vpc.main.arn)[4]]
+      }
+    }
+    dynamic "condition" {
+      for_each = var.trust_policy_source_conditions ? [1] : []
+      content {
+        test     = "ArnLike"
+        variable = "aws:SourceArn"
+        values   = ["arn:${split(":", aws_vpc.main.arn)[1]}:ec2:${split(":", aws_vpc.main.arn)[3]}:${split(":", aws_vpc.main.arn)[4]}:vpc-flow-log/*"]
+      }
+    }
   }
 }
 

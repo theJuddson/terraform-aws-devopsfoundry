@@ -270,3 +270,44 @@ run "circuit_breaker_rolls_back_when_asked" {
     error_message = "The circuit breaker must stop a failing deployment and roll it back."
   }
 }
+
+# The task role trusts ECS only for this account (#65); the execution role,
+# for which AWS documents no such conditions, keeps the plain trust.
+run "task_role_trust_is_limited_to_this_account" {
+  command = plan
+
+  variables {
+    create_alb                  = false
+    create_cluster              = false
+    existing_alb_dns_name       = "host-alb-123.us-east-1.elb.amazonaws.com"
+    existing_alb_zone_id        = "Z35SXDOTRQ7X7K"
+    existing_https_listener_arn = "arn:aws:elasticloadbalancing:eu-west-1:222222222222:listener/app/host/mock/https"
+    existing_cluster_arn        = "arn:aws:ecs:eu-west-1:222222222222:cluster/host"
+    existing_cluster_name       = "host"
+  }
+
+  assert {
+    condition = toset([for c in data.aws_iam_policy_document.task_assume.statement[0].condition : "${c.test} ${c.variable} ${one(c.values)}"]) == toset([
+      "StringEquals aws:SourceAccount 222222222222",
+      "ArnLike aws:SourceArn arn:aws:ecs:eu-west-1:222222222222:*",
+    ])
+    error_message = "The task role must trust ECS only for this account, with the wildcard AWS requires for clusters."
+  }
+  assert {
+    condition     = length(data.aws_iam_policy_document.ecs_tasks_assume.statement[0].condition) == 0
+    error_message = "The execution role's trust must stay plain: AWS documents no conditions for it."
+  }
+}
+
+run "the_switch_restores_the_task_roles_plain_trust" {
+  command = plan
+
+  variables {
+    trust_policy_source_conditions = false
+  }
+
+  assert {
+    condition     = length(data.aws_iam_policy_document.task_assume.statement[0].condition) == 0
+    error_message = "trust_policy_source_conditions = false must remove the conditions."
+  }
+}
