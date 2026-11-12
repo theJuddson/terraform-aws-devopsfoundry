@@ -30,6 +30,7 @@ The defaults still match v1.1.0, so checkov keeps reporting these for the defaul
 | database | CKV_AWS_161 | No IAM database authentication | Apps use the RDS-managed password from Secrets Manager; opt in with `iam_database_authentication_enabled = true` (v1.3.0) |
 | database | CKV_AWS_293 | Deletion protection off by default | `db_deletion_protection` is a variable; off so teardown works |
 | email | CKV_AWS_273, CKV_AWS_40 | IAM user with an inline policy | SES SMTP credentials can only be derived from an IAM user's access key; the policy allows `ses:SendRawEmail` only |
+| project-access | CKV_AWS_273, CKV_AWS_40 (inline skip) | Optional IAM user with an inline policy | Only when `user_name` is set, for a shared account without Identity Center; it can only assume the project role with MFA and manage its own password and MFA. Separate accounts with `organization` and `identity-center` are the SSO way |
 | email, full-stack | CKV2_AWS_57 | SMTP password and Redis auth token have no rotation Lambda | Rotated by `bin/rotate-secret` (v1.9.0), which also rolls the service so tasks read the new value; a Lambda would fight Terraform, which owns the secret versions |
 | email | CKV_AWS_149 | SMTP secret encrypted with the AWS-managed key | Still encrypted at rest; opt in with `kms_key_arn` (v1.4.0) |
 | container-service | CKV2_AWS_28 | ALB without WAF | WAF costs about $5/month per ACL plus rules; opt in with `create_waf = true` or attach one with `waf_web_acl_arn` (v1.3.0) |
