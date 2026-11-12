@@ -17,3 +17,7 @@ logs/*.log
 
 # Shared state backend settings (see backend.tfvars.example)
 /backend.tfvars
+
+# Python bytecode from the plugin tests
+__pycache__/
+*.pyc
