@@ -26,8 +26,8 @@ or straight from git, over HTTPS or SSH, pinned to a release tag (the newest is 
 [Releases page](https://github.com/theJuddson/terraform-aws-devopsfoundry/releases)):
 
 ```hcl
-source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.13.0"
-source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.13.0"
+source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.14.0"
+source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.14.0"
 ```
 
 Each module's README lists its inputs and outputs, and the building blocks have a runnable example under
@@ -91,6 +91,7 @@ shares state with anything else.
 | `bin/put-secret <name> --env ENV_NAME` | Store an app secret from a hidden prompt or stdin (never argv or history), tagged with its app, optionally under your own KMS key (`--kms-key`); prints the `app.tfvars` line |
 | `bin/email-status [--config <dir>]` | Whether SES in the app's region can send to anyone yet (or is in the sandbox), whether the app's domain is verified (DKIM, MAIL FROM), and the DMARC report record to add; `--request-production` asks AWS for production access, once the domain is ready |
 | `bin/rotate-secret --config <dir> redis\|smtp` | Rotate the app's Redis auth token or SMTP password with no failed requests: publish a new one while the old still works, roll the service, retire the old one; `bin/preflight` warns once one is over 90 days old |
+| `bin/estimate-cost --config <dir>` | The app's monthly on-demand cost from its `app.tfvars` and AWS's Price List API: tasks, load balancer, NAT gateway, public IPv4, database and cache, priced and summed line by line (usage-driven costs listed, not priced) |
 | `bin/release-nameservers --config <dir>` | Stop managing a live Namecheap delegation in Terraform, so deploys never call Namecheap (`new-app` runs it) |
 | `bin/destroy-app --config <dir>` | Tear down the app stack; reverts the delegation unless `--keep-ns` |
 
@@ -248,7 +249,7 @@ serving and `--enable-email` are refused in this mode, and `destroy-app` removes
 
 ```bash
 bin/new-app example.com --subdomain app --existing-zone example.com \
-  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.13.0
+  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.14.0
 ```
 
 #### App-owned state
@@ -430,7 +431,7 @@ templates/static/      site-root stamped into sites/<domain>/ by new-site
 templates/full-stack/  app-root stamped into a repo's .devopsfoundry/ by new-app
 sites/<domain>/        generated static Terraform root (own remote-state key) + site.env
 bin/            sites: preflight · new-site · deploy · destroy-site
-                apps:  new-app · deploy-app · destroy-app · email-status · rotate-secret · release-nameservers
+                apps:  new-app · deploy-app · destroy-app · email-status · rotate-secret · estimate-cost · release-nameservers
                 repo:  check-modules (fmt/validate/tflint/checkov) · check-compat (offline no-change proof) · check-readme-pins · check-plugin · soci-index
 lib/common.sh   shared shell helpers (logging, slug, tf wrappers)
 backend.tfvars.example  shared S3 state backend; copy to backend.tfvars (key is per-site / per-app)

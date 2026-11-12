@@ -57,8 +57,8 @@ without `--request-production`, `terraform plan`, `terraform output`, and `descr
 - **Prove a deploy works.** A green health check only proves the process is listening. Give the app a
   `VERIFY_SCRIPT` in `app.env` that checks real behavior: a page that renders, an API route the client calls, a
   database query.
-- **Know what it costs.** A dedicated app stack starts at about $60 a month (NAT gateway, load balancer, Fargate),
-  more with RDS or Redis. Shared-platform mode and `enable_nat_gateway = false` cost less; say which you're
+- **Know what it costs.** Run `bin/estimate-cost --config <dir>` and show its figure before asking for approval. Don't
+  work out prices yourself. Shared-platform mode and `enable_nat_gateway = false` cost less; say which you're
   proposing.
 - **Email starts in the SES sandbox.** It only reaches verified addresses. Check with `bin/email-status`.
   Production access is a request to AWS that a person files.
