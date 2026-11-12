@@ -370,12 +370,35 @@ The `bin/` scripts are non-interactive with `--yes` and authenticate via the amb
 AWS profile/OIDC, so the flow lifts into GitHub Actions when ready — point the module
 `source` at a pinned `--module-ref` and run `new-app --resume --yes` / `deploy-app --yes`.
 
+### With AI agents
+
+[AGENTS.md](https://github.com/theJuddson/terraform-aws-devopsfoundry/blob/main/AGENTS.md) holds the rules for AI coding
+agents that use or change DevOpsFoundry (`CLAUDE.md` imports it for Claude Code):
+- what a person must approve;
+- how secrets are handled;
+- how to change the modules without breaking existing stacks.
+
+It ends with AWS's own rules for agents, from the [Agent Toolkit for AWS](https://github.com/aws/agent-toolkit-for-aws),
+and says where DevOpsFoundry's rules take precedence: Terraform rather than CDK, and changes through the scripts
+rather than direct AWS calls.
+
+Those AWS rules expect the Agent Toolkit: the AWS MCP Server, plus AWS's skills for agents. Set it up once per machine
+with AWS's [setup instructions](https://github.com/aws/agent-toolkit-for-aws/blob/main/setup-instructions/setup.md).
+Give them to your agent, or follow them yourself:
+1. Sign in to a named AWS profile.
+2. Run `aws configure agent-toolkit --region us-east-1 --profile <profile>`.
+3. Set `AWS_MCP_PROXY_PROFILES` to that profile in the `aws-mcp` entry it writes.
+
+To have an agent deploy an app, start from
+[docs/CONSUMER_PROMPT.md](https://github.com/theJuddson/terraform-aws-devopsfoundry/blob/main/docs/CONSUMER_PROMPT.md).
+
 ## Repository layout
 
 ```
 modules/        static:  acm-cert · route53-zone · route53-records · static-site · namecheap-ns
                 app:     networking · container-service · database · cache · email · full-stack
                 blocks:  object-store · kms-key · shared-filesystem · task-runner · ecr-repository · ec2-host · budget-alarm · route53-zone-security
+AGENTS.md       rules for AI agents using or changing DevOpsFoundry (CLAUDE.md imports it)
 main.tf         empty root module (the Terraform Registry requires one; use the submodules)
 examples/       one root per building-block module (validated in CI, never applied)
 tests/          offline compatibility and validation fixtures for bin/check-*

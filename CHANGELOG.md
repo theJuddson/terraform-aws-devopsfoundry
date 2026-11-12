@@ -3,6 +3,14 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## Unreleased
+
+- `AGENTS.md` (imported by `CLAUDE.md`): rules for AI agents that use or change DevOpsFoundry, covering what a person
+  must approve, secrets, upgrade safety and checks. It ends with AWS's Agent Toolkit rules (Apache-2.0, attributed in
+  `NOTICE`), with where DevOpsFoundry's rules take precedence. The README's new "With AI agents" section points to
+  AWS's Agent Toolkit setup. `docs/CONSUMER_PROMPT.md` is brought up to date: plans shown before applying,
+  `put-secret`, `VERIFY_SCRIPT`, `email-status`, `--module-ref`, shared platforms.
+
 ## v1.10.2
 
 - `ec2-host` no longer strips the data volume's `dlm-snapshot` tag. The provider reads the instance's `volume_tags`

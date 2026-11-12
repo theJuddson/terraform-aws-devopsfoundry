@@ -2,3 +2,8 @@ DevOpsFoundry
 Copyright 2026 Juddson Sharp
 
 This product includes software developed by Juddson Sharp.
+
+AGENTS.md includes the AWS Agent Toolkit rules (rules/aws-agent-rules.md) from
+the Agent Toolkit for AWS, https://github.com/aws/agent-toolkit-for-aws,
+licensed under the Apache License 2.0.
+Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
