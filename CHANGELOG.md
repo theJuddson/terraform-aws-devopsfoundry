@@ -22,6 +22,9 @@ the earlier versions below were private and their tags are not in this repositor
     role's trust policy is the only change.
   - Existing app roots get the protection on their next apply; to hold it back, add the variable and `module "app"`
     argument from `templates/full-stack` and set it false.
+- `AGENTS.md`: which sign-in steps work with Claude Code's `!` (`aws sso login`, and `aws login` unless it asks to
+  repoint the profile) and which need a real terminal (`aws configure sso`, the Agent Toolkit wizard); a lapsed
+  sign-in mid-session shows as every AWS MCP tool answering "Unknown tool".
 
 
 - `container-service` and `full-stack`: opt-in WAF request logging, `waf_logging` (#66). With `create_waf`, the web
