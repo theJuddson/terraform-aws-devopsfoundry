@@ -192,6 +192,25 @@ df_resolve_config() {
   echo "$c"
 }
 
+# The state backend an app root uses: its own backend.tfvars (e.g. a venture's
+# own bucket), else the shared one. Usage: df_app_backend_file <config_dir>
+df_app_backend_file() {
+  if [[ -f "$1/backend.tfvars" ]]; then echo "$1/backend.tfvars"; else echo "$DF_ROOT/backend.tfvars"; fi
+}
+
+# Initialize an app root this checkout hasn't initialized yet. .terraform/ is
+# gitignored, so a fresh clone or a repo moved to a new path has the app's
+# .devopsfoundry/ but no backend or modules, and every plan fails (#45).
+# Usage: df_ensure_app_init <config_dir>
+df_ensure_app_init() {
+  local c="$1" backend
+  [[ -f "$c/.terraform/terraform.tfstate" && -f "$c/.terraform/modules/modules.json" ]] && return 0
+  backend="$(df_app_backend_file "$c")"
+  [[ -f "$backend" ]] || die "No state backend config for $c: add $c/backend.tfvars, or $DF_ROOT/backend.tfvars"
+  info "Initializing Terraform in $c (this checkout has no .terraform yet)"
+  df_tf_init "$c" -input=false -backend-config="$backend" || die "terraform init failed in $c"
+}
+
 # Run terraform in a config dir. Usage: df_tf_at <config_dir> <args...>
 df_tf_at() { local c="$1"; shift; terraform -chdir="$c" "$@"; }
 

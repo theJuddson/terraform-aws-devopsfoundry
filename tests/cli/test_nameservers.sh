@@ -8,7 +8,8 @@ R53_NS='["ns-1.awsdns-01.org","ns-2.awsdns-02.net"]'
 
 # An app root as new-app leaves it, with state and DNS answers chosen per test.
 make_app() { # make_app <state-has-record:true|false> <public NS lines>
-  APP="$TMP/app/.devopsfoundry"; mkdir -p "$APP"
+  APP="$TMP/app/.devopsfoundry"; mkdir -p "$APP/.terraform/modules"
+  touch "$APP/.terraform/terraform.tfstate" "$APP/.terraform/modules/modules.json"   # initialized, as new-app leaves it
   local t
   for t in main.tf app.tfvars; do
     sed -e 's/__DOMAIN__/example.com/g' -e 's/__SUBDOMAIN__/api/g' -e 's/__EXISTING_ZONE__//g' \

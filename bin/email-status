@@ -32,6 +32,7 @@ done
 
 if [[ -n "$CONFIG" ]]; then
   CONFIG="$(df_resolve_config "$CONFIG")"
+  df_ensure_app_init "$CONFIG"
   [[ -n "$REGION" ]] || REGION="$(df_tfvar "$CONFIG/app.tfvars" aws_region 2>/dev/null || true)"
 fi
 [[ -n "$REGION" ]] || REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-}}"

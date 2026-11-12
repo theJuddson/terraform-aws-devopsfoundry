@@ -24,6 +24,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 CONFIG="$(df_resolve_config "$CONFIG")"
+df_ensure_app_init "$CONFIG"
 TFVARS="$CONFIG/app.tfvars"
 [[ -f "$TFVARS" ]] || die "Missing $TFVARS"
 
