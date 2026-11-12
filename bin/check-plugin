@@ -1,0 +1,193 @@
+#!/usr/bin/env python3
+"""check-plugin — validate the agent plugin under plugins/ (#60).
+
+Checks what AWS's Agent Toolkit validator checks for a skill and a plugin, plus
+DevOpsFoundry's own rule that the plugin's version is the newest release:
+  - each skills/<name>/SKILL.md has frontmatter with only the allowed fields; a
+    kebab-case name of at most 64 characters matching its folder; a description
+    of 20 to 1024 characters; and every relative link in it points at a file;
+  - every manifest and marketplace file is valid JSON, names the plugin as its
+    folder is named, and points at paths that exist;
+  - every version equals the newest "## vX.Y.Z" in CHANGELOG.md.
+Standard library only; makes no network call.
+
+Usage: bin/check-plugin [--fix] [repo root]
+  --fix sets every manifest and marketplace version to the newest release.
+"""
+
+import json
+import pathlib
+import re
+import sys
+
+ARGS = [a for a in sys.argv[1:] if a != "--fix"]
+FIX = "--fix" in sys.argv[1:]
+ROOT = pathlib.Path(ARGS[0] if ARGS else pathlib.Path(__file__).resolve().parents[1])
+VERSIONED = (".claude-plugin/marketplace.json", ".cursor-plugin/marketplace.json", "plugins/*/plugin.json",
+             "plugins/*/.claude-plugin/plugin.json", "plugins/*/.codex-plugin/plugin.json",
+             "plugins/*/.cursor-plugin/plugin.json")
+ALLOWED_FIELDS = {"name", "description", "license", "allowed-tools", "metadata", "compatibility"}
+NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+LINK_RE = re.compile(r"\]\(([^)#\s]+)(?:#[^)]*)?\)")
+errors = []
+
+
+def error(msg):
+    errors.append(msg)
+
+
+def frontmatter(text):
+    """Top-level keys of a SKILL.md's YAML frontmatter, folding '>' and '|' blocks."""
+    if not text.startswith("---\n"):
+        return None
+    end = text.find("\n---\n", 4)
+    if end < 0:
+        return None
+    fields, key, block = {}, None, []
+    for line in text[4:end].splitlines():
+        top = re.match(r"^([A-Za-z][\w-]*):\s*(.*)$", line)
+        if top:
+            if key is not None and block:
+                fields[key] = " ".join(block).strip()
+            key, value = top.group(1), top.group(2).strip()
+            block = []
+            if value in (">", "|", ">-", "|-", ""):
+                fields[key] = ""
+            else:
+                fields[key] = value.strip("'\"")
+                key = None if fields[key] else key
+        elif key is not None and line.startswith((" ", "\t")):
+            block.append(line.strip())
+    if key is not None and block:
+        fields[key] = " ".join(block).strip()
+    return fields
+
+
+def newest_release():
+    for line in (ROOT / "CHANGELOG.md").read_text().splitlines():
+        m = re.match(r"^## (v\d+\.\d+\.\d+)\s*$", line)
+        if m:
+            return m.group(1)[1:]
+    error("CHANGELOG.md has no '## vX.Y.Z' heading")
+    return None
+
+
+def load(path):
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError) as e:
+        error(f"{path.relative_to(ROOT)}: not valid JSON ({e})")
+        return None
+
+
+def check_skill(skill_dir):
+    rel = skill_dir.relative_to(ROOT)
+    md = skill_dir / "SKILL.md"
+    if not md.is_file():
+        error(f"{rel}: no SKILL.md"); return
+    text = md.read_text()
+    fm = frontmatter(text)
+    if fm is None:
+        error(f"{rel}/SKILL.md: no '---' frontmatter"); return
+    for extra in sorted(set(fm) - ALLOWED_FIELDS):
+        error(f"{rel}/SKILL.md: field {extra!r} is not allowed ({', '.join(sorted(ALLOWED_FIELDS))})")
+    name, desc = fm.get("name", ""), fm.get("description", "")
+    if not NAME_RE.match(name) or len(name) > 64:
+        error(f"{rel}/SKILL.md: name {name!r} must be kebab-case, at most 64 characters")
+    if name != skill_dir.name:
+        error(f"{rel}/SKILL.md: name {name!r} must match its folder {skill_dir.name!r}")
+    if not 20 <= len(desc) <= 1024:
+        error(f"{rel}/SKILL.md: description is {len(desc)} characters; it must be 20 to 1024")
+    for doc in [md, *sorted((skill_dir / "references").glob("*.md"))]:
+        for target in LINK_RE.findall(doc.read_text()):
+            if "://" in target or target.startswith("mailto:"):
+                continue
+            if not (doc.parent / target).exists():
+                error(f"{doc.relative_to(ROOT)}: link {target!r} points at nothing")
+
+
+def check_plugin(plugin_dir, version):
+    rel = plugin_dir.relative_to(ROOT)
+    skills = sorted(p for p in (plugin_dir / "skills").iterdir() if p.is_dir()) if (plugin_dir / "skills").is_dir() else []
+    if not skills:
+        error(f"{rel}: no skills/<name>/ folders")
+    for s in skills:
+        check_skill(s)
+    for tool in (".", ".claude-plugin", ".codex-plugin", ".cursor-plugin"):  # "." is the tool-neutral manifest
+        manifest_path = plugin_dir / tool / "plugin.json"
+        if not manifest_path.is_file():
+            error(f"{rel}/{tool}/plugin.json is missing"); continue
+        m = load(manifest_path)
+        if m is None:
+            continue
+        if m.get("name") != plugin_dir.name:
+            error(f"{rel}/{tool}/plugin.json: name {m.get('name')!r} != folder {plugin_dir.name!r}")
+        if version and m.get("version") != version:
+            error(f"{rel}/{tool}/plugin.json: version {m.get('version')!r} != newest release {version!r} in CHANGELOG.md")
+        for key in ("skills", "hooks"):
+            if key in m and not (plugin_dir / m[key]).exists():
+                error(f"{rel}/{tool}/plugin.json: {key} path {m[key]!r} doesn't exist")
+    hooks = plugin_dir / "hooks" / "hooks.json"
+    if hooks.is_file():
+        h = load(hooks)
+        for entry in (h or {}).get("hooks", {}).get("PreToolUse", []):
+            for hook in entry.get("hooks", []):
+                for script in re.findall(r"\$\{CLAUDE_PLUGIN_ROOT\}/([\w./-]+)", hook.get("command", "")):
+                    if not (plugin_dir / script).is_file():
+                        error(f"{rel}/hooks/hooks.json: {script} doesn't exist")
+
+
+def check_marketplaces(version):
+    names = {p.name for p in (ROOT / "plugins").iterdir() if p.is_dir()}
+    for mp in (".claude-plugin/marketplace.json", ".cursor-plugin/marketplace.json", ".agents/plugins/marketplace.json"):
+        path = ROOT / mp
+        if not path.is_file():
+            error(f"{mp} is missing"); continue
+        m = load(path)
+        if m is None:
+            continue
+        listed = set()
+        for p in m.get("plugins", []):
+            listed.add(p.get("name"))
+            src = p.get("source")
+            src = src.get("path") if isinstance(src, dict) else src
+            if not src or not (ROOT / src).is_dir():
+                error(f"{mp}: plugin {p.get('name')!r} source {src!r} isn't a folder")
+            if version and "version" in p and p["version"] != version:
+                error(f"{mp}: plugin {p.get('name')!r} version {p['version']!r} != newest release {version!r}")
+        if version and "metadata" in m and m["metadata"].get("version") not in (None, version):
+            error(f"{mp}: metadata version {m['metadata']['version']!r} != newest release {version!r}")
+        for missing in sorted(names - listed):
+            error(f"{mp}: plugins/{missing} isn't listed")
+
+
+def fix_versions(version):
+    for pattern in VERSIONED:
+        for path in sorted(ROOT.glob(pattern)):
+            text = path.read_text()
+            new = re.sub(r'("version":\s*")[^"]*(")', rf"\g<1>{version}\g<2>", text)
+            if new != text:
+                path.write_text(new)
+                print(f"  {path.relative_to(ROOT)} -> {version}")
+
+
+def main():
+    if not (ROOT / "plugins").is_dir():
+        print("no plugins/ folder"); return 1
+    version = newest_release()
+    if FIX and version:
+        fix_versions(version)
+    for plugin_dir in sorted(p for p in (ROOT / "plugins").iterdir() if p.is_dir()):
+        check_plugin(plugin_dir, version)
+    check_marketplaces(version)
+    if errors:
+        for e in errors:
+            print(f"  {e}")
+        print(f"check-plugin: {len(errors)} problem(s)")
+        return 1
+    print(f"check-plugin: plugins/ OK at v{version}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -3,7 +3,22 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
-## v1.11.0
+## v1.12.0
+
+- DevOpsFoundry is an agent plugin (#60). `plugins/devopsfoundry` packages a `deploying-with-devopsfoundry` skill in
+  the format of AWS's Agent Toolkit for AWS: the deploy workflow, what a person must approve, secrets, costs,
+  operating and troubleshooting, loaded by the agent when needed instead of pasting `docs/CONSUMER_PROMPT.md`.
+  Install in Claude Code with `/plugin install devopsfoundry --marketplace theJuddson/terraform-aws-devopsfoundry`;
+  Codex and Cursor read the same repository (README, "With AI agents"). It passes AWS's plugin spec and marketplace
+  validators and Claude Code's `claude plugin validate`. The skill asks for your DevOpsFoundry checkout, since the
+  scripts run from there.
+- The plugin's hook enforces the approval rules (#61). Before a shell command it asks the person when the command
+  skips a plan approval (`bin/...` with `--yes`, `--request-production`, `terraform apply/destroy -auto-approve`,
+  apply with `-replace` or `-target`, `terraform state rm/mv/push`), and denies reading `.env` or `site.env` and
+  fetching a secret's value. Best-effort, not a security boundary; it fails open on anything it can't parse.
+- `bin/check-plugin` validates the plugin as AWS's validator does (skill frontmatter, names, links, manifests) and
+  that its version is the newest release; `--fix` sets it. `bin/check-modules` runs it and the hook's tests.
+
 
 Improvements from a review of AWS's Agent Toolkit for AWS, plus the agent guidance below.
 

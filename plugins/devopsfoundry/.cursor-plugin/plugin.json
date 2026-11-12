@@ -1,0 +1,14 @@
+{
+  "name": "devopsfoundry",
+  "displayName": "DevOpsFoundry",
+  "version": "1.12.0",
+  "description": "Put apps and static sites on AWS with DevOpsFoundry, a Terraform toolkit: container services on ECS Fargate behind HTTPS with optional Postgres, Redis and SES email, or S3 and CloudFront sites, with DNS and certificates. A skill for deploying and operating with its bin/ scripts, and a hook that asks before steps that skip their plan approval.",
+  "author": {
+    "name": "Juddson Sharp"
+  },
+  "homepage": "https://github.com/theJuddson/terraform-aws-devopsfoundry",
+  "repository": "https://github.com/theJuddson/terraform-aws-devopsfoundry",
+  "license": "Apache-2.0",
+  "category": "developer-tools",
+  "skills": "./skills/"
+}

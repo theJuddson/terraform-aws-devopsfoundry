@@ -6,6 +6,10 @@ placeholders, or fill them in: the prompt has the agent gather them and propose 
 agent uses DevOpsFoundry's `bin/` scripts and the `.devopsfoundry/` contract, and must not change DevOpsFoundry
 itself.
 
+If your agent takes plugins, install the DevOpsFoundry plugin instead (README, "With AI agents"): its
+`deploying-with-devopsfoundry` skill carries this workflow, and its hook enforces the approvals. This prompt is
+for agents without plugin support.
+
 For best results, set up AWS's Agent Toolkit on the machine first (README, "With AI agents"). The agent then reads
 AWS documentation and skills through the AWS MCP Server.
 
