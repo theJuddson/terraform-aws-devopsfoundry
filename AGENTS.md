@@ -11,8 +11,10 @@ them, this file wins. The [exceptions](#where-this-project-differs-from-awss-rul
 
 ## Using DevOpsFoundry to deploy
 
-Read the README's "The CLI" and "Apps" sections first. For a whole deployment, start from
-[docs/CONSUMER_PROMPT.md](docs/CONSUMER_PROMPT.md).
+Read the README's "The CLI" and "Apps" sections first. For a whole deployment, the plugin's
+[deploying-with-devopsfoundry](plugins/devopsfoundry/skills/deploying-with-devopsfoundry/SKILL.md) skill has the
+workflow (or [docs/CONSUMER_PROMPT.md](docs/CONSUMER_PROMPT.md) without a plugin). The plugin's hook asks the person
+before the commands listed below whenever they skip a plan; it backs these rules up, it doesn't replace them.
 
 ### What a person must approve
 
@@ -103,6 +105,9 @@ walk an agent through it. What they leave out, or what has caught people:
 - **Release notes are part of the change.** Add a `## vX.Y.Z` entry at the top of `CHANGELOG.md`, run
   `bin/check-readme-pins --fix` so the README examples pin that release, and regenerate the module READMEs with
   `terraform-docs -c .terraform-docs.yml modules/<name>`. CI checks all three.
+- **The plugin follows the code.** When a script's flags, a workflow step or a cost changes, update the skill under
+  `plugins/devopsfoundry/skills/` too. `bin/check-plugin` validates it and checks its version is the newest release
+  (`--fix` sets it); the hook's tests are in `tests/plugin/`.
 - **Accepted checkov findings** go in `docs/checkov-accepted.md`, with the reason. Put an inline
   `#checkov:skip=<id>:<reason>` on the resource.
 - **Nothing private goes in this repo:** no account IDs of real deployments, domains other than `example.com`

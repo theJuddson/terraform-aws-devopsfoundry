@@ -26,8 +26,8 @@ or straight from git, over HTTPS or SSH, pinned to a release tag (the newest is 
 [Releases page](https://github.com/theJuddson/terraform-aws-devopsfoundry/releases)):
 
 ```hcl
-source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.11.0"
-source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.11.0"
+source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.12.0"
+source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.12.0"
 ```
 
 Each module's README lists its inputs and outputs, and the building blocks have a runnable example under
@@ -248,7 +248,7 @@ serving and `--enable-email` are refused in this mode, and `destroy-app` removes
 
 ```bash
 bin/new-app example.com --subdomain app --existing-zone example.com \
-  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.11.0
+  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.12.0
 ```
 
 #### App-owned state
@@ -390,8 +390,22 @@ Give them to your agent, or follow them yourself:
 2. Run `aws configure agent-toolkit --region us-east-1 --profile <profile>`.
 3. Set `AWS_MCP_PROXY_PROFILES` to that profile in the `aws-mcp` entry it writes.
 
-To have an agent deploy an app, start from
-[docs/CONSUMER_PROMPT.md](https://github.com/theJuddson/terraform-aws-devopsfoundry/blob/main/docs/CONSUMER_PROMPT.md).
+**The DevOpsFoundry plugin** gives an agent the deploy workflow as a skill it loads when needed
+(`deploying-with-devopsfoundry`: approvals, secrets, costs, operating, troubleshooting), plus a hook that asks you
+before any command that skips a plan approval and blocks reading `.env` or fetching secret values. The scripts still
+run from your checkout, so the skill asks where it is.
+
+- Claude Code (2.1.275 or later): `/plugin install devopsfoundry --marketplace theJuddson/terraform-aws-devopsfoundry`.
+  Earlier versions: `/plugin marketplace add theJuddson/terraform-aws-devopsfoundry`, then
+  `/plugin install devopsfoundry@devopsfoundry`.
+- Codex: `codex plugin marketplace add theJuddson/terraform-aws-devopsfoundry`, then install **devopsfoundry** from
+  `/plugins`.
+- Cursor: Settings, Plugins, Team Marketplaces, Import from Repo, `theJuddson/terraform-aws-devopsfoundry`. Cursor
+  takes the skill but not the hook.
+
+The hook is a best-effort guard, not a security boundary. Without a plugin, paste
+[docs/CONSUMER_PROMPT.md](https://github.com/theJuddson/terraform-aws-devopsfoundry/blob/main/docs/CONSUMER_PROMPT.md)
+into the agent instead.
 
 ## Repository layout
 
@@ -400,6 +414,7 @@ modules/        static:  acm-cert · route53-zone · route53-records · static-s
                 app:     networking · container-service · database · cache · email · full-stack
                 blocks:  object-store · kms-key · shared-filesystem · task-runner · ecr-repository · ec2-host · budget-alarm · route53-zone-security
 AGENTS.md       rules for AI agents using or changing DevOpsFoundry (CLAUDE.md imports it)
+plugins/        the agent plugin: deploying-with-devopsfoundry skill and approval hook (bin/check-plugin validates it)
 main.tf         empty root module (the Terraform Registry requires one; use the submodules)
 examples/       one root per building-block module (validated in CI, never applied)
 tests/          offline compatibility and validation fixtures for bin/check-*
@@ -408,7 +423,7 @@ templates/full-stack/  app-root stamped into a repo's .devopsfoundry/ by new-app
 sites/<domain>/        generated static Terraform root (own remote-state key) + site.env
 bin/            sites: preflight · new-site · deploy · destroy-site
                 apps:  new-app · deploy-app · destroy-app · email-status · rotate-secret · release-nameservers
-                repo:  check-modules (fmt/validate/tflint/checkov) · check-compat (offline no-change proof) · check-readme-pins · soci-index
+                repo:  check-modules (fmt/validate/tflint/checkov) · check-compat (offline no-change proof) · check-readme-pins · check-plugin · soci-index
 lib/common.sh   shared shell helpers (logging, slug, tf wrappers)
 backend.tfvars.example  shared S3 state backend; copy to backend.tfvars (key is per-site / per-app)
 ```
