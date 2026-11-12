@@ -383,7 +383,8 @@ and says where DevOpsFoundry's rules take precedence: Terraform rather than CDK,
 rather than direct AWS calls.
 
 Those AWS rules expect the Agent Toolkit: the AWS MCP Server, plus AWS's skills for agents. Set it up once per machine
-with AWS's [setup instructions](https://github.com/aws/agent-toolkit-for-aws/blob/main/setup-instructions/setup.md).
+with AWS's [setup instructions](https://github.com/aws/agent-toolkit-for-aws/blob/main/setup-instructions/setup.md). It needs
+AWS CLI 2.35.9 or later; `AGENTS.md` lists the other steps that catch people out.
 Give them to your agent, or follow them yourself:
 1. Sign in to a named AWS profile.
 2. Run `aws configure agent-toolkit --region us-east-1 --profile <profile>`.
