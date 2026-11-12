@@ -60,7 +60,7 @@ locals {
 
 # 1. ACM cert (us-east-1), initially unvalidated.
 module "acm_cert" {
-  source      = "../../modules/acm-cert"
+  source      = "__MODULES__/acm-cert__MODULE_QUERY__"
   providers   = { aws = aws.us_east_1 }
   domain_name = var.domain_name
 }
@@ -68,14 +68,14 @@ module "acm_cert" {
 # 2. Route53 zone + ACM validation CNAMEs. No CloudFront dependency
 #    (Phase 1 targets this).
 module "route53_zone" {
-  source                        = "../../modules/route53-zone"
+  source                        = "__MODULES__/route53-zone__MODULE_QUERY__"
   domain_name                   = var.domain_name
   acm_domain_validation_options = module.acm_cert.domain_validation_options
 }
 
 # 3. Delegate the registrar's nameservers to the Route53 zone (Phase 1).
 module "namecheap_ns" {
-  source      = "../../modules/namecheap-ns"
+  source      = "__MODULES__/namecheap-ns__MODULE_QUERY__"
   domain_name = var.domain_name
   nameservers = module.route53_zone.name_servers
 }
@@ -92,7 +92,7 @@ resource "aws_acm_certificate_validation" "main" {
 
 # 5. S3 + CloudFront, using the validated cert (Phase 2).
 module "static_site" {
-  source          = "../../modules/static-site"
+  source          = "__MODULES__/static-site__MODULE_QUERY__"
   site_name       = var.site_name
   domain_name     = var.domain_name
   bucket_name     = local.bucket_name
@@ -101,7 +101,7 @@ module "static_site" {
 
 # 6. Point apex + www at CloudFront; optional Google Workspace email (Phase 2).
 module "route53_records" {
-  source                    = "../../modules/route53-records"
+  source                    = "__MODULES__/route53-records__MODULE_QUERY__"
   domain_name               = var.domain_name
   zone_id                   = module.route53_zone.zone_id
   cloudfront_domain_name    = module.static_site.distribution_domain

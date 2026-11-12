@@ -3,6 +3,22 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.15.0
+
+- Static sites keep their Terraform root in their own repo's `.devopsfoundry/`, like apps, so the config is committed
+  with the site instead of living only in this checkout's untracked `sites/`.
+  - `bin/new-site <domain> --config <dir> --module-ref vX.Y.Z` scaffolds the root there, with its modules pinned to
+    a release (or `--module-path DIR`) and a `.gitignore` for `.terraform/`. `--config` without either is refused.
+  - `bin/deploy --config <dir>` and `bin/destroy-site --config <dir>` read the domain from the root's
+    `terraform.tfvars` and initialize a fresh clone first (the root's own `backend.tfvars` wins over the shared one,
+    as for apps). `site.env` paths are relative to the directory holding `.devopsfoundry/`, so the committed file
+    has no machine paths. `destroy-site --config --purge` deletes the repo's directory, so it refuses `--yes`.
+  - The state key is still `devopsfoundry/<domain>/terraform.tfstate`, so an existing root moves without an AWS
+    change: the README's "Moving a site root out of `sites/`" has the steps, ending in a no-change plan.
+  - The build-freshness check skips `.devopsfoundry/`, whose `.terraform/` changes on every init.
+  - Without `--config` nothing changes: `sites/<domain>/` and the domain argument still work. `sites/` is now
+    gitignored, as AGENTS.md already said it was.
+
 ## v1.14.0
 
 - New `bin/estimate-cost --config <dir>` (#63): the app's monthly on-demand cost from its `app.tfvars` (and its
@@ -15,6 +31,7 @@ the earlier versions below were private and their tags are not in this repositor
   transfer, LCUs, NAT processing, logs, requests) are listed, not priced. Read-only: it calls only the Price List API.
   The plugin's skill and `docs/CONSUMER_PROMPT.md` now use it instead of asking the agent for figures.
 
+## v1.13.0
 
 - Opt-in baseline alarms (#62), following AWS's CloudWatch alarm guidance: 1-minute periods, alarm on 2 of the last 3,
   error rate as a percentage rather than a count, latency at p99 rather than Average, missing data set explicitly.

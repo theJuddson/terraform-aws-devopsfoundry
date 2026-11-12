@@ -15,6 +15,10 @@ logs/*.log
 # OS
 .DS_Store
 
+# Legacy static-site roots: private, owned by whoever runs this checkout. New
+# sites keep their root in their own repo's .devopsfoundry/ (new-site --config).
+/sites/
+
 # Shared state backend settings (see backend.tfvars.example)
 /backend.tfvars
 
