@@ -140,3 +140,4 @@ run "unknown_policy_types_are_refused" {
 
   expect_failures = [var.enabled_policy_types]
 }
+

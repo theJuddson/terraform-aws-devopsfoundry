@@ -33,7 +33,7 @@ variable "organizational_units" {
 }
 
 variable "service_access_principals" {
-  description = "AWS services trusted across the organization. sso.amazonaws.com is what IAM Identity Center needs; account.amazonaws.com lets the management account manage members' contact details."
+  description = "Every AWS service trusted across the organization: this list is authoritative, so a service given access outside Terraform loses it at the next apply (the plan warns first). sso.amazonaws.com is what IAM Identity Center needs; account.amazonaws.com lets the management account manage members' contact details. List the live ones with: aws organizations list-aws-service-access-for-organization."
   type        = list(string)
   default     = ["sso.amazonaws.com", "account.amazonaws.com"]
 }

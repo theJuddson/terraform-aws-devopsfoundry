@@ -312,3 +312,9 @@ variable "cpu_architecture" {
     error_message = "cpu_architecture must be X86_64 or ARM64."
   }
 }
+
+variable "deployment_circuit_breaker" {
+  description = "Stop a deployment whose tasks keep failing and roll back to the last working one. Off by default so existing services plan no change; new app roots from bin/new-app turn it on."
+  type        = bool
+  default     = false
+}

@@ -248,3 +248,25 @@ run "cpu_architecture_is_checked" {
 
   expect_failures = [var.cpu_architecture]
 }
+
+run "no_circuit_breaker_by_default" {
+  command = plan
+
+  assert {
+    condition     = length(aws_ecs_service.app.deployment_circuit_breaker) == 0
+    error_message = "Without the input the service must plan as before: no circuit breaker block."
+  }
+}
+
+run "circuit_breaker_rolls_back_when_asked" {
+  command = plan
+
+  variables {
+    deployment_circuit_breaker = true
+  }
+
+  assert {
+    condition     = one(aws_ecs_service.app.deployment_circuit_breaker).enable && one(aws_ecs_service.app.deployment_circuit_breaker).rollback
+    error_message = "The circuit breaker must stop a failing deployment and roll it back."
+  }
+}

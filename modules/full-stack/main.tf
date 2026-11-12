@@ -291,11 +291,12 @@ module "container_service" {
   health_check_interval = var.health_check_interval
   health_check_timeout  = var.health_check_timeout
 
-  tasks_in_public_subnets = var.tasks_in_public_subnets
-  cpu_architecture        = var.cpu_architecture
-  container_insights      = var.container_insights
-  alb_deletion_protection = var.alb_deletion_protection
-  log_kms_key_arn         = var.kms_key_arn
+  tasks_in_public_subnets    = var.tasks_in_public_subnets
+  cpu_architecture           = var.cpu_architecture
+  container_insights         = var.container_insights
+  deployment_circuit_breaker = var.deployment_circuit_breaker
+  alb_deletion_protection    = var.alb_deletion_protection
+  log_kms_key_arn            = var.kms_key_arn
 
   alb_access_logs                = var.alb_access_logs
   alb_access_logs_bucket         = var.alb_access_logs_bucket

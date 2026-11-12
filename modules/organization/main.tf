@@ -18,6 +18,25 @@ resource "aws_organizations_organization" "this" {
   enabled_policy_types          = var.enabled_policy_types
 }
 
+# service_access_principals is authoritative: a service given trusted access
+# outside Terraform (from the console, or by the service's own setup, such as
+# Compute Optimizer or Cost Optimization Hub) is switched off at the next
+# apply. This check reads the live organization and warns in the plan, naming
+# each service that would lose its access. A check only warns, which is also
+# why it works before the organization exists: then the read fails, and that
+# is only a warning too. (#59)
+check "service_access_kept" {
+  data "aws_organizations_organization" "live" {}
+
+  assert {
+    condition = length(setsubtract(
+      toset(coalesce(data.aws_organizations_organization.live.aws_service_access_principals, [])),
+      toset(var.service_access_principals),
+    )) == 0
+    error_message = "This apply would switch off organization trusted access for: ${join(", ", sort(tolist(setsubtract(toset(coalesce(data.aws_organizations_organization.live.aws_service_access_principals, [])), toset(var.service_access_principals)))))}. Add them to service_access_principals to keep them, or remove them on purpose."
+  }
+}
+
 resource "aws_organizations_organizational_unit" "this" {
   for_each  = var.organizational_units
   name      = each.key

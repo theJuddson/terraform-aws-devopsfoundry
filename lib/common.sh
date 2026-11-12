@@ -127,6 +127,26 @@ df_ses_account_status() {
          end' <<<"$out" 2>/dev/null || echo UNKNOWN
 }
 
+# Whether SES can send as a domain: the identity verified for sending, DKIM
+# verified, and its custom MAIL FROM domain (when it has one) verified. Prints
+# one line per problem. Returns 0 when ready, 1 when not, 2 when unreadable.
+# Usage: df_ses_identity_status <domain> <region>
+df_ses_identity_status() {
+  local out
+  if ! out="$(aws sesv2 get-email-identity --email-identity "$1" --region "$2" --output json 2>&1)"; then
+    if grep -q NotFoundException <<<"$out"; then echo "  $1 is not an SES identity in $2 yet"; return 1; fi
+    echo "  could not read SES identity $1 in $2 (aws sesv2 get-email-identity)"; return 2
+  fi
+  jq -r --arg d "$1" '
+    (if .VerifiedForSendingStatus == true then empty else "  \($d) is not verified for sending" end),
+    (if (.DkimAttributes.Status // "") == "SUCCESS" then empty
+     else "  DKIM for \($d) is \(.DkimAttributes.Status // "not set up") (needs its CNAME records in DNS)" end),
+    (if (.MailFromAttributes.MailFromDomain // "") == "" or (.MailFromAttributes.MailFromDomainStatus // "") == "SUCCESS" then empty
+     else "  MAIL FROM \(.MailFromAttributes.MailFromDomain) is \(.MailFromAttributes.MailFromDomainStatus // "unknown") (needs its MX and SPF records)" end)
+  ' <<<"$out" | grep . && return 1
+  return 0
+}
+
 # One line on what an SES status means for sending. Usage: df_ses_report <region> <status>
 df_ses_report() {
   case "$2" in
@@ -211,6 +231,27 @@ df_ensure_app_init() {
   df_tf_init "$c" -input=false -backend-config="$backend" || die "terraform init failed in $c"
 }
 
+# Force a new deployment of an ECS service and wait for it to settle. With the
+# circuit breaker on, a failing deployment is rolled back and the service
+# settles on the previous one, so "stable" alone isn't success: check the
+# deployment we started is still the primary one (#54).
+# Returns 0 on success, 1 if update-service failed, 2 if the deployment was
+# rolled back or failed, 3 if it didn't settle in time.
+# Usage: df_roll_service <cluster> <service> <region>
+df_roll_service() {
+  local cluster="$1" service="$2" region="$3" started primary state settled=true
+  started="$(aws ecs update-service --cluster "$cluster" --service "$service" --force-new-deployment \
+    --region "$region" --query "service.deployments[?status=='PRIMARY'] | [0].id" --output text)" || return 1
+  aws ecs wait services-stable --cluster "$cluster" --services "$service" --region "$region" || settled=false
+  read -r primary state < <(aws ecs describe-services --cluster "$cluster" --services "$service" --region "$region" \
+    --query "services[0].deployments[?status=='PRIMARY'] | [0].[id, rolloutState]" --output text 2>/dev/null) || true
+  if [[ -n "$started" && "$started" != "None" && -n "$primary" && "$primary" != "$started" ]] || [[ "$state" == FAILED ]]; then
+    echo "  deployment ${started:-?} failed; $service is on ${primary:-?} (${state:-unknown})" >&2
+    return 2
+  fi
+  $settled || return 3
+}
+
 # Run terraform in a config dir. Usage: df_tf_at <config_dir> <args...>
 df_tf_at() { local c="$1"; shift; terraform -chdir="$c" "$@"; }
 
@@ -273,26 +314,26 @@ df_tfvars_secret_arns() {
     | sort -u
 }
 
-# Check each secret exists, isn't scheduled for deletion and has a non-empty
-# current value. Prints one line per problem and returns 1 if there are any.
-# Values are never printed: only their length is asked for.
+# Check each secret exists, isn't scheduled for deletion and has a current
+# version. Prints one line per problem and returns 1 if there are any. Only
+# describe-secret is called: the value is never read, so neither DevOpsFoundry
+# nor the identity running it needs secretsmanager:GetSecretValue (#55).
+# (bin/put-secret refuses an empty value, so "has a current version" is the
+# check that can still fail.)
 df_check_secrets() {
-  local arn region bad=0 deleted len
+  local arn region bad=0 out deleted current
   for arn in "$@"; do
     region="$(cut -d: -f4 <<<"$arn")"
-    if ! deleted="$(aws secretsmanager describe-secret --secret-id "$arn" --region "$region" \
-          --query 'DeletedDate' --output text 2>/dev/null)"; then
+    if ! out="$(aws secretsmanager describe-secret --secret-id "$arn" --region "$region" \
+          --query '[DeletedDate, length(values(VersionIdsToStages || `{}`)[?contains(@, `AWSCURRENT`)])]' \
+          --output text 2>/dev/null)"; then
       echo "  missing:   $arn"; bad=1; continue
     fi
+    read -r deleted current <<<"$out"
     if [[ -n "$deleted" && "$deleted" != "None" ]]; then
-      echo "  deleted:   $arn (scheduled for deletion; restore it with aws secretsmanager restore-secret)"; bad=1; continue
-    fi
-    len="$(aws secretsmanager get-secret-value --secret-id "$arn" --region "$region" \
-          --query 'length(SecretString || SecretBinary || `""`)' --output text 2>/dev/null)" || len=""
-    if [[ -z "$len" ]]; then
-      echo "  no value:  $arn (no current version, or no permission to read it)"; bad=1
-    elif [[ "$len" == "0" ]]; then
-      echo "  empty:     $arn"; bad=1
+      echo "  deleted:   $arn (scheduled for deletion; restore it with aws secretsmanager restore-secret)"; bad=1
+    elif [[ "${current:-0}" == "0" ]]; then
+      echo "  no value:  $arn (no current version: store one with bin/put-secret)"; bad=1
     fi
   done
   return $bad

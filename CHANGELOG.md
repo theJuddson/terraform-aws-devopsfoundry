@@ -3,7 +3,31 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
-## Unreleased
+## v1.11.0
+
+Improvements from a review of AWS's Agent Toolkit for AWS, plus the agent guidance below.
+
+- `container-service` and `full-stack`: opt-in ECS deployment circuit breaker, `deployment_circuit_breaker` (#54). A
+  deployment whose tasks keep failing is stopped and rolled back in minutes instead of retrying until ECS gives up.
+  Off by default, so existing stacks plan no change; new app roots from `bin/new-app` turn it on (existing roots: add
+  the variable and `module "app"` argument from `templates/full-stack`). `bin/deploy-app` and `bin/rotate-secret`
+  now check that the deployment they started is the one that settled, so a rolled-back deploy fails with that said,
+  instead of reporting "Service stable".
+- Secret checks never read a value (#55). `deploy-app`'s check uses `describe-secret` only: the secret exists, isn't
+  scheduled for deletion, and has a current version. Nothing in DevOpsFoundry calls `get-secret-value`, so the
+  deploying identity no longer needs `secretsmanager:GetSecretValue`.
+- `bin/put-secret` tags every secret `Project=devopsfoundry` and `App=<app>` (`--app`, else the name's first
+  segment), and takes `--kms-key` to use a customer managed key (#56).
+- `bin/email-status` reports whether the sending domain is ready (verified for sending, DKIM, custom MAIL FROM) and
+  refuses `--request-production` until it is, since AWS reviews the request against it (#57). The domain is
+  `--domain`, else the app's `domain_name`.
+- `bin/preflight` tells an expired sign-in (`aws login`, IAM Identity Center) from missing or rejected credentials,
+  with the command that fixes each, and notes when the profile uses long-term access keys (#58).
+- `organization`: the plan warns, naming each service, before an apply would switch off organization trusted access
+  that was turned on outside Terraform (#59). The README explains that `service_access_principals` is authoritative.
+
+### Agent guidance
+
 
 - `AGENTS.md` (imported by `CLAUDE.md`): rules for AI agents that use or change DevOpsFoundry, covering what a person
   must approve, secrets, upgrade safety and checks. It ends with AWS's Agent Toolkit rules (Apache-2.0, attributed in
