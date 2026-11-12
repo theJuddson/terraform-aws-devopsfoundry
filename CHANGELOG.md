@@ -3,6 +3,13 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.10.1
+
+- App scripts work in a fresh clone or a moved app repo (#45). `deploy-app`, `destroy-app`, `release-nameservers`,
+  `rotate-secret` and `email-status --config` run `terraform init` first when the app root has no `.terraform`
+  (it's gitignored), with the app's own `backend.tfvars` if it has one, else the shared one, as `new-app` does.
+  An app that is already initialized is not initialized again.
+
 ## v1.10.0
 
 - Access for other people, two ways. Both need Terraform 1.9 or later.

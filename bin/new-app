@@ -140,8 +140,7 @@ if [[ -n "$BACKEND_CONFIG" ]]; then
   [[ -f "$BACKEND_CONFIG" ]] || die "Backend config not found: $BACKEND_CONFIG"
   [[ "$(cd "$(dirname "$BACKEND_CONFIG")" && pwd)/$(basename "$BACKEND_CONFIG")" == "$CONFIG/backend.tfvars" ]] || cp "$BACKEND_CONFIG" "$CONFIG/backend.tfvars"
 fi
-BACKEND_FILE="$DF_ROOT/backend.tfvars"
-[[ -f "$CONFIG/backend.tfvars" ]] && BACKEND_FILE="$CONFIG/backend.tfvars"
+BACKEND_FILE="$(df_app_backend_file "$CONFIG")"
 info "State backend: $BACKEND_FILE"
 
 step "terraform init"

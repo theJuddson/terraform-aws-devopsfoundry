@@ -17,6 +17,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 CONFIG="$(df_resolve_config "$CONFIG")"
+df_ensure_app_init "$CONFIG"
 [[ -f "$CONFIG/app.env" ]] || die "Missing $CONFIG/app.env"
 DOCKERFILE="Dockerfile"; DOCKER_CONTEXT="."; DOCKER_BUILD_ARGS=""; VERIFY_SCRIPT=""
 # shellcheck disable=SC1091
