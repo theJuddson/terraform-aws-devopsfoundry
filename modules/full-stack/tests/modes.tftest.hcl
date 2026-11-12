@@ -485,3 +485,17 @@ run "no_alarms_unless_asked" {
     error_message = "Without alarm_emails or alarm_sns_topic_arns, no alarms."
   }
 }
+
+run "waf_logging_reaches_the_container_service" {
+  command = plan
+
+  variables {
+    create_waf  = true
+    waf_logging = true
+  }
+
+  assert {
+    condition     = output.waf_log_group == "aws-waf-logs-demo-alb"
+    error_message = "waf_logging must reach the container service and name its log group."
+  }
+}

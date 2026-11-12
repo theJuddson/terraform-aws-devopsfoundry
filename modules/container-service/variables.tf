@@ -374,3 +374,26 @@ variable "alarm_p99_seconds" {
     error_message = "alarm_p99_seconds must be above 0."
   }
 }
+
+variable "waf_logging" {
+  description = "Log the WAF's requests to CloudWatch Logs (aws-waf-logs-<name>-alb), with Authorization and Cookie redacted. Only with create_waf. Billed per GB ingested and stored; by default only blocked and counted requests are kept."
+  type        = bool
+  default     = false
+}
+
+variable "waf_log_all_requests" {
+  description = "Keep every request in the WAF log, allowed ones too, not only blocked and counted. Much more volume."
+  type        = bool
+  default     = false
+}
+
+variable "waf_log_retention_days" {
+  description = "Days to keep WAF request logs."
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = contains([1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653], var.waf_log_retention_days)
+    error_message = "waf_log_retention_days must be a retention period CloudWatch Logs accepts (1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, ...)."
+  }
+}

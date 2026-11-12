@@ -118,6 +118,7 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | tasks\_in\_public\_subnets | Run ECS tasks in public subnets with public IPs (no NAT needed). Inbound stays ALB-only. In shared-platform mode this must match the host: true if the host has no NAT gateway (the plan fails otherwise). | `bool` | `false` | no |
 | vpc\_cidr | ── Networking ───────────────────────────────────────── | `string` | `"10.0.0.0/16"` | no |
 | waf\_count\_only | Count WAF matches without blocking. Start here on a live ALB, then set false to enforce. | `bool` | `false` | no |
+| waf\_logging | Log the WAF's blocked and counted requests to CloudWatch Logs (Authorization and Cookie redacted). Only with create\_waf; billed per GB. | `bool` | `false` | no |
 | waf\_managed\_rule\_groups | AWS managed rule groups to apply, in order. | `list(string)` | <pre>[<br/>  "AWSManagedRulesAmazonIpReputationList",<br/>  "AWSManagedRulesCommonRuleSet",<br/>  "AWSManagedRulesKnownBadInputsRuleSet"<br/>]</pre> | no |
 | waf\_rate\_limit | Requests per client IP per 5 minutes before the rate rule blocks it, across every host on the ALB. | `number` | `2000` | no |
 | waf\_rule\_overrides | Managed rules to count instead of block, keyed by rule group, e.g. { AWSManagedRulesCommonRuleSet = ["SizeRestrictions\_BODY"] }. | `map(list(string))` | `{}` | no |
@@ -147,5 +148,6 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | rds\_security\_group\_id | Security group on the RDS instance; add ingress rules here for companion services |
 | service\_url | n/a |
 | task\_security\_group\_id | Security group attached to this app's ECS tasks |
+| waf\_log\_group | The WAF request log group, when waf\_logging is on |
 | waf\_web\_acl\_arn | Web ACL attached to the ALB this stack owns (empty when none, or in shared-platform mode) |
 <!-- END_TF_DOCS -->

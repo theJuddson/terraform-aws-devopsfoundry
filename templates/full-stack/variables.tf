@@ -315,3 +315,9 @@ variable "alarm_sns_topic_arns" {
   type        = list(string)
   default     = []
 }
+
+variable "waf_logging" {
+  description = "Log the WAF's blocked and counted requests to CloudWatch Logs (Authorization and Cookie redacted). Only with create_waf; billed per GB."
+  type        = bool
+  default     = false
+}

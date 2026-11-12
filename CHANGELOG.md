@@ -3,6 +3,20 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.16.0
+
+- `container-service` and `full-stack`: opt-in WAF request logging, `waf_logging` (#66). With `create_waf`, the web
+  ACL logs to the CloudWatch log group `aws-waf-logs-<name>-alb` (the prefix WAF requires), with the Authorization
+  and Cookie headers redacted and, unless `waf_log_all_requests`, only the requests a rule blocked or counted: what
+  tuning count mode needs, as AWS advises turning logging on first. `waf_log_retention_days` (30) sets retention;
+  `log_kms_key_arn` encrypts it. Output `waf_log_group`. Off by default, so existing stacks plan no change. The
+  README gains a WAF section.
+- `AGENTS.md`: the Agent Toolkit notes now cover what an expired sign-in looks like (the AWS MCP server fails to start
+  with `-32602`, like a missing profile), that `aws login` and `aws configure sso` need a real terminal, that
+  `aws login` signs in as whatever account the browser is in, and that an IAM Identity Center profile works with the
+  AWS MCP server. AWS's documentation confirms v1.13.0's note that CloudWatch alarms can't publish to a topic under
+  the AWS-managed SNS key.
+
 ## v1.15.0
 
 - Static sites keep their Terraform root in their own repo's `.devopsfoundry/`, like apps, so the config is committed

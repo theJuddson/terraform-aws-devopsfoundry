@@ -75,17 +75,24 @@ walk an agent through it. What they leave out, or what has caught people:
   flag in 2.35.9. Older versions fail with `Found invalid choice 'agent-toolkit'`. Check `aws --version`, then
   upgrade (`brew upgrade awscli`, or AWS's installer) before running the wizard. Retrying without `--yes` doesn't
   fix it on a version older than 2.35.0.
-- **Two steps need the person.** They run in their own terminal, because an agent's shell can't open a browser or
-  answer prompts:
-  - `aws login --region <region> --profile <profile>`, a browser sign-in;
+- **Two steps need the person.** They run in their own terminal app, because an agent's shell (and Claude Code's
+  `!` prefix) can't open a browser or answer a prompt:
+  - a sign-in: `aws login --region <region> --profile <profile>` for an IAM user, or `aws configure sso` then
+    `aws sso login --profile <profile>` for IAM Identity Center. Both work with the AWS MCP server;
   - `aws configure agent-toolkit --yes --region us-east-1 --profile <profile>`, an interactive wizard.
+- **`aws login` signs in as whoever the browser is signed in as.** If the browser holds a session for another
+  account (an IAM Identity Center portal, say), it offers to repoint the profile at that account; answer `n` and
+  sign the browser in to the right account first.
 - **Use us-east-1 for the wizard and `aws agent-toolkit` commands,** whatever the account's default region: the
   Toolkit service only runs there.
 - **Use a named profile, not `default`.** The scripts use `default`, through `.env`. Afterwards, add
   `"env": { "AWS_MCP_PROXY_PROFILES": "<profile>" }` to each `aws-mcp` entry the wizard wrote; without it the server
   looks for `default` and fails to start with `JSON-RPC error: -32602`. Leave every other field and server as it is.
   More accounts: add their profiles to that space-separated list. Then restart the AI tool.
-- **Sign-ins last 12 hours** and renew for 90 days without the browser.
+- **An expired sign-in gives the same `-32602`.** `aws sts get-caller-identity --profile <profile>` says "Your session
+  has expired"; the person signs in again in their terminal, then reconnects the server (`/mcp` in Claude Code).
+  AWS says `aws login` sessions last 12 hours and renew for up to 90 days; in practice one still expired and needed
+  the browser again, so don't promise it won't.
 - **Check the install** with `aws agent-toolkit list-available-skills --region us-east-1 --profile <profile>`.
 
 ## Changing DevOpsFoundry

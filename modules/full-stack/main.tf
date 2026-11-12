@@ -314,6 +314,7 @@ module "container_service" {
   create_waf              = var.create_waf
   waf_web_acl_arn         = var.waf_web_acl_arn
   waf_count_only          = var.waf_count_only
+  waf_logging             = var.waf_logging
   waf_rate_limit          = var.waf_rate_limit
   waf_managed_rule_groups = var.waf_managed_rule_groups
   waf_rule_overrides      = var.waf_rule_overrides

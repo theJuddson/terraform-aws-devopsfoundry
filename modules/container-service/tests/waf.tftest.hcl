@@ -13,6 +13,10 @@ mock_provider "aws" {
   mock_resource "aws_lb" {
     defaults = { arn = "arn:aws:elasticloadbalancing:us-east-1:111111111111:loadbalancer/app/demo-alb/mock" }
   }
+  mock_resource "aws_cloudwatch_log_group" {
+    override_during = plan
+    defaults        = { arn = "arn:aws:logs:us-east-1:111111111111:log-group:aws-waf-logs-demo-alb" }
+  }
   mock_resource "aws_wafv2_web_acl" {
     defaults = { arn = "arn:aws:wafv2:us-east-1:111111111111:regional/webacl/demo-alb/mock" }
   }
@@ -156,4 +160,91 @@ run "guest_app_on_shared_alb_creates_and_attaches_nothing" {
     condition     = length(aws_wafv2_web_acl.alb) == 0 && length(aws_wafv2_web_acl_association.alb) == 0 && output.waf_web_acl_arn == ""
     error_message = "A guest app must not create or attach a web ACL: the shared ALB's belongs to the host platform."
   }
+}
+
+# ── Request logging (#66) ─────────────────────────────
+run "no_waf_logging_by_default" {
+  command = plan
+
+  variables {
+    create_waf = true
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_log_group.waf) == 0 && length(aws_wafv2_web_acl_logging_configuration.alb) == 0 && output.waf_log_group == null
+    error_message = "WAF logging is opt-in."
+  }
+}
+
+run "waf_logging_keeps_blocked_and_counted_requests_with_credentials_redacted" {
+  command = plan
+
+  variables {
+    create_waf  = true
+    waf_logging = true
+  }
+
+  assert {
+    condition     = aws_cloudwatch_log_group.waf[0].name == "aws-waf-logs-demo-alb" && aws_cloudwatch_log_group.waf[0].retention_in_days == 30
+    error_message = "The log group must be named aws-waf-logs-..., which WAF requires, and keep 30 days by default."
+  }
+  assert {
+    condition     = aws_wafv2_web_acl_logging_configuration.alb[0].log_destination_configs == toset(["arn:aws:logs:us-east-1:111111111111:log-group:aws-waf-logs-demo-alb"])
+    error_message = "The web ACL must log to that group."
+  }
+  assert {
+    condition     = toset([for r in aws_wafv2_web_acl_logging_configuration.alb[0].redacted_fields : one(r.single_header).name]) == toset(["authorization", "cookie"])
+    error_message = "Authorization and Cookie headers must be redacted."
+  }
+  assert {
+    condition     = one(aws_wafv2_web_acl_logging_configuration.alb[0].logging_filter).default_behavior == "DROP"
+    error_message = "Requests no rule acted on are dropped by default."
+  }
+  assert {
+    condition     = toset([for c in one(one(aws_wafv2_web_acl_logging_configuration.alb[0].logging_filter).filter).condition : one(c.action_condition).action]) == toset(["BLOCK", "COUNT"])
+    error_message = "Blocked and counted requests are kept."
+  }
+  assert {
+    condition     = output.waf_log_group == "aws-waf-logs-demo-alb"
+    error_message = "The output must name the log group."
+  }
+}
+
+run "all_requests_can_be_logged" {
+  command = plan
+
+  variables {
+    create_waf             = true
+    waf_logging            = true
+    waf_log_all_requests   = true
+    waf_log_retention_days = 7
+  }
+
+  assert {
+    condition     = length(aws_wafv2_web_acl_logging_configuration.alb[0].logging_filter) == 0 && aws_cloudwatch_log_group.waf[0].retention_in_days == 7
+    error_message = "waf_log_all_requests removes the filter; retention follows the variable."
+  }
+}
+
+run "waf_logging_needs_a_waf_this_module_creates" {
+  command = plan
+
+  variables {
+    waf_logging = true
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_log_group.waf) == 0
+    error_message = "Without create_waf there is no web ACL of ours to log."
+  }
+}
+
+run "waf_log_retention_must_be_one_cloudwatch_accepts" {
+  command = plan
+
+  variables {
+    waf_log_retention_days = 10
+  }
+
+  expect_failures = [var.waf_log_retention_days]
 }
