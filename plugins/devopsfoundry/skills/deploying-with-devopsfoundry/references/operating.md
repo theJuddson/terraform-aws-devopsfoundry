@@ -12,6 +12,14 @@ yes first.
 | Stop Terraform managing a live delegation* | `$DOF/bin/release-nameservers --config <dir>` (`new-app` runs it once DNS is live) |
 | Tear down* | `$DOF/bin/destroy-app --config <dir>`. Deletes the stack and reverts the nameservers unless `--keep-ns`. Only when the person asks |
 
+## Alarms
+
+Propose `alarm_emails = ["<the person's address>"]` in `app.tfvars` for any app people rely on: it turns on alarms for
+the app's 5xx rate, p99 latency and health, and the database's storage and CPU, at about $0.10 per alarm per
+month. Each address must click the confirmation email AWS sends, or nothing arrives. Thresholds:
+`alarm_5xx_percent` (5), `alarm_p99_seconds` (2). Existing app roots made before v1.13.0 need the variables copied
+from `$DOF/templates/full-stack`.
+
 ## Injected environment variables
 
 With `--enable-db`, `--enable-cache` or `--enable-email`, the container gets:

@@ -457,3 +457,31 @@ run "rotation_state_reaches_the_cache_and_email_modules" {
     error_message = "The SMTP key slots must reach the email module."
   }
 }
+
+run "alarm_emails_reach_the_service_and_the_database" {
+  command = plan
+
+  variables {
+    enable_database = true
+    desired_count   = 1
+    alarm_emails    = ["ops@example.com"]
+  }
+
+  assert {
+    condition     = length(module.container_service.alarm_names) == 4 && length(module.database[0].alarm_names) >= 2
+    error_message = "alarm_emails must turn on the service's and the database's alarms."
+  }
+}
+
+run "no_alarms_unless_asked" {
+  command = plan
+
+  variables {
+    enable_database = true
+  }
+
+  assert {
+    condition     = length(module.container_service.alarm_names) == 0 && length(module.database[0].alarm_names) == 0
+    error_message = "Without alarm_emails or alarm_sns_topic_arns, no alarms."
+  }
+}

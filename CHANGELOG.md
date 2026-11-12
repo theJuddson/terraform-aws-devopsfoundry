@@ -3,7 +3,25 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
-## v1.12.0
+## v1.13.0
+
+- Opt-in baseline alarms (#62), following AWS's CloudWatch alarm guidance: 1-minute periods, alarm on 2 of the last 3,
+  error rate as a percentage rather than a count, latency at p99 rather than Average, missing data set explicitly.
+  Off unless asked, so existing stacks plan no change.
+  - `container-service`: `alarm_emails` creates an SNS topic with email subscriptions (each address confirms AWS's
+    email) and four alarms on the app's own target group, so they work on a shared ALB too: 5xx rate over
+    `alarm_5xx_percent` (5%, quiet minutes under `alarm_min_requests` count as 0%), p99 latency over
+    `alarm_p99_seconds` (2s), any unhealthy target, and no healthy target at all (only when `desired_count` > 0).
+    `alarm_sns_topic_arns` adds existing topics, or turns the alarms on alone. `alarm_topic_kms_key_arn` encrypts the
+    topic with a customer managed key (CloudWatch can't use the AWS-managed SNS key). Outputs `alarm_topic_arn` and
+    `alarm_names`.
+  - `database`: free storage under `alarm_free_storage_percent` (10%) of `allocated_storage`, CPU over
+    `alarm_cpu_percent` (80%) for 15 minutes, and CPU credits under `alarm_cpu_credit_balance` (20) on `db.t*`
+    classes, sent to `alarm_sns_topic_arns`; `alarms_enabled` decides when the topic is made in the same apply.
+  - `full-stack`: `alarm_emails` and `alarm_sns_topic_arns` turn on both, the database's sharing the service's topic.
+    New app roots have the line commented in `app.tfvars`; existing ones copy the variables and `module "app"`
+    arguments from `templates/full-stack`. About $0.10 per alarm per month.
+
 
 - DevOpsFoundry is an agent plugin (#60). `plugins/devopsfoundry` packages a `deploying-with-devopsfoundry` skill in
   the format of AWS's Agent Toolkit for AWS: the deploy workflow, what a person must approve, secrets, costs,

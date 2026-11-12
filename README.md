@@ -26,8 +26,8 @@ or straight from git, over HTTPS or SSH, pinned to a release tag (the newest is 
 [Releases page](https://github.com/theJuddson/terraform-aws-devopsfoundry/releases)):
 
 ```hcl
-source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.12.0"
-source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.12.0"
+source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.13.0"
+source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.13.0"
 ```
 
 Each module's README lists its inputs and outputs, and the building blocks have a runnable example under
@@ -248,7 +248,7 @@ serving and `--enable-email` are refused in this mode, and `destroy-app` removes
 
 ```bash
 bin/new-app example.com --subdomain app --existing-zone example.com \
-  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.12.0
+  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.13.0
 ```
 
 #### App-owned state
@@ -279,6 +279,14 @@ app. Fix forward, or roll back by re-tagging a previous `git-<sha>` image (every
 deploy pushes both `git-<sha>` and `latest`; the task definition pulls `latest`).
 An image built with uncommitted changes to tracked files is tagged
 `git-<sha>-dirty` instead, since it isn't exactly that commit.
+
+#### Alarms
+
+Set `alarm_emails = ["you@example.com"]` in `app.tfvars` for baseline alarms, emailed through an SNS topic: the
+app's 5xx rate, p99 latency, unhealthy targets and no healthy target, and with a database, its free storage, CPU and
+(on `db.t*` classes) CPU credits. Each address must confirm the subscription email AWS sends. About $0.10 per alarm
+per month; tune the thresholds with `alarm_5xx_percent` and `alarm_p99_seconds`, or send them to an existing topic
+with `alarm_sns_topic_arns`.
 
 #### Shared platform (cheap mode)
 

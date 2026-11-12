@@ -414,3 +414,15 @@ variable "deployment_circuit_breaker" {
   type        = bool
   default     = false
 }
+
+variable "alarm_emails" {
+  description = "Email addresses for the baseline alarms: the service's 5xx rate, p99 latency and unhealthy targets, and the database's free storage and CPU. Each address confirms AWS's subscription email. Empty, with alarm_sns_topic_arns empty, means no alarms."
+  type        = list(string)
+  default     = []
+}
+
+variable "alarm_sns_topic_arns" {
+  description = "Existing SNS topics the baseline alarms also notify. Setting this alone turns the alarms on."
+  type        = list(string)
+  default     = []
+}

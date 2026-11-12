@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "devopsfoundry",
-  "version": "1.12.0",
+  "version": "1.13.0",
   "description": "Put apps and static sites on AWS with DevOpsFoundry, a Terraform toolkit: container services on ECS Fargate behind HTTPS with optional Postgres, Redis and SES email, or S3 and CloudFront sites, with DNS and certificates. A skill for deploying and operating with its bin/ scripts, and a hook that asks before steps that skip their plan approval.",
   "author": {
     "name": "Juddson Sharp",

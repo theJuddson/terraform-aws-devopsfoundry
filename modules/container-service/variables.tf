@@ -318,3 +318,59 @@ variable "deployment_circuit_breaker" {
   type        = bool
   default     = false
 }
+
+variable "alarm_emails" {
+  description = "Email addresses for the baseline alarms (5xx rate, p99 latency, unhealthy and no healthy targets). Creates an SNS topic; each address must confirm AWS's subscription email. Empty, with alarm_sns_topic_arns empty, means no alarms."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for e in var.alarm_emails : can(regex("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", e))])
+    error_message = "alarm_emails must be email addresses."
+  }
+}
+
+variable "alarm_sns_topic_arns" {
+  description = "Existing SNS topics the baseline alarms also notify (a team's topic, a chat integration). Setting this alone turns the alarms on without creating a topic."
+  type        = list(string)
+  default     = []
+}
+
+variable "alarm_topic_kms_key_arn" {
+  description = "Customer managed KMS key for the alarm topic. Its key policy must let cloudwatch.amazonaws.com use it (kms:Decrypt, kms:GenerateDataKey*); the AWS-managed SNS key doesn't work with CloudWatch alarms. null = unencrypted."
+  type        = string
+  default     = null
+}
+
+variable "alarm_5xx_percent" {
+  description = "Alarm when more than this percentage of the app's responses are 5xx (in 2 of 3 minutes)."
+  type        = number
+  default     = 5
+
+  validation {
+    condition     = var.alarm_5xx_percent > 0 && var.alarm_5xx_percent <= 100
+    error_message = "alarm_5xx_percent must be above 0 and at most 100."
+  }
+}
+
+variable "alarm_min_requests" {
+  description = "Minutes with fewer requests than this count as a 0% error rate, so a single failure in a quiet minute doesn't alarm."
+  type        = number
+  default     = 20
+
+  validation {
+    condition     = var.alarm_min_requests >= 1 && floor(var.alarm_min_requests) == var.alarm_min_requests
+    error_message = "alarm_min_requests must be a whole number, 1 or more."
+  }
+}
+
+variable "alarm_p99_seconds" {
+  description = "Alarm when the app's p99 response time is over this many seconds (in 2 of 3 minutes). Tune to about twice your normal p99."
+  type        = number
+  default     = 2
+
+  validation {
+    condition     = var.alarm_p99_seconds > 0
+    error_message = "alarm_p99_seconds must be above 0."
+  }
+}

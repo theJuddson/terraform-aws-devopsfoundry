@@ -46,3 +46,18 @@ output "cpu_architecture" {
   description = "CPU architecture the tasks run on (X86_64 or ARM64); build images for it"
   value       = var.cpu_architecture
 }
+
+output "alarm_topic_arn" {
+  description = "The SNS topic the baseline alarms notify, when alarm_emails created one (null otherwise)"
+  value       = one(aws_sns_topic.alarms[*].arn)
+}
+
+output "alarm_names" {
+  description = "Names of the baseline alarms (empty when they're off)"
+  value = compact([
+    one(aws_cloudwatch_metric_alarm.error_rate[*].alarm_name),
+    one(aws_cloudwatch_metric_alarm.latency_p99[*].alarm_name),
+    one(aws_cloudwatch_metric_alarm.unhealthy_targets[*].alarm_name),
+    one(aws_cloudwatch_metric_alarm.no_healthy_targets[*].alarm_name),
+  ])
+}

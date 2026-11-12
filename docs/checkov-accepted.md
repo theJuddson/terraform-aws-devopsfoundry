@@ -28,6 +28,7 @@ The defaults still match v1.1.0, so checkov keeps reporting these for the defaul
 | database | CKV_AWS_157 | Single-AZ | `db_multi_az` is a variable; off by default for cost |
 | database | CKV2_AWS_30 | No Postgres query logging | Opt in with `log_min_duration_ms` (v1.4.0) |
 | database | CKV_AWS_161 | No IAM database authentication | Apps use the RDS-managed password from Secrets Manager; opt in with `iam_database_authentication_enabled = true` (v1.3.0) |
+| database | CKV_AWS_354 (inline skip) | Performance Insights not encrypted with a customer managed key | Performance Insights is opt-in and then uses the AWS-managed key. Checkov reports it only when it can't resolve the module call's variables (full-stack passes the database a module output, for the alarm topic); a customer managed key for it isn't supported yet |
 | database | CKV_AWS_293 | Deletion protection off by default | `db_deletion_protection` is a variable; off so teardown works |
 | email | CKV_AWS_273, CKV_AWS_40 | IAM user with an inline policy | SES SMTP credentials can only be derived from an IAM user's access key; the policy allows `ses:SendRawEmail` only |
 | project-access | CKV_AWS_273, CKV_AWS_40 (inline skip) | Optional IAM user with an inline policy | Only when `user_name` is set, for a shared account without Identity Center; it can only assume the project role with MFA and manage its own password and MFA. Separate accounts with `organization` and `identity-center` are the SSO way |

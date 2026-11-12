@@ -98,6 +98,7 @@ enable_email    = __ENABLE_EMAIL__   # SES          -> injects MAIL_HOST/MAIL_PO
 # enable_flow_logs                = true   # VPC flow logs to CloudWatch, per GB
 # container_insights              = true   # ECS Container Insights, per metric
 # deployment_circuit_breaker      = false  # on by default: a failing deploy rolls back
+# alarm_emails                    = ["you@example.com"]  # 5xx rate, p99 latency, unhealthy targets, DB storage/CPU (~$0.10/alarm/month); confirm AWS's email
 # alb_deletion_protection         = true   # turn off again before destroy-app
 # db_performance_insights_enabled = true   # free 7-day retention
 # db_monitoring_interval          = 60     # enhanced monitoring, seconds
