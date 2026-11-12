@@ -84,21 +84,48 @@ if [[ "$YES" != true ]]; then
   read -r -p "Deploy to $URL? (y/N) " c; [[ "$c" == [yY] ]] || { echo "Aborted."; exit 0; }
 fi
 
-# ── Sync: hashed assets get a long immutable cache; index.html never caches ──
-step "Syncing assets"
-OUT=$(aws s3 sync "$BUILD_DIR" "s3://$BUCKET" --delete \
-  --exclude "index.html" \
-  --cache-control "max-age=31536000,public,immutable" 2>&1) \
-  || die "S3 sync failed: $OUT"
-pass "Assets synced"
+# ── Upload. A file's cache header follows its name ─────
+#   hashed assets (index-B4kq9z1x.js)  a year, immutable: the name changes with the content
+#   *.html                             never cached
+#   everything else (styles.css, logo.png, robots.txt)  cached but revalidated on every
+#     request, so an edit shows on the next visit and an unchanged file costs a 304
+# Assets go up before the HTML that points at them, and old files are deleted last.
+# Unhashed files are copied every time rather than synced: sync skips a file whose
+# content hasn't changed, which would leave an old cache header on it.
+HASHED=()
+while IFS= read -r f; do HASHED+=("$f"); done < <(df_hashed_assets "$BUILD_DIR")
+SKIP_HASHED=()
+for f in ${HASHED[@]+"${HASHED[@]}"}; do SKIP_HASHED+=(--exclude "$f"); done
 
-if [[ -f "$BUILD_DIR/index.html" ]]; then
-  step "Uploading index.html (no-cache)"
-  OUT=$(aws s3 cp "$BUILD_DIR/index.html" "s3://$BUCKET/index.html" \
-    --cache-control "no-cache,no-store,must-revalidate" \
-    --content-type "text/html" 2>&1) || die "index.html upload failed: $OUT"
-  pass "index.html uploaded"
+if [[ ${#HASHED[@]} -gt 0 ]]; then
+  step "Syncing ${#HASHED[@]} hashed asset(s) (cached for a year)"
+  ONLY_HASHED=(--exclude "*")
+  for f in "${HASHED[@]}"; do ONLY_HASHED+=(--include "$f"); done
+  OUT=$(aws s3 sync "$BUILD_DIR" "s3://$BUCKET" "${ONLY_HASHED[@]}" \
+    --cache-control "max-age=31536000,public,immutable" 2>&1) \
+    || die "S3 sync of hashed assets failed: $OUT"
+  pass "Hashed assets synced"
 fi
+
+step "Uploading other assets (revalidated on every request)"
+OUT=$(aws s3 cp "$BUILD_DIR" "s3://$BUCKET" --recursive \
+  --exclude "*.html" ${SKIP_HASHED[@]+"${SKIP_HASHED[@]}"} \
+  --cache-control "no-cache" 2>&1) \
+  || die "Asset upload failed: $OUT"
+pass "Other assets uploaded"
+
+step "Uploading HTML (never cached)"
+OUT=$(aws s3 cp "$BUILD_DIR" "s3://$BUCKET" --recursive \
+  --exclude "*" --include "*.html" \
+  --cache-control "no-cache,no-store,must-revalidate" \
+  --content-type "text/html" 2>&1) || die "HTML upload failed: $OUT"
+pass "HTML uploaded"
+
+# Everything is uploaded now, so sizes match and this only deletes what the build no longer has
+step "Removing files no longer in the build"
+OUT=$(aws s3 sync "$BUILD_DIR" "s3://$BUCKET" --delete --size-only 2>&1) \
+  || die "S3 cleanup failed: $OUT"
+pass "Old files removed"
 
 # ── Invalidate CloudFront ──────────────────────────────
 step "Invalidating CloudFront"
