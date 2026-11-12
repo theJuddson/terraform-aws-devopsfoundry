@@ -93,6 +93,7 @@ anything else. (Sites can still live in this checkout's gitignored
 | `bin/put-secret <name> --env ENV_NAME` | Store an app secret from a hidden prompt or stdin (never argv or history), tagged with its app, optionally under your own KMS key (`--kms-key`); prints the `app.tfvars` line |
 | `bin/email-status [--config <dir>]` | Whether SES in the app's region can send to anyone yet (or is in the sandbox), whether the app's domain is verified (DKIM, MAIL FROM), and the DMARC report record to add; `--request-production` asks AWS for production access, once the domain is ready |
 | `bin/rotate-secret --config <dir> redis\|smtp` | Rotate the app's Redis auth token or SMTP password with no failed requests: publish a new one while the old still works, roll the service, retire the old one; `bin/preflight` warns once one is over 90 days old |
+| `bin/estimate-cost --config <dir>` | The app's monthly on-demand cost from its `app.tfvars` and AWS's Price List API: tasks, load balancer, NAT gateway, public IPv4, database and cache, priced and summed line by line (usage-driven costs listed, not priced) |
 | `bin/release-nameservers --config <dir>` | Stop managing a live Namecheap delegation in Terraform, so deploys never call Namecheap (`new-app` runs it) |
 | `bin/destroy-app --config <dir>` | Tear down the app stack; reverts the delegation unless `--keep-ns` |
 
@@ -454,7 +455,7 @@ templates/static/      site-root stamped into a repo's .devopsfoundry/ (or sites
 templates/full-stack/  app-root stamped into a repo's .devopsfoundry/ by new-app
 sites/<domain>/        legacy, gitignored static roots (new-site without --config)
 bin/            sites: preflight · new-site · deploy · destroy-site
-                apps:  new-app · deploy-app · destroy-app · email-status · rotate-secret · release-nameservers
+                apps:  new-app · deploy-app · destroy-app · email-status · rotate-secret · estimate-cost · release-nameservers
                 repo:  check-modules (fmt/validate/tflint/checkov) · check-compat (offline no-change proof) · check-readme-pins · check-plugin · soci-index
 lib/common.sh   shared shell helpers (logging, slug, tf wrappers)
 backend.tfvars.example  shared S3 state backend; copy to backend.tfvars (key is per-site / per-app)

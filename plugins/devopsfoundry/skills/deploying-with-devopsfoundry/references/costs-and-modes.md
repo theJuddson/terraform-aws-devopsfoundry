@@ -1,8 +1,11 @@
 # Costs and modes
 
-Rough monthly costs in us-east-1 before any traffic. Say which mode you're proposing, and give the person the
-figure before they approve `bin/new-app`. These are DevOpsFoundry's own estimates from its README; for a precise
-figure use AWS's pricing data, not mental arithmetic.
+**Get the figure from the script, never by arithmetic of your own:** write the proposed settings into `app.tfvars`,
+then run `$DOF/bin/estimate-cost --config <app repo>/.devopsfoundry`. It prices every hourly resource from AWS's
+Price List API for the app's region and sums them, and lists the usage-driven costs it can't price. Show the person
+its table before they approve `bin/new-app`, and rerun it when you change the mode or sizes.
+
+The modes, with DevOpsFoundry's rough us-east-1 figures for orientation only:
 
 | Mode | Fixed cost | Notes |
 | --- | --- | --- |

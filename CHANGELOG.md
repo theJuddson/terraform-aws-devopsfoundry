@@ -19,6 +19,18 @@ the earlier versions below were private and their tags are not in this repositor
   - Without `--config` nothing changes: `sites/<domain>/` and the domain argument still work. `sites/` is now
     gitignored, as AGENTS.md already said it was.
 
+## v1.14.0
+
+- New `bin/estimate-cost --config <dir>` (#63): the app's monthly on-demand cost from its `app.tfvars` (and its
+  `variables.tf` defaults) and AWS's Price List API, read at run time. Fargate vCPU and memory (x86 or ARM), the ALB,
+  the NAT gateway, public IPv4 addresses, RDS PostgreSQL (instance, Single- or Multi-AZ, and gp3 storage) and
+  ElastiCache Redis, each priced and multiplied out in the script, never by reasoning, as AWS's billing guidance
+  requires. A shared platform counts only the guest's own resources. Each price must match its usage type exactly in
+  an AWS Region, so lookalikes (Trust Store units, Outposts, extended-support nodes, idle instances) are never
+  picked; no price or two different prices stops the estimate instead of guessing. Usage-driven costs (data
+  transfer, LCUs, NAT processing, logs, requests) are listed, not priced. Read-only: it calls only the Price List API.
+  The plugin's skill and `docs/CONSUMER_PROMPT.md` now use it instead of asking the agent for figures.
+
 ## v1.13.0
 
 - Opt-in baseline alarms (#62), following AWS's CloudWatch alarm guidance: 1-minute periods, alarm on 2 of the last 3,

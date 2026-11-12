@@ -57,8 +57,9 @@ said yes in this conversation. Reading is always fine: `bin/preflight`, `bin/ema
    - a `VERIFY_SCRIPT` that proves real behavior;
    - who should get alarms (`alarm_emails`), for an app people rely on.
 
-   Propose `app.tfvars` and `app.env` values, the cost (see [references/costs-and-modes.md](references/costs-and-modes.md)),
-   and the exact command, then wait for approval.
+   Propose `app.tfvars` and `app.env` values, the monthly cost from `$DOF/bin/estimate-cost --config <app
+   repo>/.devopsfoundry` (see [references/costs-and-modes.md](references/costs-and-modes.md); never your own
+   arithmetic), and the exact command, then wait for approval.
 2. **Provision**, after approval:
    `$DOF/bin/new-app <domain> --config <app repo>/.devopsfoundry --module-ref <newest vX.Y.Z in $DOF/CHANGELOG.md> [flags]`.
    It shows each phase's plan and asks. It builds at `desired_count = 0`: there's no image yet, which is expected.
