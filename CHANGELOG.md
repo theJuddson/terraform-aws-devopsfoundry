@@ -10,6 +10,8 @@ the earlier versions below were private and their tags are not in this repositor
   `NOTICE`), with where DevOpsFoundry's rules take precedence. The README's new "With AI agents" section points to
   AWS's Agent Toolkit setup. `docs/CONSUMER_PROMPT.md` is brought up to date: plans shown before applying,
   `put-secret`, `VERIFY_SCRIPT`, `email-status`, `--module-ref`, shared platforms.
+- `AGENTS.md` gains "Setting up the AWS Agent Toolkit": AWS CLI 2.35.9 or later, the two steps a person runs, us-east-1
+  only, a named profile with `AWS_MCP_PROXY_PROFILES`, and how to check the install.
 
 ## v1.10.2
 

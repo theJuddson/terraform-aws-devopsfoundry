@@ -63,6 +63,29 @@ without `--request-production`, `terraform plan`, `terraform output`, and `descr
 - **When something fails, read the whole error first.** Don't retry with `-auto-approve`, `-replace`, `state rm`
   or `-target` to get past it. Report the error, what you think caused it, and what you'd check next.
 
+### Setting up the AWS Agent Toolkit
+
+AWS's rules at the end of this file expect the [Agent Toolkit for AWS](https://github.com/aws/agent-toolkit-for-aws):
+the AWS MCP Server plus AWS's skills. AWS's [setup instructions](https://github.com/aws/agent-toolkit-for-aws/blob/main/setup-instructions/setup.md)
+walk an agent through it. What they leave out, or what has caught people:
+
+- **The AWS CLI must be 2.35.9 or later.** `aws configure agent-toolkit` first shipped in 2.35.0 and its `--yes`
+  flag in 2.35.9. Older versions fail with `Found invalid choice 'agent-toolkit'`. Check `aws --version`, then
+  upgrade (`brew upgrade awscli`, or AWS's installer) before running the wizard. Retrying without `--yes` doesn't
+  fix it on a version older than 2.35.0.
+- **Two steps need the person.** They run in their own terminal, because an agent's shell can't open a browser or
+  answer prompts:
+  - `aws login --region <region> --profile <profile>`, a browser sign-in;
+  - `aws configure agent-toolkit --yes --region us-east-1 --profile <profile>`, an interactive wizard.
+- **Use us-east-1 for the wizard and `aws agent-toolkit` commands,** whatever the account's default region: the
+  Toolkit service only runs there.
+- **Use a named profile, not `default`.** The scripts use `default`, through `.env`. Afterwards, add
+  `"env": { "AWS_MCP_PROXY_PROFILES": "<profile>" }` to each `aws-mcp` entry the wizard wrote; without it the server
+  looks for `default` and fails to start with `JSON-RPC error: -32602`. Leave every other field and server as it is.
+  More accounts: add their profiles to that space-separated list. Then restart the AI tool.
+- **Sign-ins last 12 hours** and renew for 90 days without the browser.
+- **Check the install** with `aws agent-toolkit list-available-skills --region us-east-1 --profile <profile>`.
+
 ## Changing DevOpsFoundry
 
 - **Run the checks before you push.** `bin/check-modules` runs fmt, validate, tflint, every module's
