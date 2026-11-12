@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+# estimate-cost — the monthly on-demand cost of an app's stack, from its
+#                 app.tfvars and AWS's Price List API (#63).
+#
+# Usage: bin/estimate-cost --config <dir> [--region <region>]
+#
+# Prices come from the Price List API at run time (read-only, free, no account
+# changes), and every sum is done here in code, so the figure is the same each
+# run and never a guess. It covers what a DevOpsFoundry stack bills by the hour:
+# Fargate tasks, the ALB, the NAT gateway, public IPv4 addresses, RDS (instance
+# and storage) and ElastiCache. Traffic-driven costs (data transfer, ALB LCUs,
+# NAT data processing, logs, requests) depend on usage and are listed, not
+# priced. Settings not in app.tfvars take the app root's variables.tf defaults.
+set -euo pipefail
+DF_SCRIPT_NAME="estimate-cost"
+source "$(cd "$(dirname "$0")/.." && pwd)/lib/common.sh"
+df_load_env
+
+CONFIG=""; REGION=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --config) [[ $# -ge 2 ]] || die "usage: bin/estimate-cost --config <dir> [--region <region>]"; CONFIG="$2"; shift 2 ;;
+    --region) [[ $# -ge 2 ]] || die "usage: bin/estimate-cost --config <dir> [--region <region>]"; REGION="$2"; shift 2 ;;
+    *)        die "usage: bin/estimate-cost --config <dir> [--region <region>]" ;;
+  esac
+done
+CONFIG="$(df_resolve_config "$CONFIG")"
+TFV="$CONFIG/app.tfvars"
+[[ -f "$TFV" ]] || die "Missing $TFV"
+
+# setting <name> <fallback>: app.tfvars, else the app root's variables.tf default,
+# else the fallback (the template's default when this was written).
+setting() {
+  local v
+  v="$(df_tfvar "$TFV" "$1")"
+  if [[ -z "$v" && -f "$CONFIG/variables.tf" ]]; then
+    v="$(awk -v n="$1" '
+      $0 ~ "^variable \"" n "\"" { inb = 1; next }
+      inb && /^}/ { inb = 0 }
+      inb && /^[[:space:]]*default[[:space:]]*=/ { sub(/^[^=]*=[[:space:]]*/, ""); sub(/[[:space:]]*#.*$/, ""); gsub(/^"|"$/, ""); print; exit }
+    ' "$CONFIG/variables.tf")"
+  fi
+  echo "${v:-$2}"
+}
+number() { [[ "$2" =~ ^[0-9]+([.][0-9]+)?$ ]] || die "$1 must be a number in $TFV (got: $2)"; echo "$2"; }
+
+REGION="${REGION:-$(setting aws_region us-east-1)}"
+CPU="$(number cpu "$(setting cpu 512)")"
+MEMORY="$(number memory "$(setting memory 1024)")"
+TASKS="$(number desired_count "$(setting desired_count 1)")"
+ARCH="$(setting cpu_architecture X86_64)"
+AZS="$(number az_count "$(setting az_count 2)")"
+SHARED="$(setting shared_platform "")"
+NAT="$(setting enable_nat_gateway true)"
+PUBLIC_TASKS="$(setting tasks_in_public_subnets false)"
+DB="$(setting enable_database false)"
+DB_CLASS="$(setting db_instance_class db.t4g.micro)"
+DB_GB="$(number db_allocated_storage "$(setting db_allocated_storage 20)")"
+DB_MULTI_AZ="$(setting db_multi_az false)"
+CACHE="$(setting enable_cache false)"
+CACHE_TYPE="$(setting cache_node_type cache.t4g.micro)"
+CACHE_NODES="$(number cache_num_cache_clusters "$(setting cache_num_cache_clusters 1)")"
+case "$ARCH" in X86_64) ARCH_PART="" ;; ARM64) ARCH_PART="ARM-" ;; *) die "cpu_architecture must be X86_64 or ARM64 (got: $ARCH)" ;; esac
+
+# price <var> <what> <service code> <usage type> [jq test] [Field=Value...]
+# Sets <var> to the one on-demand USD price for that usage type, matched
+# exactly, apart from an optional region prefix: a code ending in a digit
+# (USE1-, APS2-) or eu-west-1's older EU-. Not any capitals: TS-LoadBalancerUsage
+# is a Trust Store unit, not an ALB-hour in an AWS Region, not
+# an Outpost or Local Zone. Stops, naming <what>, when the price list has none
+# or more than one distinct price, rather than picking one.
+price() {
+  local var="$1" what="$2" svc="$3" usage="$4" test="${5:-true}" out prices f; shift 5 || shift $#
+  local filters=("Type=TERM_MATCH,Field=regionCode,Value=$REGION" "Type=TERM_MATCH,Field=locationType,Value=AWS Region")
+  for f in "$@"; do filters+=("Type=TERM_MATCH,Field=${f%%=*},Value=${f#*=}"); done
+  out="$(aws pricing get-products --region us-east-1 --service-code "$svc" --filters "${filters[@]}" --output json)" \
+    || die "Could not read AWS prices for $what (aws pricing get-products --service-code $svc)"
+  prices="$(jq -r --arg u "$usage" "[.PriceList[] | fromjson | .product.attributes as \$a
+      | select((\$a.usagetype | test(\"^(EU-|[A-Z]{2,4}[0-9]-)?\" + (\$u | gsub(\"[.]\"; \"[.]\")) + \"\$\")) and (\$a | $test))
+      | [.terms.OnDemand[].priceDimensions[]][] | .pricePerUnit.USD | tonumber] | unique | .[]" <<<"$out")" \
+    || die "Could not read AWS's price list answer for $what"
+  case "$(grep -c . <<<"$prices" || true)" in
+    1) printf -v "$var" '%s' "$prices" ;;
+    0) die "AWS's price list has no on-demand price for $what in $REGION" ;;
+    *) die "AWS's price list has several prices for $what in $REGION ($(tr '\n' ' ' <<<"$prices")); not guessing" ;;
+  esac
+}
+
+echo ""
+echo "DevOpsFoundry — Monthly cost estimate"
+echo "  config: $CONFIG"
+echo "  region: $REGION (on-demand list prices from the AWS Price List API, 730 hours a month)"
+echo "─────────────────────────────────────"
+
+LINES=""   # tab-separated: item, quantity, unit, unit price
+add() { LINES="$LINES$1"$'\t'"$2"$'\t'"$3"$'\t'"$4"$'\n'; }
+
+if (( $(awk -v t="$TASKS" 'BEGIN { print (t > 0) }') )); then
+  price P "Fargate ${ARCH_PART}vCPU" AmazonECS "Fargate-${ARCH_PART}vCPU-Hours:perCPU"
+  add "Fargate vCPU, $ARCH ($TASKS × $(awk -v c="$CPU" 'BEGIN { print c / 1024 }') vCPU)" \
+    "$(awk -v t="$TASKS" -v c="$CPU" 'BEGIN { print t * c / 1024 * 730 }')" "vCPU-hours" "$P"
+  price P "Fargate ${ARCH_PART}memory" AmazonECS "Fargate-${ARCH_PART}GB-Hours"
+  add "Fargate memory ($TASKS × $(awk -v m="$MEMORY" 'BEGIN { print m / 1024 }') GB)" \
+    "$(awk -v t="$TASKS" -v m="$MEMORY" 'BEGIN { print t * m / 1024 * 730 }')" "GB-hours" "$P"
+fi
+
+IPV4=0
+if [[ -z "$SHARED" ]]; then
+  price P "an Application Load Balancer" AWSELB "LoadBalancerUsage" true "productFamily=Load Balancer-Application"
+  add "Application Load Balancer" 730 "hours" "$P"
+  IPV4=$((IPV4 + ${AZS%.*}))
+  if [[ "$NAT" == true ]]; then
+    price P "a NAT gateway" AmazonEC2 "NatGateway-Hours" true "productFamily=NAT Gateway"
+    add "NAT gateway" 730 "hours" "$P"
+    IPV4=$((IPV4 + 1))
+  fi
+  if [[ "$PUBLIC_TASKS" == true ]]; then IPV4=$((IPV4 + ${TASKS%.*})); fi
+fi
+if (( IPV4 > 0 )); then
+  price P "a public IPv4 address" AmazonVPC "PublicIPv4:InUseAddress"
+  add "Public IPv4 addresses ($IPV4)" "$((IPV4 * 730))" "address-hours" "$P"
+fi
+
+if [[ "$DB" == true ]]; then
+  if [[ "$DB_MULTI_AZ" == true ]]; then DEPLOY="Multi-AZ"; DB_UT="Multi-AZUsage:$DB_CLASS"; else DEPLOY="Single-AZ"; DB_UT="InstanceUsage:$DB_CLASS"; fi
+  price P "RDS PostgreSQL $DB_CLASS ($DEPLOY)" AmazonRDS "$DB_UT" '.licenseModel == "No license required"' \
+    "instanceType=$DB_CLASS" "databaseEngine=PostgreSQL" "deploymentOption=$DEPLOY" "productFamily=Database Instance"
+  add "RDS PostgreSQL $DB_CLASS, $DEPLOY" 730 "hours" "$P"
+  price P "RDS gp3 storage ($DEPLOY)" AmazonRDS "$([[ "$DEPLOY" == Multi-AZ ]] && echo "RDS:Multi-AZ-GP3-Storage" || echo "RDS:GP3-Storage")" \
+    '.volumeType == "General Purpose-GP3"' "productFamily=Database Storage" "databaseEngine=PostgreSQL" "deploymentOption=$DEPLOY"
+  add "RDS gp3 storage, $DEPLOY" "$DB_GB" "GB-months" "$P"
+fi
+
+if [[ "$CACHE" == true ]]; then
+  price P "ElastiCache Redis $CACHE_TYPE" AmazonElastiCache "NodeUsage:$CACHE_TYPE" true "instanceType=$CACHE_TYPE" "cacheEngine=Redis"
+  add "ElastiCache Redis $CACHE_TYPE ($CACHE_NODES node(s))" "$(awk -v n="$CACHE_NODES" 'BEGIN { print n * 730 }')" "node-hours" "$P"
+fi
+
+# The arithmetic, in one place: quantity × unit price per line, then the total.
+printf '%s' "$LINES" | awk -F '\t' '
+  { cost = $2 * $4; total += cost
+    printf "  %-46s %9.2f %-13s × $%-10.6g = $%9.2f\n", $1, $2, $3, $4, cost }
+  END { printf "─────────────────────────────────────\n  %-46s %38s $%9.2f\n", "Estimated monthly total", "", total }'
+
+[[ -n "$SHARED" ]] && info "Shared platform \"$SHARED\": the host app pays the load balancer, NAT gateway and their addresses."
+echo ""
+echo "  Not included (usage-driven): data transfer out, ALB capacity units (LCUs), NAT gateway data"
+echo "  processing, CloudWatch logs and alarms, Secrets Manager secrets, SES messages, WAF, Route53"
+echo "  queries and the hosted zone, ECR storage, backups beyond the free allowance, taxes."

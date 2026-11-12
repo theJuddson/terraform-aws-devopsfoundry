@@ -41,8 +41,9 @@ FIRST, GATHER AND REPORT (run nothing that changes anything yet)
 - Every environment variable the app reads, and which are secrets.
 - A VERIFY_SCRIPT for app.env: a small script that proves the deployed app works (a page renders, a real API route
   answers, the database is reachable). A health check alone doesn't prove that.
-- The cost: dedicated, with or without a NAT gateway, or shared with an existing platform. Give rough monthly
-  figures.
+- The cost: dedicated, with or without a NAT gateway, or shared with an existing platform. Once the proposed
+  settings are in .devopsfoundry/app.tfvars, run <DEVOPSFOUNDRY_DIR>/bin/estimate-cost --config
+  <THIS_REPO>/.devopsfoundry and show me its table. Don't work out prices yourself.
 Then propose app.tfvars and app.env values, and the exact new-app command with --module-ref <latest vX.Y.Z from
 CHANGELOG.md>, and wait for my approval.
 
