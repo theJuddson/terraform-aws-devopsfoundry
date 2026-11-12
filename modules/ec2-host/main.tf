@@ -114,8 +114,12 @@ resource "aws_instance" "this" {
 
   # A newer AMI from the SSM parameter would otherwise replace the instance on
   # the next apply. Roll forward on purpose with `terraform apply -replace`.
+  # volume_tags tags the root volume at launch only. After that the provider reads
+  # it back from every attached volume, including the data volume, so without this
+  # each apply would strip the data volume's dlm-snapshot tag and silently stop
+  # its snapshots.
   lifecycle {
-    ignore_changes = [ami]
+    ignore_changes = [ami, volume_tags]
   }
 }
 
