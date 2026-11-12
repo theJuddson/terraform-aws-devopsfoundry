@@ -106,6 +106,32 @@ df_build_freshness() {
   fi
 }
 
+# ── Static-site cache headers (bin/deploy) ─────────────
+# Whether a file name carries a content hash, so its URL changes whenever its
+# content does and browsers may keep it for a year: "index-B4kq9z1x.js",
+# "main.3f2a9c1b.css". The hash is the last dash- or dot-separated part of the
+# name before the extension: 8 or more letters, digits or underscores, at least
+# one of them a digit. "mountains.png" has no digit, so it counts as unhashed.
+# Erring that way is cheap (one revalidation per visit); the other way would
+# serve a stale file for a year. Usage: df_is_hashed_asset <path>
+df_is_hashed_asset() {
+  local base="${1##*/}" stem part
+  stem="${base%.*}"
+  [[ "$stem" != "$base" && -n "$stem" ]] || return 1
+  part="${stem##*[.-]}"
+  [[ "$part" != "$stem" ]] || return 1
+  [[ ${#part} -ge 8 && "$part" =~ ^[A-Za-z0-9_]+$ && "$part" =~ [0-9] ]]
+}
+
+# Paths, relative to <build_dir>, of the files whose names carry a content hash
+# (see df_is_hashed_asset). Usage: df_hashed_assets <build_dir>
+df_hashed_assets() {
+  local f
+  (cd "$1" && find . -type f ! -name .DS_Store | sed 's|^\./||' | sort) | while IFS= read -r f; do
+    if df_is_hashed_asset "$f"; then echo "$f"; fi
+  done
+}
+
 # Whether a git work tree has uncommitted changes to tracked files under <dir>.
 # Untracked files don't count (editor and Finder litter would flag every deploy).
 # False outside a git work tree. Usage: df_git_dirty <dir>

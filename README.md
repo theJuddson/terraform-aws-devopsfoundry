@@ -84,7 +84,7 @@ shares state with anything else.
 |---|---|
 | `bin/preflight` | Toolchain, AWS auth, Namecheap API, IP whitelist |
 | `bin/new-site <domain> --build-dir ./dist` | Zone + NS delegation + ACM + S3 + CloudFront |
-| `bin/deploy <domain>` | Build, sync to S3, invalidate CloudFront |
+| `bin/deploy <domain>` | Build, sync to S3, invalidate CloudFront. Files with a content hash in their name are cached for a year, HTML never, everything else is revalidated on each request |
 | `bin/destroy-site <domain>` | Tear down; reverts nameservers to Namecheap default |
 | `bin/new-app <domain> --config <dir>` | Zone + NS + ACM + VPC + Fargate stack at `desired_count = 0`; shows each phase's plan and asks before applying it (`--yes` skips, `--plan-only` applies nothing) |
 | `bin/deploy-app --config <dir>` | Build image → ECR → apply → roll service → verify |
