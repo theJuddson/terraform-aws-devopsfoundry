@@ -41,14 +41,14 @@ Improvements from a review of AWS's Agent Toolkit for AWS, plus the agent guidan
 - `organization`: the plan warns, naming each service, before an apply would switch off organization trusted access
   that was turned on outside Terraform (#59). The README explains that `service_access_principals` is authoritative.
 
-### Agent guidance
-
-
 - `bin/deploy` sets each file's cache header from its name. Only files with a content hash in their name
   (`index-B4kq9z1x.js`) keep the one-year `immutable` header. Every HTML page is never cached, where before only
   `index.html` was, and other files (`styles.css`, images, `robots.txt`) are revalidated on each request. Until now
   those were cached for a year, so returning visitors could keep an old stylesheet or page after a deploy.
   Unhashed files are re-uploaded on every deploy so an object uploaded under the old header gets the new one.
+
+### Agent guidance
+
 - `AGENTS.md` (imported by `CLAUDE.md`): rules for AI agents that use or change DevOpsFoundry, covering what a person
   must approve, secrets, upgrade safety and checks. It ends with AWS's Agent Toolkit rules (Apache-2.0, attributed in
   `NOTICE`), with where DevOpsFoundry's rules take precedence. The README's new "With AI agents" section points to
