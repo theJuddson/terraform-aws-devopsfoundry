@@ -1,101 +1,91 @@
-# Consumer prompt — deploy an app with DevOpsFoundry
+# Consumer prompt: deploy an app with DevOpsFoundry
 
-Paste the block below into a Claude Code session running **inside the app repo you
-want to deploy**. Replace the `<…>` placeholders (or leave them — the prompt tells
-the session to gather and propose them before doing anything). The session consumes
-DevOpsFoundry's `bin/` + the `.devopsfoundry/` contract; it must not modify
-DevOpsFoundry itself.
+Paste the block below into an agent session (Claude Code, Codex, Cursor, ...) running **inside the app repo you
+want to deploy**. Replace `<DEVOPSFOUNDRY_DIR>` with your DevOpsFoundry checkout. Leave the other `<...>`
+placeholders, or fill them in: the prompt has the agent gather them and propose values before it runs anything. The
+agent uses DevOpsFoundry's `bin/` scripts and the `.devopsfoundry/` contract, and must not change DevOpsFoundry
+itself.
+
+For best results, set up AWS's Agent Toolkit on the machine first (README, "With AI agents"). The agent then reads
+AWS documentation and skills through the AWS MCP Server.
 
 ---
 
 ```
-We're going to provision and deploy THIS application into AWS using DevOpsFoundry,
-a separate DevOps tool checked out at <DEVOPSFOUNDRY_DIR> (do not modify it — only consume it).
+We're going to put THIS application on AWS with DevOpsFoundry, a separate toolkit checked out at
+<DEVOPSFOUNDRY_DIR>. Use it; don't change it.
 
-WHAT DEVOPSFOUNDRY DOES
-It provisions a framework-neutral container service — ECS Fargate behind an HTTPS ALB,
-with Route53 DNS and automated Namecheap nameserver delegation, plus optional RDS
-Postgres, Redis, and SES. AWS creds + Namecheap API creds are already configured in
-<DEVOPSFOUNDRY_DIR>/.env. The full contract is in <DEVOPSFOUNDRY_DIR>/README.md
-("Apps (full-stack container services)") — read it first.
+READ FIRST
+- <DEVOPSFOUNDRY_DIR>/AGENTS.md: the rules for agents using DevOpsFoundry. They take precedence over general AWS
+  guidance. Above all: what I must approve, and how secrets are handled.
+- <DEVOPSFOUNDRY_DIR>/README.md, sections "The CLI" and "Apps (full-stack container services)".
+AWS and Namecheap credentials are already in <DEVOPSFOUNDRY_DIR>/.env. The scripts load them; don't read that file.
 
-THE WORKFLOW (three steps)
-1. Scaffold + provision infra:
-     cd <DEVOPSFOUNDRY_DIR>
-     bash bin/new-app <YOURDOMAIN.com> --config <THIS_REPO>/.devopsfoundry \
-       [--subdomain api | --apex] [--enable-db] [--enable-cache] [--enable-email] --yes
-   By default the service is fronted at api.<YOURDOMAIN.com>; pass --apex to serve at
-   the bare domain (<YOURDOMAIN.com>) instead.
-   This delegates YOURDOMAIN's nameservers to Route53 (a real DNS change), validates an
-   ACM cert, and stands up VPC/ALB/ECS at desired_count=0 (no image yet). It scaffolds
-   <THIS_REPO>/.devopsfoundry/{main.tf,backend.tf,app.tfvars,app.env,...}.
-2. Edit <THIS_REPO>/.devopsfoundry/app.tfvars (container_port, health_check_path,
-   cpu/memory, desired_count, env{}, secrets{}) and .devopsfoundry/app.env (DOCKERFILE,
-   DOCKER_CONTEXT). Commit the .devopsfoundry dir to this repo.
-3. Build + deploy:
-     bash bin/deploy-app --config <THIS_REPO>/.devopsfoundry --yes
-   Builds the Dockerfile, pushes to ECR, scales the service up, rolls it, waits for
-   stable, and health-checks https://api.YOURDOMAIN.com<health_check_path>.
+WHAT IT BUILDS
+A container service on ECS Fargate behind an HTTPS load balancer, with Route53 DNS and the domain's nameservers
+set at Namecheap. Optional: Postgres (RDS), Redis and SES email. It can share another app's network and load
+balancer (--shared-platform) to cost less.
 
-BEFORE YOU RUN ANYTHING, gather these facts about THIS app and report them to me:
-- The domain to use, and whether to serve at a subdomain (default `api` →
-  api.YOURDOMAIN.com) or at the bare apex domain (`--apex` → YOURDOMAIN.com). Confirm
-  the domain is registered in the Namecheap account.
-- The port the container listens on (set container_port).
-- A health endpoint that returns HTTP 200 (set health_check_path; default /health).
-- Whether there's a Dockerfile that builds a runnable image (linux/amd64). If not, create
-  a production multi-stage Dockerfile that EXPOSEs the port and runs the server.
-- Which backing services it needs: Postgres (--enable-db), Redis (--enable-cache),
-  SES email (--enable-email).
-- All required environment variables and which are secret.
+FIRST, GATHER AND REPORT (run nothing that changes anything yet)
+- The domain. Is it in the Namecheap account, or is it an existing Route53 zone (--existing-zone)? Should the app
+  serve at a subdomain (default api.<DOMAIN>) or the bare domain (--apex)?
+- The port the container listens on, and a health path that returns 200.
+- A Dockerfile that builds a runnable image. If there isn't one, propose a multi-stage production Dockerfile.
+  Graviton (cpu_architecture = "ARM64" in app.tfvars) is about 20% cheaper if the image's dependencies support
+  arm64.
+- Backing services: Postgres (--enable-db), Redis (--enable-cache), email (--enable-email).
+- Every environment variable the app reads, and which are secrets.
+- A VERIFY_SCRIPT for app.env: a small script that proves the deployed app works (a page renders, a real API route
+  answers, the database is reachable). A health check alone doesn't prove that.
+- The cost: dedicated, with or without a NAT gateway, or shared with an existing platform. Give rough monthly
+  figures.
+Then propose app.tfvars and app.env values, and the exact new-app command with --module-ref <latest vX.Y.Z from
+CHANGELOG.md>, and wait for my approval.
 
-REQUIREMENTS & GOTCHAS
-- Repo layout: the default module source is the relative sibling path
-  ../../DevOpsFoundry/modules/full-stack, so THIS repo should sit in the same parent
-  directory as the DevOpsFoundry checkout. Prefer --module-ref <tag> (a pinned git source),
-  which works from anywhere.
-- Config split: app.tfvars is Terraform config (sizing, env, secrets, toggles); app.env is
-  build config (Dockerfile path, context). They are NOT the same file.
-- env vs secrets: `env` is a plaintext map; `secrets` is a map of ENV_NAME → AWS Secrets
-  Manager ARN (append ":json_key::" to pull one JSON field). For app secrets (JWT, OAuth,
-  API keys, etc.), create the secrets in Secrets Manager first, then reference their ARNs
-  in the `secrets` map.
-- Auto-injection: with --enable-db/cache/email, DevOpsFoundry auto-injects CONVENTIONAL
-  vars into the container — DB_URL (a generic postgresql:// URL), DB_HOST, DB_PORT, DB_NAME,
-  DB_USERNAME, DB_PASSWORD; REDIS_HOST, REDIS_PORT, REDIS_SSL_ENABLED, REDIS_PASSWORD;
-  MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD. If THIS app reads different names or
-  formats (e.g. Spring wants SPRING_DATASOURCE_URL with a `jdbc:postgresql://` prefix), set
-  those explicitly in the `env`/`secrets` maps — YOUR values override the auto-injected ones.
-- Bootstrap: new-app intentionally provisions at desired_count=0 (no image exists yet), so
-  the service shows 0 tasks until deploy-app runs. That's expected, not a failure. Set the
-  real desired_count in app.tfvars before deploy-app.
-- This is a real, billed deployment (NAT gateway + ALB + Fargate ≈ ~$60/mo baseline, more
-  with RDS/Redis) and it changes live DNS. Confirm with me before running new-app.
-- These can run 10–20 min (NS propagation + provisioning, then image build + ECS rollout).
+THE WORKFLOW
+1. Scaffold and provision. This creates billed infrastructure and changes the domain's nameservers:
+     <DEVOPSFOUNDRY_DIR>/bin/new-app <DOMAIN> --config <THIS_REPO>/.devopsfoundry --module-ref <vX.Y.Z> [flags]
+   It shows each phase's plan and asks before applying it. Show me each plan; don't pass --yes.
+   It provisions at desired_count = 0 (no image yet). That's expected.
+2. Secrets: I store each one with
+     <DEVOPSFOUNDRY_DIR>/bin/put-secret <app>/<name> --env ENV_NAME
+   and paste the ARN line it prints into app.tfvars `secrets`. Never type, echo or log a secret value yourself.
+3. Edit .devopsfoundry/app.tfvars (container_port, health_check_path, cpu, memory, desired_count, env, secrets) and
+   .devopsfoundry/app.env (DOCKERFILE, DOCKER_CONTEXT, VERIFY_SCRIPT). Commit .devopsfoundry/, but not .terraform/.
+4. Deploy, after I approve:
+     <DEVOPSFOUNDRY_DIR>/bin/deploy-app --config <THIS_REPO>/.devopsfoundry
+   It checks the secrets, builds, pushes, applies, rolls the service, waits until it's stable, and runs
+   VERIFY_SCRIPT.
+5. Email: SES starts in the sandbox, where mail only reaches verified addresses. Check with
+     <DEVOPSFOUNDRY_DIR>/bin/email-status --config <THIS_REPO>/.devopsfoundry
+   and tell me what it reports. Requesting production access is my decision.
 
-VERIFY at the end: curl https://api.YOURDOMAIN.com<health_check_path> returns 200 with a
-valid TLS cert, and the ECS service shows running == desired.
-TEARDOWN when done: bash bin/destroy-app --config <THIS_REPO>/.devopsfoundry --yes
-(this also reverts the Namecheap nameservers to default).
+GOTCHAS
+- app.tfvars is Terraform settings; app.env is build settings. They are different files.
+- With --enable-db, --enable-cache or --enable-email the container gets conventional variables: DB_URL
+  (postgresql://...), DB_HOST, DB_PORT, DB_NAME, DB_USERNAME, DB_PASSWORD; REDIS_HOST, REDIS_PORT,
+  REDIS_SSL_ENABLED, REDIS_PASSWORD; MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD. If the app expects other
+  names or formats (Spring's SPRING_DATASOURCE_URL with jdbc:postgresql://, for example), set them in env/secrets:
+  your values override these.
+- new-app can take 10 to 20 minutes, waiting for nameservers to propagate and the certificate to validate. If it
+  times out, rerun it with --resume.
+- If a step fails, read the whole error and report it with your diagnosis. Don't force past it with
+  -auto-approve, -replace, -target or terraform state commands.
 
-Start by reading <DEVOPSFOUNDRY_DIR>/README.md, then inspect THIS repo and report the
-gathered facts + your proposed app.tfvars/app.env values for my approval BEFORE running.
+VERIFY at the end: https://<host><health_check_path> answers 200 with a valid certificate, VERIFY_SCRIPT passed,
+and the ECS service shows running == desired.
+TEARDOWN, only when I ask: <DEVOPSFOUNDRY_DIR>/bin/destroy-app --config <THIS_REPO>/.devopsfoundry
+(it also reverts the nameservers at Namecheap).
 ```
 
 ---
 
 ## Notes
 
-- **Fill in before pasting**: `<DEVOPSFOUNDRY_DIR>` (where you cloned DevOpsFoundry) and, unless you let the session propose them, `<THIS_REPO>`,
-  `<api.YOURDOMAIN.com>`, and the `--enable-*` toggles for the backing services the app
-  needs.
-- **Repo location matters.** The default module source is the relative sibling path
-  `../../DevOpsFoundry/modules/full-stack`, so the consuming repo should sit next to the
-  DevOpsFoundry checkout. For CI, switch to a pinned git source with
-  `--module-ref <gitref>`.
-- **Spring Boot / JDBC apps**: the auto-injected `DB_URL` is a generic `postgresql://`
-  URL. Frameworks that need a `jdbc:postgresql://` URL or differently-named vars
-  (`SPRING_DATASOURCE_URL`, etc.) should set them explicitly in `app.tfvars`'s `env` map —
-  caller values override the auto-injected ones.
-- This prompt is intentionally framework-neutral. Validated end-to-end against a throwaway
-  app (provision → deploy → 200 → teardown).
+- **Pin a release.** `--module-ref vX.Y.Z` makes the app root use a pinned git source, so it works from anywhere,
+  including CI. Without it, the module source is the sibling path `../../DevOpsFoundry/modules/full-stack`, and the
+  app repo must sit next to a checkout named `DevOpsFoundry`.
+- **Spring Boot and other JDBC apps** need `jdbc:postgresql://` URLs or their own variable names. Set them in
+  `app.tfvars` `env`; they override the injected ones.
+- **The prompt is framework-neutral.** The workflow was validated end to end against a throwaway app: provision,
+  deploy, 200, teardown.
