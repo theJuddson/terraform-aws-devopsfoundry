@@ -37,10 +37,11 @@ No modules.
 | ---- | ----------- | ---- | ------- | :------: |
 | cloudfront\_domain\_name | CloudFront distribution domain name (from static-site module) | `string` | n/a | yes |
 | cloudfront\_hosted\_zone\_id | CloudFront distribution hosted zone ID for alias records | `string` | n/a | yes |
-| domain\_name | Apex domain | `string` | n/a | yes |
+| domain\_name | Domain the site serves (the apex, or a subdomain of an existing zone) | `string` | n/a | yes |
 | zone\_id | Route53 hosted zone ID (from route53-zone module) | `string` | n/a | yes |
 | enable\_google\_email | Create Google Workspace MX + DKIM records | `bool` | `false` | no |
 | google\_dkim\_key | Google Workspace DKIM public key (required if enable\_google\_email) | `string` | `""` | no |
+| include\_www | Also alias www.<domain\_name>. False for a site in a subdomain of an existing zone. | `bool` | `true` | no |
 
 ## Outputs
 

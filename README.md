@@ -26,8 +26,8 @@ or straight from git, over HTTPS or SSH, pinned to a release tag (the newest is 
 [Releases page](https://github.com/theJuddson/terraform-aws-devopsfoundry/releases)):
 
 ```hcl
-source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.17.0"
-source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.17.0"
+source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.18.0"
+source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.18.0"
 ```
 
 Each module's README lists its inputs and outputs, and the building blocks have a runnable example under
@@ -84,10 +84,10 @@ anything else. (Sites can still live in this checkout's gitignored
 
 | Command | Does |
 |---|---|
-| `bin/preflight` | Toolchain, AWS auth, Namecheap API, IP whitelist |
-| `bin/new-site <domain> --config <dir> --module-ref vX.Y.Z` | Zone + NS delegation + ACM + S3 + CloudFront |
+| `bin/preflight` | Toolchain, AWS auth, state bucket, Namecheap API, IP whitelist (`--existing-zone` skips Namecheap; `--config <dir>` checks that root's backend) |
+| `bin/new-site <domain> --config <dir> --module-ref vX.Y.Z` | Zone + NS delegation + ACM + S3 + CloudFront; `--existing-zone [ZONE]` uses a Route53 zone that already exists instead |
 | `bin/deploy --config <dir>` | Build, sync to S3, invalidate CloudFront. Files with a content hash in their name are cached for a year, HTML never, everything else is revalidated on each request |
-| `bin/destroy-site --config <dir>` | Tear down; reverts nameservers to Namecheap default |
+| `bin/destroy-site --config <dir>` | Tear down; reverts nameservers to Namecheap default (in an existing zone, removes only the site's records) |
 | `bin/new-app <domain> --config <dir>` | Zone + NS + ACM + VPC + Fargate stack at `desired_count = 0`; shows each phase's plan and asks before applying it (`--yes` skips, `--plan-only` applies nothing) |
 | `bin/deploy-app --config <dir>` | Build image → ECR → apply → roll service → verify |
 | `bin/put-secret <name> --env ENV_NAME` | Store an app secret from a hidden prompt or stdin (never argv or history), tagged with its app, optionally under your own KMS key (`--kms-key`); prints the `app.tfvars` line |
@@ -127,7 +127,7 @@ exercise the Namecheap path against the free sandbox with no eligibility gate.
 
 ```bash
 bin/preflight                                   # check toolchain + AWS + Namecheap + IP whitelist
-bin/new-site example.com --config ../MySite/.devopsfoundry --module-ref v1.17.0 --build-dir dist
+bin/new-site example.com --config ../MySite/.devopsfoundry --module-ref v1.18.0 --build-dir dist
                                                 # scaffold + two-phase provision
 bin/deploy --config ../MySite/.devopsfoundry    # build (optional) + sync + invalidate
 bin/destroy-site --config ../MySite/.devopsfoundry   # tear down; reverts NS to default
@@ -138,6 +138,9 @@ Paths in its `site.env` are relative to the directory holding `.devopsfoundry/`.
 Without `--config`, `new-site <domain>` scaffolds into this checkout's
 `sites/<domain>/` (gitignored, so nothing commits it) and the other scripts take
 the domain instead of `--config`.
+
+The state backend is the site root's own `backend.tfvars` when it has one (put it in `.devopsfoundry/` before
+running `new-site`, for a project's own state bucket), else this checkout's.
 
 `bin/new-site` runs in **two phases** to avoid the cert-validation-vs-NS-
 propagation race on a fresh domain:
@@ -156,6 +159,39 @@ first checks the build is at least as new as its source: `SRC_DIR` (default:
 the newest file in `BUILD_DIR`, it stops before uploading and names the file;
 `--allow-stale` deploys anyway. For a hand-written site with no build, set
 `SRC_DIR` to `BUILD_DIR`. Uncommitted changes in the source get a warning.
+
+#### Existing DNS zone (site)
+
+`--existing-zone` puts the site's records in a public Route53 zone that already exists in the account, such as one
+made by hand that the registrar already points at. No zone is created, Namecheap is never called, and `.env` needs
+no Namecheap settings (`bin/preflight --existing-zone` skips those checks).
+
+```bash
+bin/new-site example.com --existing-zone example.com \
+  --config ../MySite/.devopsfoundry --module-ref v1.18.0 --build-dir dist        # apex and www
+bin/new-site blog.example.com --existing-zone example.com \
+  --config ../Blog/.devopsfoundry --module-ref v1.18.0 --build-dir dist          # a subdomain, no www
+bin/new-site example.com --existing-zone --config ../MySite/.devopsfoundry ...   # list the zones that fit; choose one
+```
+
+- The zone is the domain itself (the site serves the apex and `www`) or a parent of it (a subdomain site, without
+  `www`). `ZONE` is a name or a zone id; two public zones of one name are refused, naming their ids, so pass the id.
+  Private zones are never used.
+- Bare `--existing-zone` lists the public zones that could serve the domain, closest first, with their ids and
+  record counts, and asks which to use. Put the domain before the flag (or write `--existing-zone=ZONE`): a word
+  after a bare `--existing-zone` is read as its zone.
+- Without the flag, `new-site` won't create a second zone where one already serves the domain: it lists them the
+  same way and asks whether to use one or stop. With `--yes` it never chooses for you; it stops and prints the
+  `--existing-zone` argument to pass.
+- Before anything is applied, `dig NS` at 8.8.8.8 must answer the zone's own nameservers, or ACM could never
+  validate. If it doesn't yet, `new-site` shows both sets and stops (exit 75); point the registrar at the zone and
+  re-run with `--resume --yes`.
+- ACM validation and the alias records are added without overwriting anything: a name that already has a record
+  fails the apply. The certificate covers the apex and its wildcard, or exactly the subdomain. `--email` and
+  `--sandbox` are refused in this mode.
+- The zone id is recorded as `existing_zone_id` in the root's `terraform.tfvars`, and the root gets no
+  `namecheap.tf`. `bin/deploy` works as for any site; `bin/destroy-site` removes only the site's records and never
+  the zone or its nameservers (`--keep-ns` is refused).
 
 #### Email
 
@@ -273,7 +309,7 @@ serving and `--enable-email` are refused in this mode, and `destroy-app` removes
 
 ```bash
 bin/new-app example.com --subdomain app --existing-zone example.com \
-  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.17.0
+  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.18.0
 ```
 
 #### App-owned state
