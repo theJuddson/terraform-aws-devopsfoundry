@@ -1,6 +1,18 @@
 variable "domain_name" {
-  description = "Apex domain"
+  description = "Domain the site serves: the apex, or with existing_zone_id a subdomain of that zone"
   type        = string
+}
+
+variable "existing_zone_id" {
+  description = "Route53 zone to add the site's records to instead of creating one (bin/new-site --existing-zone). Empty: create a zone and delegate it at Namecheap."
+  type        = string
+  default     = ""
+}
+
+variable "include_www" {
+  description = "Also serve www.<domain_name>. False for a site in a subdomain of an existing zone."
+  type        = bool
+  default     = true
 }
 
 variable "site_name" {

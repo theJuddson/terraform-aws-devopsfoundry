@@ -7,6 +7,10 @@
 #   Phase 1 (-target route53_zone, namecheap_ns): create zone + flip NS.
 #   Phase 2 (full apply): validate cert, build CloudFront, add alias records.
 # This avoids the cert-validation-vs-NS-propagation race on a fresh domain.
+#
+# With existing_zone_id set (bin/new-site --existing-zone), the records go into
+# that zone instead: no zone is created, the root has no namecheap.tf, and no
+# record already in the zone is ever overwritten.
 # ─────────────────────────────────────────────────────────────
 
 terraform {
@@ -16,6 +20,8 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    # Configured in namecheap.tf. A root without that file (--existing-zone)
+    # never configures it, so it needs no Namecheap credentials.
     namecheap = {
       source  = "namecheap/namecheap"
       version = ">= 2.1.0"
@@ -47,44 +53,74 @@ provider "aws" {
   }
 }
 
-# Credentials read from env: NAMECHEAP_API_USER / API_KEY / USER_NAME /
-# CLIENT_IP / USE_SANDBOX (see .env).
-provider "namecheap" {}
-
 data "aws_caller_identity" "current" {}
 
 locals {
   # Globally-unique bucket name: <slug>-<account-id>.
   bucket_name = "${var.site_name}-${data.aws_caller_identity.current.account_id}"
+
+  use_existing_zone = var.existing_zone_id != ""
+  zone_id           = local.use_existing_zone ? data.aws_route53_zone.existing[0].zone_id : module.route53_zone[0].zone_id
+  validation_fqdns = (local.use_existing_zone
+    ? [for r in aws_route53_record.existing_zone_validation : r.fqdn]
+  : module.route53_zone[0].validation_record_fqdns)
 }
 
-# 1. ACM cert (us-east-1), initially unvalidated.
+# 1. ACM cert (us-east-1), initially unvalidated. The wildcard covers www;
+#    without www it covers exactly the site's name.
 module "acm_cert" {
-  source      = "__MODULES__/acm-cert__MODULE_QUERY__"
-  providers   = { aws = aws.us_east_1 }
-  domain_name = var.domain_name
+  source           = "__MODULES__/acm-cert__MODULE_QUERY__"
+  providers        = { aws = aws.us_east_1 }
+  domain_name      = var.domain_name
+  include_wildcard = var.include_www
 }
 
 # 2. Route53 zone + ACM validation CNAMEs. No CloudFront dependency
-#    (Phase 1 targets this).
+#    (Phase 1 targets this). The registrar delegation is in namecheap.tf.
 module "route53_zone" {
   source                        = "__MODULES__/route53-zone__MODULE_QUERY__"
+  count                         = local.use_existing_zone ? 0 : 1
   domain_name                   = var.domain_name
   acm_domain_validation_options = module.acm_cert.domain_validation_options
 }
 
-# 3. Delegate the registrar's nameservers to the Route53 zone (Phase 1).
-module "namecheap_ns" {
-  source      = "__MODULES__/namecheap-ns__MODULE_QUERY__"
-  domain_name = var.domain_name
-  nameservers = module.route53_zone.name_servers
+# 3. Or an existing zone: the domain itself, or a parent of it.
+data "aws_route53_zone" "existing" {
+  count   = local.use_existing_zone ? 1 : 0
+  zone_id = var.existing_zone_id
+
+  lifecycle {
+    postcondition {
+      condition = !coalesce(self.private_zone, false) && (trimsuffix(self.name, ".") == var.domain_name
+      || endswith(var.domain_name, ".${trimsuffix(self.name, ".")}"))
+      error_message = "existing_zone_id must be a public zone for the domain itself or a parent of it."
+    }
+  }
+}
+
+# Validation records in the existing zone, one per distinct name (the apex and
+# its wildcard share one). Never overwrite: a clash means the record is someone else's.
+resource "aws_route53_record" "existing_zone_validation" {
+  for_each = local.use_existing_zone ? {
+    for dvo in module.acm_cert.domain_validation_options : dvo.resource_record_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }...
+  } : {}
+  zone_id         = data.aws_route53_zone.existing[0].zone_id
+  name            = each.value[0].name
+  type            = each.value[0].type
+  ttl             = 300
+  records         = [each.value[0].record]
+  allow_overwrite = false
 }
 
 # 4. Wait for issuance once the validation records resolve (Phase 2).
 resource "aws_acm_certificate_validation" "main" {
   provider                = aws.us_east_1
   certificate_arn         = module.acm_cert.certificate_arn
-  validation_record_fqdns = module.route53_zone.validation_record_fqdns
+  validation_record_fqdns = local.validation_fqdns
   timeouts {
     create = "45m"
   }
@@ -95,15 +131,17 @@ module "static_site" {
   source          = "__MODULES__/static-site__MODULE_QUERY__"
   site_name       = var.site_name
   domain_name     = var.domain_name
+  include_www     = var.include_www
   bucket_name     = local.bucket_name
   certificate_arn = aws_acm_certificate_validation.main.certificate_arn
 }
 
-# 6. Point apex + www at CloudFront; optional Google Workspace email (Phase 2).
+# 6. Point the domain (+ www) at CloudFront; optional Google Workspace email (Phase 2).
 module "route53_records" {
   source                    = "__MODULES__/route53-records__MODULE_QUERY__"
   domain_name               = var.domain_name
-  zone_id                   = module.route53_zone.zone_id
+  include_www               = var.include_www
+  zone_id                   = local.zone_id
   cloudfront_domain_name    = module.static_site.distribution_domain
   cloudfront_hosted_zone_id = module.static_site.distribution_hosted_zone_id
   enable_google_email       = var.enable_google_email

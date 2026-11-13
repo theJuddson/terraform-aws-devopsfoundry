@@ -1,4 +1,6 @@
 # CloudFront alias records (apex + www) and optional Google Workspace email.
+# None sets allow_overwrite (the provider's default is false), so a name that already has a record fails the apply
+# instead of being taken over (the zone may be one this site doesn't own).
 # Separate from route53-zone because these depend on the CloudFront
 # distribution, which can't exist until the cert is validated.
 terraform {
@@ -37,6 +39,7 @@ resource "aws_route53_record" "apex_aaaa" {
 
 # www: A + AAAA alias -> CloudFront
 resource "aws_route53_record" "www_a" {
+  count   = var.include_www ? 1 : 0
   zone_id = var.zone_id
   name    = "www.${var.domain_name}"
   type    = "A"
@@ -48,6 +51,7 @@ resource "aws_route53_record" "www_a" {
 }
 
 resource "aws_route53_record" "www_aaaa" {
+  count   = var.include_www ? 1 : 0
   zone_id = var.zone_id
   name    = "www.${var.domain_name}"
   type    = "AAAA"
@@ -56,6 +60,17 @@ resource "aws_route53_record" "www_aaaa" {
     zone_id                = var.cloudfront_hosted_zone_id
     evaluate_target_health = false
   }
+}
+
+# www gained a count with include_www; without these, upgrading would replace both records.
+moved {
+  from = aws_route53_record.www_a
+  to   = aws_route53_record.www_a[0]
+}
+
+moved {
+  from = aws_route53_record.www_aaaa
+  to   = aws_route53_record.www_aaaa[0]
 }
 
 # ── Optional Google Workspace email (MX + DKIM) ────────

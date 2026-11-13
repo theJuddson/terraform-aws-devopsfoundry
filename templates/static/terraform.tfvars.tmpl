@@ -2,6 +2,11 @@ domain_name = "__DOMAIN__"
 site_name   = "__SITE_NAME__"
 aws_region  = "us-east-1"
 
+# Set by bin/new-site --existing-zone: the site's records go into this zone,
+# which is never created, changed or deleted, and Namecheap is never called.
+existing_zone_id = "__EXISTING_ZONE_ID__"
+include_www      = __INCLUDE_WWW__
+
 # Set true and paste the Google Workspace DKIM key to wire up email.
 enable_google_email = false
 google_dkim_key     = ""

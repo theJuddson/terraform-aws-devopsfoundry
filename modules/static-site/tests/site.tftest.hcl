@@ -95,3 +95,18 @@ run "cloudfront_reads_through_signed_origin_access_control" {
     error_message = "The distribution must use the given certificate with TLS 1.2 or later."
   }
 }
+
+# A site in a subdomain of an existing zone (blog.example.com) has no www.
+run "without_www_serves_only_the_domain" {
+  command = plan
+
+  variables {
+    domain_name = "blog.example.com"
+    include_www = false
+  }
+
+  assert {
+    condition     = aws_cloudfront_distribution.site.aliases == toset(["blog.example.com"])
+    error_message = "With include_www = false the site must serve its own name only."
+  }
+}

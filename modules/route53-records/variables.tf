@@ -1,6 +1,12 @@
 variable "domain_name" {
-  description = "Apex domain"
+  description = "Domain the site serves (the apex, or a subdomain of an existing zone)"
   type        = string
+}
+
+variable "include_www" {
+  description = "Also alias www.<domain_name>. False for a site in a subdomain of an existing zone."
+  type        = bool
+  default     = true
 }
 
 variable "zone_id" {

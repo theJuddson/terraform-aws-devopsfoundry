@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Static checks for every Terraform module and example: fmt, validate, tflint,
-# terraform test (mocked providers), the bin/ script tests (stubbed commands),
+# terraform test (mocked providers), the static site template's tests, the bin/ script tests (stubbed commands),
 # the agent plugin (bin/check-plugin and its hook's tests), checkov. Makes no AWS call (validate runs with -backend=false; tests plan
 # against mocks). Used by CI.
 #
@@ -55,6 +55,9 @@ done
 
 # The bin/ scripts, against stub aws/terraform/docker commands (tests/cli).
 if [[ $# -eq 0 ]]; then
+  # The static site root bin/new-site renders, in both DNS modes (mocked providers).
+  step test "templates/static"
+  tests/static-root/run.sh || fail=1
   step test "bin/ scripts"
   tests/cli/run.sh || fail=1
   # The agent plugin: its manifests and skill, and its approval hook (plugins/).
