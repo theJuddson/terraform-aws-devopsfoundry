@@ -23,14 +23,14 @@ run "defaults_alias_apex_and_www_to_cloudfront_without_email" {
   }
   assert {
     condition = (
-      aws_route53_record.www_a.name == "www.example.com" && aws_route53_record.www_a.type == "A" &&
-      aws_route53_record.www_aaaa.name == "www.example.com" && aws_route53_record.www_aaaa.type == "AAAA"
+      aws_route53_record.www_a[0].name == "www.example.com" && aws_route53_record.www_a[0].type == "A" &&
+      aws_route53_record.www_aaaa[0].name == "www.example.com" && aws_route53_record.www_aaaa[0].type == "AAAA"
     )
     error_message = "www must resolve over both IPv4 and IPv6."
   }
   assert {
     condition = alltrue([
-      for r in [aws_route53_record.apex_a, aws_route53_record.apex_aaaa, aws_route53_record.www_a, aws_route53_record.www_aaaa] :
+      for r in [aws_route53_record.apex_a, aws_route53_record.apex_aaaa, aws_route53_record.www_a[0], aws_route53_record.www_aaaa[0]] :
       r.zone_id == "Z0000000000MOCK" &&
       r.alias[0].name == "d111111abcdef8.cloudfront.net" &&
       r.alias[0].zone_id == "Z2FDTNDATAQYW2"
@@ -108,5 +108,24 @@ run "long_dkim_key_is_split_into_255_char_strings" {
   assert {
     condition     = aws_route53_record.google_dkim[0].records == toset(["${join("", [for i in range(255) : "a"])}\" \"${join("", [for i in range(45) : "b"])}"])
     error_message = "A key over 255 characters must be split into quoted 255-character strings, or Route53 rejects it."
+  }
+}
+
+# A site in a subdomain of an existing zone gets no www records.
+run "without_www_aliases_only_the_domain" {
+  command = plan
+
+  variables {
+    domain_name = "blog.example.com"
+    include_www = false
+  }
+
+  assert {
+    condition     = length(aws_route53_record.www_a) == 0 && length(aws_route53_record.www_aaaa) == 0
+    error_message = "With include_www = false no www records may be planned."
+  }
+  assert {
+    condition     = aws_route53_record.apex_a.name == "blog.example.com" && aws_route53_record.apex_aaaa.name == "blog.example.com"
+    error_message = "The site's own name must still resolve over IPv4 and IPv6."
   }
 }

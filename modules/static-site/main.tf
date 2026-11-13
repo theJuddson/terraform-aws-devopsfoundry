@@ -60,7 +60,7 @@ resource "aws_cloudfront_distribution" "site" {
   default_root_object = "index.html"
   price_class         = var.price_class
   comment             = var.domain_name
-  aliases             = [var.domain_name, "www.${var.domain_name}"]
+  aliases             = var.include_www ? [var.domain_name, "www.${var.domain_name}"] : [var.domain_name]
 
   origin {
     domain_name              = aws_s3_bucket.site.bucket_regional_domain_name

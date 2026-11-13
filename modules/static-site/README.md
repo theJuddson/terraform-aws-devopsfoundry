@@ -39,8 +39,9 @@ No modules.
 | ---- | ----------- | ---- | ------- | :------: |
 | bucket\_name | Globally-unique S3 bucket name (caller appends account id for uniqueness) | `string` | n/a | yes |
 | certificate\_arn | Validated ACM cert ARN in us-east-1 (use the acm\_certificate\_validation output) | `string` | n/a | yes |
-| domain\_name | Apex domain (also the www. alias source) | `string` | n/a | yes |
+| domain\_name | Domain the site serves (also the www. alias source when include\_www) | `string` | n/a | yes |
 | site\_name | Short slug used in resource names (e.g. example-com) | `string` | n/a | yes |
+| include\_www | Also serve www.<domain\_name>. False for a site in a subdomain of an existing zone. | `bool` | `true` | no |
 | price\_class | CloudFront price class | `string` | `"PriceClass_100"` | no |
 
 ## Outputs

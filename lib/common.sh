@@ -143,6 +143,45 @@ df_git_dirty() {
   [[ -n "$(git -C "$1" status --porcelain --untracked-files=no -- . 2>/dev/null)" ]]
 }
 
+# ── Existing Route53 zones (bin/new-site --existing-zone) ──
+# Public zones in this account that could serve <domain>: the zone named
+# <domain> and each parent of it, closest first. One line each:
+# "<name> <id> <record count>", the id without "/hostedzone/". Prints aws's
+# error and returns 1 when the zones can't be listed. Usage: df_candidate_zones <domain>
+df_candidate_zones() {
+  local d out
+  d="$(echo "$1" | tr '[:upper:]' '[:lower:]')"
+  out="$(aws route53 list-hosted-zones --output json 2>&1)" || { echo "$out" >&2; return 1; }
+  [[ -n "$out" ]] || return 0
+  jq -r --arg d "$d" '.HostedZones[]? | select(.Config.PrivateZone != true)
+      | (.Name | ascii_downcase | rtrimstr(".")) as $n
+      | select($n == $d or ($d | endswith("." + $n)))
+      | "\($n | length) \($n) \(.Id | sub("^/hostedzone/"; "")) \(.ResourceRecordSetCount // 0)"' <<<"$out" \
+    | sort -k1,1nr -k3,3 | cut -d' ' -f2-
+}
+
+# The --existing-zone argument that names one candidate line unambiguously: its
+# name, or its id when another candidate has the same name.
+# Usage: df_zone_flag <candidate line> <all candidate lines>
+df_zone_flag() {
+  local name id; read -r name id _ <<<"$1"
+  if [[ "$(awk -v n="$name" '$1 == n' <<<"$2" | wc -l | tr -d ' ')" -gt 1 ]]; then echo "--existing-zone $id"
+  else echo "--existing-zone $name"; fi
+}
+
+# Whether public DNS (8.8.8.8) answers a zone's own nameservers for its name.
+# Sets DF_ZONE_NS and DF_PUBLIC_NS (sorted, lowercase, one per line). True when
+# public DNS gives at least one nameserver and every one is the zone's.
+# Usage: df_zone_answers_publicly <zone id> <zone name>
+df_ns_list() { tr '[:upper:]' '[:lower:]' | sed 's/\.$//' | { grep . || true; } | sort -u; }
+df_zone_answers_publicly() {
+  DF_ZONE_NS="$(aws route53 get-hosted-zone --id "$1" --output json 2>/dev/null \
+    | jq -r '.DelegationSet.NameServers[]?' | df_ns_list)"
+  DF_PUBLIC_NS="$(dig +short NS "$2" @8.8.8.8 2>/dev/null | df_ns_list)"
+  [[ -n "$DF_ZONE_NS" && -n "$DF_PUBLIC_NS" ]] || return 1
+  [[ -z "$(comm -23 <(echo "$DF_PUBLIC_NS") <(echo "$DF_ZONE_NS"))" ]]
+}
+
 # ── App (full-stack) helpers ───────────────────────────
 # SES account status in a region: PRODUCTION, PENDING (a production access
 # review is open), DENIED, SANDBOX, or UNKNOWN when it can't be read.

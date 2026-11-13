@@ -21,8 +21,8 @@ your tool's plugin cache, not in that checkout, so first find the checkout:
 1. Ask the person where their DevOpsFoundry checkout is (often a sibling folder named `DevOpsFoundry`). Call it
    `$DOF`. Confirm `$DOF/bin/new-app` exists.
 2. Read `$DOF/AGENTS.md`. Its rules come first, before this skill and before general AWS guidance.
-3. Run `$DOF/bin/preflight`. It checks tools, AWS sign-in, the state bucket and Namecheap access, and says how to fix
-   each. Don't carry on past a failed hard check.
+3. Run `$DOF/bin/preflight` (`--existing-zone` when the domain's Route53 zone already exists). It checks tools, AWS
+   sign-in, the state bucket and Namecheap access, and says how to fix each. Don't carry on past a failed hard check.
 
 Never read, print or `source` `$DOF/.env`. The scripts load it themselves.
 
@@ -80,7 +80,11 @@ said yes in this conversation. Reading is always fine: `bin/preflight`, `bin/ema
 
 For a static site the steps are `bin/new-site <domain> --config <site repo>/.devopsfoundry --module-ref vX.Y.Z
 --build-dir <dir>`, then `bin/deploy --config <site repo>/.devopsfoundry`. The `--build-dir` and the paths in
-`site.env` are relative to the site repo (the directory holding `.devopsfoundry/`). Commit `.devopsfoundry/`.
+`site.env` are relative to the site repo (the directory holding `.devopsfoundry/`). Commit `.devopsfoundry/`. If the
+domain already has a public Route53 zone in the account (or a parent does, for a subdomain site), pass
+`--existing-zone <zone>`: no zone is created and Namecheap is never called (`$DOF/bin/preflight --existing-zone`
+skips the Namecheap checks). Without the flag, `new-site` lists such zones and asks; with `--yes` it stops and
+names the flag to pass, so ask the person which zone rather than choosing one.
 
 ## Operating an app
 

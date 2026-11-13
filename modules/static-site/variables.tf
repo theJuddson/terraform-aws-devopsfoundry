@@ -4,8 +4,14 @@ variable "site_name" {
 }
 
 variable "domain_name" {
-  description = "Apex domain (also the www. alias source)"
+  description = "Domain the site serves (also the www. alias source when include_www)"
   type        = string
+}
+
+variable "include_www" {
+  description = "Also serve www.<domain_name>. False for a site in a subdomain of an existing zone."
+  type        = bool
+  default     = true
 }
 
 variable "bucket_name" {

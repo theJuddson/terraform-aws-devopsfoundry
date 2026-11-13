@@ -19,6 +19,6 @@ output "url" {
 }
 
 output "name_servers" {
-  description = "Route53 nameservers delegated at the registrar"
-  value       = module.route53_zone.name_servers
+  description = "Nameservers of the site's Route53 zone (the one it created, or the existing one)"
+  value       = local.use_existing_zone ? data.aws_route53_zone.existing[0].name_servers : module.route53_zone[0].name_servers
 }

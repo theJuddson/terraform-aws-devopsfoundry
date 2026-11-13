@@ -1,9 +1,24 @@
 #!/usr/bin/env bash
 # preflight — verify the local toolchain + AWS + Namecheap prerequisites.
+#
+# Usage: bin/preflight [--config <dir>] [--existing-zone]
+#   --config checks the state backend that root uses (its backend.tfvars, else
+#     this checkout's).
+#   --existing-zone skips the Namecheap checks, for new-site --existing-zone,
+#     which never calls Namecheap.
 set -euo pipefail
 DF_SCRIPT_NAME="preflight"
 source "$(cd "$(dirname "$0")/.." && pwd)/lib/common.sh"
 df_load_env
+
+CONFIG=""; EXISTING_ZONE=false
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --config)        CONFIG="$2"; shift 2 ;;
+    --existing-zone) EXISTING_ZONE=true; shift ;;
+    *)               die "Unknown arg: $1 (usage: bin/preflight [--config <dir>] [--existing-zone])" ;;
+  esac
+done
 
 # Optional: set DF_EXPECTED_AWS_ACCOUNT in .env to catch the wrong AWS_PROFILE.
 EXPECTED_ACCOUNT="${DF_EXPECTED_AWS_ACCOUNT:-}"
@@ -63,8 +78,10 @@ if [[ -n "$SES_REGION" ]] && [[ -n "${ACCT:-}" ]]; then
 fi
 
 # ── State backend reachability ─────────────────────────
-[[ -f "$DF_ROOT/backend.tfvars" ]] || die "No backend.tfvars. Copy backend.tfvars.example to backend.tfvars and fill in your state bucket."
-BACKEND_BUCKET=$(awk -F'"' '/^[[:space:]]*bucket[[:space:]]*=/{print $2}' "$DF_ROOT/backend.tfvars")
+BACKEND_FILE="$DF_ROOT/backend.tfvars"
+[[ -z "$CONFIG" ]] || BACKEND_FILE="$(df_app_backend_file "$CONFIG")"
+[[ -f "$BACKEND_FILE" ]] || die "No backend.tfvars. Copy backend.tfvars.example to backend.tfvars${CONFIG:+ (here, or in $CONFIG)} and fill in your state bucket."
+BACKEND_BUCKET=$(awk -F'"' '/^[[:space:]]*bucket[[:space:]]*=/{print $2}' "$BACKEND_FILE")
 if aws s3api head-bucket --bucket "$BACKEND_BUCKET" &>/dev/null; then
   pass "State bucket reachable: $BACKEND_BUCKET"
 else
@@ -72,28 +89,32 @@ else
 fi
 
 # ── Namecheap ──────────────────────────────────────────
-nc_ok=true
-for v in NAMECHEAP_USER_NAME NAMECHEAP_API_USER NAMECHEAP_API_KEY; do
-  if [[ -z "${!v:-}" ]]; then warn "$v not set (see .env.example)"; nc_ok=false; fi
-done
-$nc_ok && pass "Namecheap API creds present"
-[[ "${NAMECHEAP_USE_SANDBOX:-false}" == "true" ]] && info "Namecheap SANDBOX mode is ON"
-
-# IP whitelist check — the machine's public IP must be whitelisted at Namecheap.
-PUBLIC_IP=$(df_detect_ip)
-CLIENT_IP="${NAMECHEAP_CLIENT_IP:-}"
-if [[ -n "$PUBLIC_IP" ]]; then
-  pass "Public IPv4: $PUBLIC_IP"
-  if [[ -z "$CLIENT_IP" ]]; then
-    info "NAMECHEAP_CLIENT_IP unset — scripts will auto-use $PUBLIC_IP"
-    warn "Confirm $PUBLIC_IP is whitelisted: Namecheap → Profile → Tools → API → Whitelisted IPs"
-  elif [[ "$CLIENT_IP" != "$PUBLIC_IP" ]]; then
-    warn "NAMECHEAP_CLIENT_IP ($CLIENT_IP) != detected public IP ($PUBLIC_IP) — API calls will fail unless on a static/VPN IP"
-  else
-    pass "NAMECHEAP_CLIENT_IP matches public IP"
-  fi
+if $EXISTING_ZONE; then
+  info "Namecheap not checked: an existing zone (--existing-zone) never calls it"
 else
-  warn "Could not detect public IP (offline?) — ensure NAMECHEAP_CLIENT_IP is set + whitelisted"
+  nc_ok=true
+  for v in NAMECHEAP_USER_NAME NAMECHEAP_API_USER NAMECHEAP_API_KEY; do
+    if [[ -z "${!v:-}" ]]; then warn "$v not set (see .env.example)"; nc_ok=false; fi
+  done
+  $nc_ok && pass "Namecheap API creds present"
+  [[ "${NAMECHEAP_USE_SANDBOX:-false}" == "true" ]] && info "Namecheap SANDBOX mode is ON"
+
+  # IP whitelist check — the machine's public IP must be whitelisted at Namecheap.
+  PUBLIC_IP=$(df_detect_ip)
+  CLIENT_IP="${NAMECHEAP_CLIENT_IP:-}"
+  if [[ -n "$PUBLIC_IP" ]]; then
+    pass "Public IPv4: $PUBLIC_IP"
+    if [[ -z "$CLIENT_IP" ]]; then
+      info "NAMECHEAP_CLIENT_IP unset — scripts will auto-use $PUBLIC_IP"
+      warn "Confirm $PUBLIC_IP is whitelisted: Namecheap → Profile → Tools → API → Whitelisted IPs"
+    elif [[ "$CLIENT_IP" != "$PUBLIC_IP" ]]; then
+      warn "NAMECHEAP_CLIENT_IP ($CLIENT_IP) != detected public IP ($PUBLIC_IP) — API calls will fail unless on a static/VPN IP"
+    else
+      pass "NAMECHEAP_CLIENT_IP matches public IP"
+    fi
+  else
+    warn "Could not detect public IP (offline?) — ensure NAMECHEAP_CLIENT_IP is set + whitelisted"
+  fi
 fi
 
 echo "─────────────────────────────────────"

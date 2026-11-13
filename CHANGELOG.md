@@ -3,6 +3,31 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.18.0
+
+- `bin/new-site --existing-zone [ZONE]`: provision a static site into a public Route53 zone that already exists, the
+  domain's own (apex and `www`) or a parent's (a subdomain site, no `www`). No zone is created, Namecheap is never
+  called and needs no settings, and ACM validation and alias records never overwrite a record already in the zone.
+  `ZONE` is a name or a zone id; a missing zone, a zone that isn't the domain or a parent, a private zone, and two
+  zones of one name (named by id) are refused. Bare `--existing-zone` lists the zones that fit, with ids and record
+  counts, and asks which to use. Before anything is applied, public DNS must answer the zone's own nameservers; if
+  not, it shows both and stops with `--resume` (exit 75). `--email` and `--sandbox` are refused in this mode.
+- **Behaviour change:** without `--existing-zone`, `new-site` no longer creates a second zone where a public zone
+  for the domain or a parent already exists. It lists them and asks whether to use one or stop; with `--yes` it
+  stops and prints the `--existing-zone` argument to pass.
+- The mode is recorded as `existing_zone_id` (and `include_www`) in the site root's `terraform.tfvars`.
+  `bin/destroy-site` then removes only the site's records, never the zone or its nameservers, without calling
+  Namecheap; `--keep-ns` is refused. `bin/deploy` is unchanged.
+- `templates/static`: new site roots keep the Namecheap provider and delegation in their own `namecheap.tf`, left out
+  in existing-zone mode, so such a root never configures the Namecheap provider. New roots address the zone as
+  `module.route53_zone[0]`. Site roots made by earlier releases are not touched. `tests/static-root` tests the
+  rendered root in both modes against mocked providers, from `bin/check-modules`.
+- `route53-records` and `static-site`: `include_www` (default `true`). `route53-records` moves `www_a` and
+  `www_aaaa` to `[0]` with `moved` blocks; an upgrade plans only those moves (checked offline against a v1.17.0
+  state).
+- `bin/preflight --existing-zone` skips the Namecheap checks; `--config <dir>` checks the state bucket in that
+  root's `backend.tfvars`.
+
 ## v1.17.0
 
 - Confused-deputy protection on the service roles' trust policies (#65), as AWS documents for each service. **The one
