@@ -9,6 +9,10 @@
 # Usage: bin/destroy-site --config <dir> [--keep-ns] [--purge] [--yes]
 #        bin/destroy-site <domain>       [--keep-ns] [--purge] [--yes]   (root in sites/<domain>)
 #
+# A site made with new-site --existing-zone (existing_zone_id in its
+# terraform.tfvars) removes only its own records from that zone: the zone and
+# its nameservers stay, Namecheap is never called, and --keep-ns is refused.
+#
 # --purge removes the site root. With --config that is the repo's
 # .devopsfoundry/ directory, so it is only removed after the typed confirmation.
 set -euo pipefail
@@ -40,14 +44,23 @@ else
   [[ -d "$SITE_DIR" ]] || die "No site dir for $DOMAIN"
 fi
 
-# Namecheap provider needs a client IP even for destroy.
-if [[ -z "${NAMECHEAP_CLIENT_IP:-}" ]]; then
-  NAMECHEAP_CLIENT_IP="$(df_detect_ip)"; export NAMECHEAP_CLIENT_IP
+ZONE_ID=""
+[[ -f "$SITE_DIR/terraform.tfvars" ]] && ZONE_ID="$(df_tfvar "$SITE_DIR/terraform.tfvars" existing_zone_id)"
+if [[ -n "$ZONE_ID" ]]; then
+  $KEEP_NS && die "--keep-ns doesn't apply: this site's zone $ZONE_ID existed before it, and its nameservers are never changed"
+else
+  # Namecheap provider needs a client IP even for destroy.
+  if [[ -z "${NAMECHEAP_CLIENT_IP:-}" ]]; then
+    NAMECHEAP_CLIENT_IP="$(df_detect_ip)"; export NAMECHEAP_CLIENT_IP
+  fi
 fi
 
 echo ""
 echo "DevOpsFoundry — DESTROY $DOMAIN"
-$KEEP_NS && echo "  (keeping Namecheap NS delegation)" || echo "  (reverting Namecheap NS to default)"
+if [[ -n "$ZONE_ID" ]]; then
+  echo "  (removing only this site's records from zone $ZONE_ID; the zone and its nameservers stay)"
+elif $KEEP_NS; then echo "  (keeping Namecheap NS delegation)"
+else echo "  (reverting Namecheap NS to default)"; fi
 echo "─────────────────────────────────────"
 if [[ "$YES" != true ]]; then
   read -r -p "Type the domain to confirm destroy: " c
@@ -61,7 +74,7 @@ fi
 
 step "terraform destroy"
 df_tf_at "$SITE_DIR" destroy -input=false -auto-approve
-log "INFO" "Destroyed $DOMAIN (keep_ns=$KEEP_NS)"
+log "INFO" "Destroyed $DOMAIN (keep_ns=$KEEP_NS${ZONE_ID:+, existing zone $ZONE_ID kept})"
 pass "AWS resources destroyed"
 
 if $PURGE; then

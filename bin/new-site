@@ -5,14 +5,24 @@
 #
 # Usage:
 #   bin/new-site <domain> --config <dir> --module-ref GITREF
-#                         [--build-dir DIR] [--email --dkim KEY]
-#                         [--sandbox] [--resume] [--yes]
+#                         [--existing-zone [ZONE]] [--build-dir DIR]
+#                         [--email --dkim KEY] [--sandbox] [--resume] [--yes]
 #   --config scaffolds the site root into <dir>, the site repo's .devopsfoundry
 #     directory (commit it). Its modules come from the release --module-ref
 #     names, or from --module-path DIR (a DevOpsFoundry checkout, as seen from
 #     <dir>). --build-dir is then relative to <dir>'s parent.
 #   Without --config the root goes in sites/<domain> in this checkout, which
 #   nothing commits.
+#   --existing-zone ZONE puts the site's records in an EXISTING public Route53
+#     zone: the domain's own (the site serves the apex and www) or a parent's
+#     (a subdomain site, no www). ZONE is a name or a zone id. No zone is
+#     created, Namecheap is never called and needs no settings, and no record
+#     already in the zone is overwritten. Bare --existing-zone lists the zones
+#     that fit and asks which; write the domain first, or --existing-zone=ZONE,
+#     so the bare flag is never read as taking the domain as its zone. Without
+#     the flag, new-site still refuses to create a second zone where one
+#     already serves the domain: it offers those zones instead. With --yes it
+#     never chooses a zone for you.
 set -euo pipefail
 DF_SCRIPT_NAME="new-site"
 source "$(cd "$(dirname "$0")/.." && pwd)/lib/common.sh"
@@ -21,7 +31,7 @@ df_load_env
 # ── Args ───────────────────────────────────────────────
 DOMAIN=""; CONFIG=""; MODULE_REF=""; MODULE_PATH=""
 BUILD_DIR="./dist"; SANDBOX=false; RESUME=false; YES=false
-ENABLE_EMAIL=false; DKIM_KEY=""
+ENABLE_EMAIL=false; DKIM_KEY=""; EXISTING_FLAG=false; EXISTING_ZONE=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --config)      CONFIG="$2"; shift 2 ;;
@@ -30,6 +40,10 @@ while [[ $# -gt 0 ]]; do
     --build-dir) BUILD_DIR="$2"; shift 2 ;;
     --dkim)      DKIM_KEY="$2"; shift 2 ;;
     --email)     ENABLE_EMAIL=true; shift ;;
+    --existing-zone=*) EXISTING_FLAG=true; EXISTING_ZONE="${1#*=}"; shift ;;
+    --existing-zone)   # a value only when one follows that isn't a flag
+      EXISTING_FLAG=true
+      if [[ $# -ge 2 && "$2" != -* ]]; then EXISTING_ZONE="$2"; shift 2; else shift; fi ;;
     --sandbox)   SANDBOX=true; shift ;;
     --resume)    RESUME=true; shift ;;
     --yes|-y)    YES=true; shift ;;
@@ -38,7 +52,11 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ -z "$DOMAIN" && -n "$EXISTING_ZONE" ]]; then
+  die "No domain given, or it was read as the zone: --existing-zone $EXISTING_ZONE. Put the domain first, or write --existing-zone=ZONE"
+fi
 df_validate_domain "$DOMAIN"
+DOMAIN_LC="$(echo "$DOMAIN" | tr '[:upper:]' '[:lower:]')"
 SLUG="$(df_slug "$DOMAIN")"
 STATE_KEY="$(df_state_key "$DOMAIN")"
 if [[ -n "$CONFIG" ]]; then
@@ -53,14 +71,99 @@ else
   SITE_DIR="$(df_site_dir "$DOMAIN")"; MODULES="../../modules"; MODULE_QUERY=""
 fi
 
-# ── Namecheap env ──────────────────────────────────────
-$SANDBOX && export NAMECHEAP_USE_SANDBOX=true
-[[ -n "${NAMECHEAP_API_KEY:-}" ]] || die "NAMECHEAP_API_KEY not set — copy .env.example to .env and fill it in"
-if [[ -z "${NAMECHEAP_CLIENT_IP:-}" ]]; then
-  NAMECHEAP_CLIENT_IP="$(df_detect_ip)"
-  [[ -n "$NAMECHEAP_CLIENT_IP" ]] || die "Could not auto-detect public IP — set NAMECHEAP_CLIENT_IP in .env"
-  export NAMECHEAP_CLIENT_IP
-  info "Using detected client IP $NAMECHEAP_CLIENT_IP (must be whitelisted at Namecheap)"
+# ── Which zone: an existing one, or a new one delegated at Namecheap ──
+RESUME_CMD="bin/new-site $DOMAIN${CONFIG:+ --config $SITE_DIR${MODULE_REF:+ --module-ref $MODULE_REF}${MODULE_PATH:+ --module-path $MODULE_PATH}}"
+ZONE_ID=""; ZONE_NAME=""; CANDIDATES=""
+
+# List candidate zones numbered, ask for one, set ZONE_ID. <prompt> <candidates>
+choose_zone() {
+  local prompt="$1" list="$2" i=0 line name id count n c
+  while IFS= read -r line; do
+    read -r name id count <<<"$line"; i=$((i + 1))
+    echo "  $i) $name  $id  $count records"
+  done <<<"$list"
+  n=$i
+  if $YES; then
+    echo "  With --yes, new-site doesn't choose a zone for you. Re-run with one of:" >&2
+    while IFS= read -r line; do echo "    $RESUME_CMD $(df_zone_flag "$line" "$list")" >&2; done <<<"$list"
+    die "No zone chosen (--yes)"
+  fi
+  printf '%s ' "$prompt" >&2
+  read -r c || c=""
+  case "$c" in
+    n|N|"") echo "Stopped; nothing was created."; exit 0 ;;
+  esac
+  [[ "$c" =~ ^[0-9]+$ && "$c" -ge 1 && "$c" -le "$n" ]] || die "Not a choice: $c. Nothing was created."
+  ZONE_ID="$(sed -n "${c}p" <<<"$list" | awk '{print $2}')"
+}
+
+RECORDED_ZONE=""
+if [[ -f "$SITE_DIR/main.tf" && -f "$SITE_DIR/terraform.tfvars" ]]; then
+  RECORDED_ZONE="$(df_tfvar "$SITE_DIR/terraform.tfvars" existing_zone_id)"
+fi
+
+if [[ -f "$SITE_DIR/main.tf" ]]; then
+  # Resuming: the root already says which zone it uses.
+  if [[ -n "$RECORDED_ZONE" ]]; then
+    ZONE_ID="$RECORDED_ZONE"
+    if [[ -n "$EXISTING_ZONE" && "$EXISTING_ZONE" != "$ZONE_ID" ]]; then
+      CANDIDATES="$(df_candidate_zones "$DOMAIN")" || die "Could not list Route53 zones"
+      awk -v z="$EXISTING_ZONE" -v id="$ZONE_ID" '$1 == z && $2 == id' <<<"$CANDIDATES" | grep -q . \
+        || die "This site root uses zone $ZONE_ID, not $EXISTING_ZONE"
+    fi
+  elif $EXISTING_FLAG; then
+    die "This site root was made to create its own zone; --existing-zone can't be added to it on --resume"
+  fi
+else
+  CANDIDATES="$(df_candidate_zones "$DOMAIN")" || die "Could not list Route53 zones (needed to know whether one already serves $DOMAIN)"
+  if [[ -n "$EXISTING_ZONE" ]]; then
+    if [[ "$EXISTING_ZONE" =~ ^Z[A-Z0-9]+$ ]]; then
+      MATCHES="$(awk -v z="$EXISTING_ZONE" '$2 == z' <<<"$CANDIDATES")"
+      [[ -n "$MATCHES" ]] || die "Zone $EXISTING_ZONE is not a public Route53 zone in this account for $DOMAIN or a parent of it"
+    else
+      EXISTING_ZONE="$(echo "${EXISTING_ZONE%.}" | tr '[:upper:]' '[:lower:]')"
+      [[ "$DOMAIN_LC" == "$EXISTING_ZONE" || "$DOMAIN_LC" == *".$EXISTING_ZONE" ]] \
+        || die "$EXISTING_ZONE is not $DOMAIN or a parent of it"
+      MATCHES="$(awk -v z="$EXISTING_ZONE" '$1 == z' <<<"$CANDIDATES")"
+      [[ -n "$MATCHES" ]] || die "No public Route53 zone named $EXISTING_ZONE in this account"
+      if [[ "$(wc -l <<<"$MATCHES" | tr -d ' ')" -gt 1 ]]; then
+        echo "  $(wc -l <<<"$MATCHES" | tr -d ' ') public zones are named $EXISTING_ZONE: $(awk '{print $2}' <<<"$MATCHES" | paste -sd' ' -)" >&2
+        echo "  Name the one to use by its id, e.g. $RESUME_CMD --existing-zone $(awk 'NR == 1 {print $2}' <<<"$MATCHES")" >&2
+        die "More than one zone named $EXISTING_ZONE"
+      fi
+    fi
+    ZONE_ID="$(awk '{print $2}' <<<"$MATCHES")"
+  elif $EXISTING_FLAG; then
+    [[ -n "$CANDIDATES" ]] || die "No public Route53 zone in this account is $DOMAIN or a parent of it. Run without --existing-zone to create one."
+    echo "Public Route53 zones that can serve $DOMAIN:"
+    choose_zone "Use which zone? [1-$(wc -l <<<"$CANDIDATES" | tr -d ' '), n to stop]" "$CANDIDATES"
+  elif [[ -n "$CANDIDATES" ]]; then
+    echo "This account already has a public Route53 zone that can serve $DOMAIN, so new-site won't create a second one:"
+    choose_zone "Use one of them? [1-$(wc -l <<<"$CANDIDATES" | tr -d ' '), n to stop]" "$CANDIDATES"
+  fi
+fi
+
+if [[ -n "$ZONE_ID" ]]; then
+  $SANDBOX && die "--sandbox exercises the Namecheap delegation, which an existing zone doesn't use"
+  $ENABLE_EMAIL && die "--email is not supported with an existing zone: its mail records belong to the zone's owner"
+  ZONE_NAME="$(aws route53 get-hosted-zone --id "$ZONE_ID" --output json 2>/dev/null | jq -r '.HostedZone.Name // empty' | tr '[:upper:]' '[:lower:]')"
+  ZONE_NAME="${ZONE_NAME%.}"
+  [[ -n "$ZONE_NAME" ]] || die "Could not read Route53 zone $ZONE_ID"
+  if [[ "$DOMAIN_LC" == "$ZONE_NAME" ]]; then INCLUDE_WWW=true; else INCLUDE_WWW=false; fi
+  ZONE_LINE="$(awk -v id="$ZONE_ID" '$2 == id' <<<"$CANDIDATES")"
+  if [[ -n "$ZONE_LINE" ]]; then RESUME_CMD="$RESUME_CMD $(df_zone_flag "$ZONE_LINE" "$CANDIDATES")"
+  else RESUME_CMD="$RESUME_CMD --existing-zone $ZONE_ID"; fi
+else
+  INCLUDE_WWW=true
+  # ── Namecheap env ──────────────────────────────────────
+  $SANDBOX && export NAMECHEAP_USE_SANDBOX=true
+  [[ -n "${NAMECHEAP_API_KEY:-}" ]] || die "NAMECHEAP_API_KEY not set — copy .env.example to .env and fill it in"
+  if [[ -z "${NAMECHEAP_CLIENT_IP:-}" ]]; then
+    NAMECHEAP_CLIENT_IP="$(df_detect_ip)"
+    [[ -n "$NAMECHEAP_CLIENT_IP" ]] || die "Could not auto-detect public IP — set NAMECHEAP_CLIENT_IP in .env"
+    export NAMECHEAP_CLIENT_IP
+    info "Using detected client IP $NAMECHEAP_CLIENT_IP (must be whitelisted at Namecheap)"
+  fi
 fi
 
 echo ""
@@ -71,7 +174,31 @@ echo "  state key:  $STATE_KEY"
 echo "  modules:    $MODULES/<name>$MODULE_QUERY"
 echo "  build dir:  $BUILD_DIR"
 $SANDBOX && echo "  MODE:       SANDBOX (NS delegation only; AWS provisioning skipped)"
+if [[ -n "$ZONE_ID" ]]; then
+  echo "  DNS:        records in EXISTING zone $ZONE_NAME ($ZONE_ID); no zone created, Namecheap not called"
+  $INCLUDE_WWW && echo "  serves:     $DOMAIN and www.$DOMAIN" || echo "  serves:     $DOMAIN (no www)"
+fi
 echo "─────────────────────────────────────"
+
+# ── Existing zone: public DNS must already answer it, or ACM can't validate ──
+if [[ -n "$ZONE_ID" ]]; then
+  step "Checking public DNS answers zone $ZONE_ID for $ZONE_NAME (dig NS @8.8.8.8)"
+  if ! df_zone_answers_publicly "$ZONE_ID" "$ZONE_NAME"; then
+    warn "Public DNS doesn't answer this zone for $ZONE_NAME yet, so ACM couldn't validate the certificate."
+    echo "  Public DNS answers: $(tr '\n' ' ' <<<"${DF_PUBLIC_NS:-nothing}")"
+    echo "  Zone $ZONE_ID has:  $(tr '\n' ' ' <<<"${DF_ZONE_NS:-nothing}")"
+    echo "  Set the domain's nameservers at its registrar to the zone's, wait for them to show, then re-run:"
+    echo "    $RESUME_CMD --resume --yes"
+    exit 75   # EX_TEMPFAIL
+  fi
+  pass "Public DNS answers zone $ZONE_ID"
+  if [[ "$DOMAIN_LC" != "$ZONE_NAME" ]]; then
+    SUB_NS="$(dig +short NS "$DOMAIN" @8.8.8.8 2>/dev/null | df_ns_list)"
+    if [[ -n "$SUB_NS" && -n "$(comm -23 <(echo "$SUB_NS") <(echo "$DF_ZONE_NS"))" ]]; then
+      die "$DOMAIN is delegated to other nameservers ($(tr '\n' ' ' <<<"$SUB_NS")), so records in $ZONE_NAME wouldn't be served"
+    fi
+  fi
+fi
 
 # ── Scaffold ───────────────────────────────────────────
 render() {
@@ -82,6 +209,8 @@ render() {
   content="${content//__BUILD_DIR__/$BUILD_DIR}"
   content="${content//__MODULES__/$MODULES}"
   content="${content//__MODULE_QUERY__/$MODULE_QUERY}"
+  content="${content//__EXISTING_ZONE_ID__/$ZONE_ID}"
+  content="${content//__INCLUDE_WWW__/$INCLUDE_WWW}"
   printf '%s\n' "$content" > "$2"
 }
 
@@ -95,6 +224,7 @@ else
     base="$(basename "$f")"
     case "$base" in
       gitignore.tmpl) if [[ -n "$CONFIG" ]]; then render "$f" "$SITE_DIR/.gitignore"; fi ;;
+      namecheap.tf.tmpl) if [[ -z "$ZONE_ID" ]]; then render "$f" "$SITE_DIR/namecheap.tf"; fi ;;
       *.tmpl)         render "$f" "$SITE_DIR/${base%.tmpl}" ;;
       *)              cp "$f" "$SITE_DIR/$base" ;;
     esac
@@ -117,6 +247,14 @@ if [[ "$YES" != true ]]; then
   read -r -p "Provision $DOMAIN now? (y/N) " c; [[ "$c" == [yY] ]] || { echo "Aborted."; exit 0; }
 fi
 
+if [[ -n "$ZONE_ID" ]]; then
+  # The zone already answers publicly (checked above): no delegation to wait for.
+  step "Phase 1 — create ACM certificate"
+  df_tf_at "$SITE_DIR" apply -input=false -auto-approve -target=module.acm_cert
+  step "Phase 2 — validate cert, build CloudFront, add records to zone $ZONE_NAME"
+  df_tf_at "$SITE_DIR" apply -input=false -auto-approve
+  log "INFO" "Provisioned $DOMAIN in existing zone $ZONE_NAME ($ZONE_ID)"
+else
 # ── Phase 1: cert -> zone + NS delegation ──────────────
 # 1a: apply the ACM cert alone first. Its domain_validation_options (the names
 #     the zone's for_each is keyed on) are unknown until the cert exists, so a
@@ -158,7 +296,7 @@ done
 
 if ! $propagated; then
   warn "Nameservers not visible after 15m. Registrar updates can lag — re-run when ready:"
-  echo "    bin/new-site $DOMAIN${CONFIG:+ --config $SITE_DIR${MODULE_REF:+ --module-ref $MODULE_REF}${MODULE_PATH:+ --module-path $MODULE_PATH}} --resume --yes"
+  echo "    $RESUME_CMD --resume --yes"
   exit 75   # EX_TEMPFAIL
 fi
 pass "Nameservers propagated"
@@ -167,6 +305,7 @@ pass "Nameservers propagated"
 step "Phase 2 — validate cert, build CloudFront, add DNS records"
 df_tf_at "$SITE_DIR" apply -input=false -auto-approve
 log "INFO" "Phase 2 applied for $DOMAIN"
+fi
 
 echo ""
 echo "─────────────────────────────────────"
