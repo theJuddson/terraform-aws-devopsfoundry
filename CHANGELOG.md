@@ -21,6 +21,17 @@ the earlier versions below were private and their tags are not in this repositor
   enrolled and pushing, an instance replacement that kept the data volume, and a destroy that left nothing but the
   final snapshot `ec2-host` takes by design.
 
+## v1.18.3
+
+- The app and site scripts initialize Terraform again when a root's module source changed since its last init
+  (#77). A pull that moves the module pin (`?ref=v1.2.8` to `v1.17.0`) left `.terraform` on the old module, and
+  `deploy-app`, `destroy-app`, `rotate-secret`, `email-status`, `release-nameservers`, `deploy` and `destroy-site`
+  stopped with Terraform's "Module source has changed" until someone ran `terraform init` by hand. They now compare
+  each top-level module block's `source` with the one `.terraform/modules/modules.json` recorded, and say which
+  changed before initializing. Init still runs without `-upgrade`, so a provider lock that no longer fits stops
+  with Terraform's own error.
+
+
 ## v1.18.2
 
 - Plans and deploys stop needing Namecheap credentials once a domain's delegation is live, for apps and static sites.

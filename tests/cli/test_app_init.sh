@@ -82,3 +82,53 @@ t_new_app_initializes_with_the_apps_own_backend() {
   assert_called "init -input=false -backend-config=$APP/backend.tfvars$"
   assert_not_called "backend-config=$DF/backend.tfvars"
 }
+
+# installed_modules <key> <source>...: what .terraform/modules/modules.json says init installed.
+installed_modules() {
+  local json='{"Modules":[{"Key":"","Source":"","Dir":"."}'
+  while [[ $# -gt 0 ]]; do json="$json,{\"Key\":\"$1\",\"Source\":\"$2\",\"Dir\":\".terraform/modules/$1\"}"; shift 2; done
+  printf '%s]}\n' "$json" > "$APP/.terraform/modules/modules.json"
+}
+# A root shaped like the template: providers with their own `source`, a nested block, a comment.
+root_main_tf() {
+  cat > "$APP/main.tf" <<TF
+terraform {
+  required_providers {
+    aws = { source = "hashicorp/aws", version = "~> 6.0" }
+  }
+}
+# module "old" { source = "./not-this" }
+module "app" {
+  source = "$1"
+  tags   = { Name = "x" }
+}
+TF
+}
+
+t_a_moved_module_pin_is_initialized_again() {
+  fresh_app initialized
+  root_main_tf "git::ssh://git@github.com/o/r//modules/full-stack?ref=v1.17.0"
+  installed_modules app "git::ssh://git@github.com/o/r//modules/full-stack?ref=v1.2.8" app.networking "../networking"
+  OUT="$("$DF/bin/email-status" --config "$APP" 2>&1)" || true
+  assert_called " init -input=false -backend-config=$DF/backend.tfvars$"
+  assert_not_called "init.*-upgrade"
+  assert_contains "$OUT" "a module source changed since the last init: app ("
+  assert_contains "$OUT" "?ref=v1.2.8 -> "
+}
+
+t_matching_module_sources_are_not_initialized_again() {
+  fresh_app initialized
+  root_main_tf "git::ssh://git@github.com/o/r//modules/full-stack?ref=v1.17.0"
+  installed_modules app "git::ssh://git@github.com/o/r//modules/full-stack?ref=v1.17.0" app.networking "../networking"
+  "$DF/bin/email-status" --config "$APP" >/dev/null 2>&1 || true
+  assert_not_called " init "
+}
+
+t_a_module_added_since_the_last_init_is_initialized() {
+  fresh_app initialized
+  root_main_tf "../modules/full-stack"
+  printf 'module "files" {\n  source = "../modules/object-store"\n}\n' > "$APP/files.tf"
+  installed_modules app "../modules/full-stack"
+  "$DF/bin/email-status" --config "$APP" >/dev/null 2>&1 || true
+  assert_called " init -input=false"
+}

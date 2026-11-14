@@ -304,16 +304,61 @@ df_app_backend_file() {
   if [[ -f "$1/backend.tfvars" ]]; then echo "$1/backend.tfvars"; else echo "$DF_ROOT/backend.tfvars"; fi
 }
 
-# Initialize an app or site root this checkout hasn't initialized yet. .terraform/ is
-# gitignored, so a fresh clone or a repo moved to a new path has the app's
-# .devopsfoundry/ but no backend or modules, and every plan fails (#45).
+# The root's module blocks whose source isn't the one .terraform installed, as
+# "<name> (<installed> -> <configured>)", space-separated; empty when they all match.
+# A pull that moves a module pin (?ref=v1.2.8 -> v1.17.0) leaves .terraform on the old
+# source, and every plan then stops with "Module source has changed" (#77).
+# Usage: df_changed_module_sources <config_dir>
+df_changed_module_sources() {
+  local c="$1" name src installed out=""
+  while IFS=$'\t' read -r name src; do
+    [[ -n "$name" ]] || continue
+    installed="$(jq -r --arg k "$name" '[.Modules[]? | select(.Key == $k) | .Source][0] // ""' \
+      "$c/.terraform/modules/modules.json" 2>/dev/null)" || installed=""
+    [[ "$installed" == "$src" ]] || out="$out${out:+ }$name (${installed:-none} -> $src)"
+  done < <(df_module_sources "$c")
+  echo "$out"
+}
+
+# Each top-level module block in a root's *.tf files, as "<name>\t<source>" lines.
+# Usage: df_module_sources <config_dir>
+df_module_sources() {
+  local f
+  for f in "$1"/*.tf; do
+    [[ -f "$f" ]] || continue
+    awk '
+      depth == 0 && match($0, /^[ \t]*module[ \t]+"[^"]+"/) {
+        name = substr($0, RSTART, RLENGTH); sub(/^[ \t]*module[ \t]+"/, "", name); sub(/"$/, "", name); inmod = 1
+      }
+      inmod && depth == 1 && match($0, /^[ \t]*source[ \t]*=[ \t]*"[^"]*"/) {
+        src = substr($0, RSTART, RLENGTH); sub(/^[^"]*"/, "", src); sub(/"$/, "", src)
+        printf "%s\t%s\n", name, src; inmod = 0
+      }
+      {
+        line = $0; gsub(/"([^"\\]|\\.)*"/, "", line); sub(/#.*/, "", line); sub(/\/\/.*/, "", line)
+        depth += gsub(/\{/, "{", line) - gsub(/\}/, "}", line)
+        if (depth == 0) inmod = 0
+      }' "$f"
+  done
+}
+
+# Initialize an app or site root this checkout hasn't initialized yet, or whose module
+# source changed since it was. .terraform/ is gitignored, so a fresh clone or a repo
+# moved to a new path has the app's .devopsfoundry/ but no backend or modules, and
+# every plan fails (#45); so does a pull that moves the module pin (#77).
 # Usage: df_ensure_app_init <config_dir>
 df_ensure_app_init() {
-  local c="$1" backend
-  [[ -f "$c/.terraform/terraform.tfstate" && -f "$c/.terraform/modules/modules.json" ]] && return 0
+  local c="$1" backend why changed
+  if [[ -f "$c/.terraform/terraform.tfstate" && -f "$c/.terraform/modules/modules.json" ]]; then
+    changed="$(df_changed_module_sources "$c")"
+    [[ -z "$changed" ]] && return 0
+    why="a module source changed since the last init: $changed"
+  else
+    why="this checkout has no .terraform yet"
+  fi
   backend="$(df_app_backend_file "$c")"
   [[ -f "$backend" ]] || die "No state backend config for $c: add $c/backend.tfvars, or $DF_ROOT/backend.tfvars"
-  info "Initializing Terraform in $c (this checkout has no .terraform yet)"
+  info "Initializing Terraform in $c ($why)"
   df_tf_init "$c" -input=false -backend-config="$backend" || die "terraform init failed in $c"
 }
 
