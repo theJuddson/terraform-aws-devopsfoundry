@@ -125,14 +125,14 @@ else
     base="$(basename "$f")"
     case "$base" in
       gitignore.tmpl) render "$f" "$CONFIG/.gitignore" ;;
-      # One namecheap.tf: credentials from the environment, or placeholders for
-      # an --existing-zone root, which never calls Namecheap.
-      namecheap.tf.tmpl) [[ -n "$EXISTING_ZONE" ]] || render "$f" "$CONFIG/namecheap.tf" ;;
-      namecheap-existing-zone.tf.tmpl) [[ -z "$EXISTING_ZONE" ]] || render "$f" "$CONFIG/namecheap.tf" ;;
+      namecheap*.tf.tmpl) ;;   # one namecheap.tf, written below
       *.tmpl)         render "$f" "$CONFIG/${base%.tmpl}" ;;
       *)              cp "$f" "$CONFIG/$base" ;;
     esac
   done
+  # Credentials from the environment, or placeholders for an --existing-zone
+  # root, which never calls Namecheap.
+  if [[ -n "$EXISTING_ZONE" ]]; then df_app_namecheap_provider "$CONFIG" unused; else df_app_namecheap_provider "$CONFIG" live; fi
   pass "Scaffolded (edit $CONFIG/app.tfvars for app config)"
 fi
 

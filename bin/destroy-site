@@ -9,6 +9,11 @@
 # Usage: bin/destroy-site --config <dir> [--keep-ns] [--purge] [--yes]
 #        bin/destroy-site <domain>       [--keep-ns] [--purge] [--yes]   (root in sites/<domain>)
 #
+# A site released by bin/release-nameservers (namecheap.tf renamed to
+# namecheap.tf.released) has no Namecheap record in state. To revert, the file
+# comes back and the record is re-adopted first (it rewrites the same
+# nameservers, a no-op at Namecheap); with --keep-ns the file stays aside.
+#
 # A site made with new-site --existing-zone (existing_zone_id in its
 # terraform.tfvars) removes only its own records from that zone: the zone and
 # its nameservers stay, Namecheap is never called, and --keep-ns is refused.
@@ -70,6 +75,13 @@ fi
 if $KEEP_NS; then
   step "Dropping namecheap_ns from state (delegation will persist)"
   df_tf_at "$SITE_DIR" state rm module.namecheap_ns 2>/dev/null || warn "namecheap_ns not in state"
+elif [[ -z "$ZONE_ID" && -f "$SITE_DIR/namecheap.tf.released" && ! -f "$SITE_DIR/namecheap.tf" ]]; then
+  step "Re-adopting the Namecheap delegation so destroy can revert it"
+  mv "$SITE_DIR/namecheap.tf.released" "$SITE_DIR/namecheap.tf"
+  if ! df_tf_at "$SITE_DIR" apply -input=false -auto-approve -target=module.namecheap_ns; then
+    mv "$SITE_DIR/namecheap.tf" "$SITE_DIR/namecheap.tf.released"
+    die "Could not re-adopt the delegation (Namecheap API access needed); use --keep-ns to destroy without reverting it"
+  fi
 fi
 
 step "terraform destroy"

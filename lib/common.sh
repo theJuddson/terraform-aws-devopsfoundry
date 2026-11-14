@@ -339,6 +339,37 @@ df_roll_service() {
 }
 
 # Run terraform in a config dir. Usage: df_tf_at <config_dir> <args...>
+# Writes an app root's namecheap.tf (v1.18.2). `live` reads Namecheap
+# credentials from the environment, for a root whose Terraform manages the
+# nameserver delegation. `unused` configures placeholders, for a root whose
+# delegation Terraform doesn't manage (an existing zone, or released by
+# bin/release-nameservers), so it needs no credentials. A root scaffolded
+# before v1.18.1 has the provider block in main.tf; it moves out here.
+df_app_namecheap_provider() { # df_app_namecheap_provider <dir> live|unused
+  local dir="$1" tmpl
+  case "$2" in
+    live)   tmpl="$DF_ROOT/templates/full-stack/namecheap.tf.tmpl" ;;
+    unused) tmpl="$DF_ROOT/templates/full-stack/namecheap-unused.tf.tmpl" ;;
+    *)      die "df_app_namecheap_provider: unknown mode $2" ;;
+  esac
+  df_app_namecheap_movable "$dir" || return 1
+  if grep -qx 'provider "namecheap" {}' "$dir/main.tf"; then
+    sed -e '/^provider "namecheap" {}$/d' -e '/^# Namecheap creds from env/d' "$dir/main.tf" > "$dir/main.tf.df-new"
+    mv "$dir/main.tf.df-new" "$dir/main.tf"
+  fi
+  cp "$tmpl" "$dir/namecheap.tf"
+}
+
+# Fails, saying why, when main.tf configures the Namecheap provider some way
+# other than the generated `provider "namecheap" {}`: that block is the
+# user's own, so it is not rewritten.
+df_app_namecheap_movable() { # df_app_namecheap_movable <dir>
+  if grep -q '^provider "namecheap"' "$1/main.tf" && ! grep -qx 'provider "namecheap" {}' "$1/main.tf"; then
+    echo "  $1/main.tf configures the Namecheap provider itself; move that block into namecheap.tf by hand" >&2
+    return 1
+  fi
+}
+
 df_tf_at() { local c="$1"; shift; terraform -chdir="$c" "$@"; }
 
 # terraform init that survives a registry or GitHub blip. Usage: df_tf_init <dir> <init args...>
@@ -445,3 +476,6 @@ df_plan_summary() {
 # form until the next apply runs the moved blocks, so match both.
 DF_NS_RECORD_RE='^module\.app\.module\.namecheap_ns(\[0\])?\.namecheap_domain_records\.ns$'
 DF_ZONE_RE='^module\.app\.module\.route53_zone(\[0\])?\.aws_route53_zone\.main$'
+# The same two in a static site root (bin/new-site).
+DF_SITE_NS_RECORD_RE='^module\.namecheap_ns(\[0\])?\.namecheap_domain_records\.ns$'
+DF_SITE_ZONE_RE='^module\.route53_zone(\[0\])?\.aws_route53_zone\.main$'

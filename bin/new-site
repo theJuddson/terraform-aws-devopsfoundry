@@ -305,6 +305,10 @@ pass "Nameservers propagated"
 step "Phase 2 — validate cert, build CloudFront, add DNS records"
 df_tf_at "$SITE_DIR" apply -input=false -auto-approve
 log "INFO" "Phase 2 applied for $DOMAIN"
+
+# Live now: hand the delegation off, so later plans never call Namecheap.
+"$DF_ROOT/bin/release-nameservers" --config "$SITE_DIR" --yes \
+  || warn "Could not release yet; plans of this site will need Namecheap access until you run: bin/release-nameservers --config $SITE_DIR"
 fi
 
 echo ""
