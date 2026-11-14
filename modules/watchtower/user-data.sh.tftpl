@@ -1,0 +1,30 @@
+#!/bin/bash
+# Watchtower collector: mount the data volume, fetch and verify the release,
+# install it. Rendered by the DevOpsFoundry watchtower module.
+set -euo pipefail
+exec > >(tee -a /var/log/watchtower-install.log) 2>&1
+
+# The data volume is attached after boot; wait for it (it appears as /dev/sdf).
+for _ in $(seq 1 120); do [ -e /dev/sdf ] && break; sleep 5; done
+dev=$(readlink -f /dev/sdf)
+blkid "$dev" || mkfs.xfs -L watchtower "$dev"
+mkdir -p /var/lib/watchtower
+grep -q 'LABEL=watchtower' /etc/fstab || echo 'LABEL=watchtower /var/lib/watchtower xfs defaults,nofail 0 2' >> /etc/fstab
+mount -a
+
+work=$(mktemp -d)
+case "${release_url}" in
+  s3://*) aws s3 cp --only-show-errors "${release_url}" "$work/release.tar.gz" ;;
+  *) curl -fsSL --retry 5 -o "$work/release.tar.gz" "${release_url}" ;;
+esac
+echo "${release_sha256}  $work/release.tar.gz" | sha256sum -c -
+tar -xzf "$work/release.tar.gz" -C "$work"
+
+install -d -m 0755 /etc/watchtower
+echo "${rules_b64}" | base64 -d > /etc/watchtower/rules.yaml
+chmod 0644 /etc/watchtower/rules.yaml
+
+WATCHTOWER_FLAGS="${flags}" WATCHTOWER_COLLECTOR="${collector_url}" WATCHTOWER_SOURCE="${source}" \
+  "$work"/watchtower_*/install.sh collector
+rm -rf "$work"
+echo "watchtower installed"
