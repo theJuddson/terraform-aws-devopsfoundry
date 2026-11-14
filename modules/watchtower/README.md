@@ -49,6 +49,15 @@ Sign-in is invite-only, with passkeys or email links. Open a shell with the `ssm
 the `first_admin_command` output with your address. It prints a one-time link; invite everyone else from the
 dashboard.
 
+## Deploy tokens
+
+`bin/deploy-app`, `bin/deploy` and `bin/rotate-secret` open a deployment window on the collector when
+`WATCHTOWER_URL` is set (see the DevOpsFoundry README, "Deployment windows (Watchtower)"). They authenticate with a
+deploy token read from an SSM SecureString. The `deploy_token_command` output mints one on the collector over SSM
+and stores it from stdin, so the token never reaches a command line or the terminal. Replace `<name>` (the token's
+name in the dashboard) and `<parameter>` (e.g. `/myapp/watchtower/deploy-token`), and add `--overwrite` to replace
+an existing parameter. It needs the Session Manager plugin, as `ssm_session_command` does.
+
 ## Test deployments
 
 Set `acme_directory` to Let's Encrypt's staging directory
@@ -118,6 +127,7 @@ Browsers won't trust the staging certificate.
 | ---- | ----------- |
 | collector\_flags | The flags the collector runs with (no secrets: mail goes through the instance role). |
 | data\_volume\_id | The data volume that outlives the instance. |
+| deploy\_token\_command | Run on your machine to mint a deploy token on the collector (over SSM) and store it as a SecureString, for `WATCHTOWER_TOKEN_PARAMETER`. Replace `<name>` and `<parameter>`; the token never reaches a command line or the terminal. |
 | first\_admin\_command | Run in an SSM session on the collector to print a one-time sign-in link for the first admin. |
 | instance\_id | The collector's instance. |
 | public\_ip | The fixed public address. Point `hostname` at it when `zone_id` is null. |

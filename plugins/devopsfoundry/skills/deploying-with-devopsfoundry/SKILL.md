@@ -72,7 +72,9 @@ said yes in this conversation. Reading is always fine: `bin/preflight`, `bin/ema
    `.devopsfoundry/`, but not `.terraform/` or plan files.
 5. **Deploy**, after approval: `$DOF/bin/deploy-app --config <app repo>/.devopsfoundry`. It checks the secrets,
    builds, pushes, applies, rolls the service, waits, and runs `VERIFY_SCRIPT`. If ECS rolls the deployment back
-   (the circuit breaker), it fails and says so: the previous version is still serving.
+   (the circuit breaker), it fails and says so: the previous version is still serving. With `WATCHTOWER_URL` set
+   it also opens a Watchtower deployment window and waits for the app to settle before closing it; a Watchtower
+   warning never fails the deploy (README, "Deployment windows (Watchtower)").
 6. **Email**: `$DOF/bin/email-status --config <app repo>/.devopsfoundry` reports the SES sandbox and whether the
    domain is verified. Requesting production access is the person's call.
 7. **Verify**: `https://<host><health_check_path>` answers 200 with a valid certificate, `VERIFY_SCRIPT` passed, and

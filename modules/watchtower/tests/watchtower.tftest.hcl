@@ -18,6 +18,10 @@ mock_provider "aws" {
   mock_data "aws_ssm_parameter" {
     defaults = { insecure_value = "ami-fromssm", value = "ami-fromssm" }
   }
+  mock_resource "aws_instance" {
+    override_during = plan
+    defaults        = { id = "i-0mock" }
+  }
   mock_resource "aws_eip" {
     override_during = plan
     defaults        = { public_ip = "203.0.113.10" }
@@ -38,6 +42,12 @@ run "defaults" {
   assert {
     condition     = output.url == "https://watch.example.com"
     error_message = "url must be the hostname over HTTPS."
+  }
+  assert {
+    condition = (startswith(output.deploy_token_command, "aws ssm start-session --target i-0mock --document-name AWS-StartNonInteractiveCommand ")
+      && strcontains(output.deploy_token_command, "watchtower admin --data /var/lib/watchtower/collector deploy-token <name>")
+    && endswith(output.deploy_token_command, "| aws ssm put-parameter --name <parameter> --type SecureString --value file:///dev/stdin"))
+    error_message = "deploy_token_command must mint the token over SSM and store it from stdin."
   }
   assert {
     condition = (length(aws_vpc_security_group_ingress_rule.https) == 1
@@ -83,8 +93,13 @@ run "s3_release_mail_rules_and_dns" {
   }
   assert {
     condition = (one([for s in data.aws_iam_policy_document.host.statement : s.resources if s.sid == "SendAsTheIdentity"])
-    == toset(["arn:aws:ses:us-east-1:111111111111:identity/example.com"]))
-    error_message = "The host may send only as its SES identity."
+    == toset(["arn:aws:ses:us-east-1:111111111111:identity/*"]))
+    error_message = "SES checks recipients' identities too, so the host may send to any identity in its identity's account and region."
+  }
+  assert {
+    condition = anytrue([for c in one([for s in data.aws_iam_policy_document.host.statement : s.condition if s.sid == "SendAsTheIdentity"]) :
+    c.test == "StringEquals" && c.variable == "ses:FromAddress" && contains(c.values, "watchtower@example.com")])
+    error_message = "The host may send only as mail_from."
   }
   assert {
     condition     = aws_route53_record.this[0].records == toset(["203.0.113.10"]) && aws_route53_record.this[0].name == "watch.example.com"

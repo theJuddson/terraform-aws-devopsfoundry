@@ -45,9 +45,12 @@ data "aws_iam_policy_document" "host" {
   dynamic "statement" {
     for_each = var.mail_from == null || var.ses_identity_arn == null ? [] : [1]
     content {
-      sid       = "SendAsTheIdentity"
-      actions   = ["ses:SendEmail"]
-      resources = [var.ses_identity_arn]
+      sid     = "SendAsTheIdentity"
+      actions = ["ses:SendEmail"]
+      # SES checks the permission against each recipient's identity in the account as well as the
+      # sender's (the sandbox's verified addresses, and any other address), so the resource is every
+      # identity in the sender identity's account and region; the From condition limits the sender.
+      resources = ["${regex("^(arn:[^:]+:ses:[^:]+:[0-9]+:identity/)", var.ses_identity_arn)[0]}*"]
       condition {
         test     = "StringEquals"
         variable = "ses:FromAddress"

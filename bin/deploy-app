@@ -6,6 +6,7 @@
 set -euo pipefail
 DF_SCRIPT_NAME="deploy-app"
 source "$(cd "$(dirname "$0")/.." && pwd)/lib/common.sh"
+source "$DF_ROOT/lib/watchtower.sh"
 df_load_env
 
 CONFIG=""; YES=false
@@ -82,6 +83,11 @@ if [[ "$YES" != true ]]; then
   read -r -p "Build + deploy $SHA to $SERVICE_URL? (y/N) " c; [[ "$c" == [yY] ]] || { echo "Aborted."; exit 0; }
 fi
 
+# A Watchtower deployment window (optional, lib/watchtower.sh), closed as failed on any exit before done.
+trap 'df_wt_on_exit $?' EXIT
+APP_NAME="$(df_tfvar "$CONFIG/app.tfvars" name)"
+df_wt_start deploy-app "${APP_NAME:-$SERVICE}" "Deploy git-$SHA to $SERVICE_URL" "git-$SHA"
+
 step "Building image ($PLATFORM)"
 # shellcheck disable=SC2086
 ( cd "$REPO_ROOT" && docker build --platform "$PLATFORM" $DOCKER_BUILD_ARGS \
@@ -105,11 +111,13 @@ pass "Applied"
 # apply alone won't redeploy on subsequent runs).
 step "Rolling ECS service and waiting for it to stabilize"
 LOGS="$(df_tf_at "$CONFIG" output -raw log_group 2>/dev/null || echo "the service's log group")"
+df_wt_ensure 600 "ECS waits up to 10 min for the service to stabilize"
 roll_rc=0; df_roll_service "$CLUSTER" "$SERVICE" "$REGION" || roll_rc=$?
 case "$roll_rc" in
   0) ;;
   1) die "update-service failed" ;;
-  2) die "The new deployment failed and ECS rolled the service back to the previous one, which is still serving. Image git-$SHA did not go live; check its tasks' logs: $LOGS" ;;
+  2) df_wt_done rolled-back "ECS rolled back git-$SHA; the previous deployment is still serving"
+     die "The new deployment failed and ECS rolled the service back to the previous one, which is still serving. Image git-$SHA did not go live; check its tasks' logs: $LOGS" ;;
   *) die "Service did not stabilize — check logs: $LOGS" ;;
 esac
 pass "Service stable"
@@ -143,6 +151,9 @@ else
     warn "Health returned $CODE at ${SERVICE_URL}${HEALTH_PATH} (DNS may still be propagating)"
   fi
 fi
+
+df_wt_wait_settled
+df_wt_done succeeded "git-$SHA is live${DF_WT_NOTE:+; $DF_WT_NOTE}"
 
 echo ""
 echo "─────────────────────────────────────"

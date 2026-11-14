@@ -3,6 +3,23 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.21.0
+
+- Fix: `watchtower`'s instance role may now send mail. SES checks `ses:SendEmail` against each recipient's identity
+  in the account as well as the sender's, so a role allowed only `ses_identity_arn` was refused for every alarm
+  email. The resource is now every identity in that identity's account and region; the `ses:FromAddress` condition
+  still limits the sender to `mail_from`. Applying it updates the role's inline policy in place.
+
+- Deployment windows on a Watchtower collector, the first client of its deployments API. With `WATCHTOWER_URL`
+  and `WATCHTOWER_TOKEN_PARAMETER` set in `.env`, `app.env` or `site.env`, `deploy-app`, `deploy` and
+  `rotate-secret` start a deployment after the confirmation, extend it before long waits, poll until the target
+  settles, and close it as succeeded, rolled-back or failed (an EXIT trap catches every failure). `deploy` waits
+  for the CloudFront invalidation first when a window is open. Optional: unset, nothing changes and no request is
+  made; an unreachable or erroring collector only warns. The deploy token comes from an SSM SecureString and reaches
+  curl on stdin. See the README's "Deployment windows (Watchtower)".
+- `watchtower`: a `deploy_token_command` output that mints a deploy token on the collector over SSM and stores it
+  as a SecureString from stdin. Needs a Watchtower release with deploy tokens.
+
 ## v1.20.0
 
 - `container-service` and `full-stack`: `waf_allowed_countries` blocks requests from outside a list of countries
