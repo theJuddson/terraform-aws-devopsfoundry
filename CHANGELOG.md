@@ -10,6 +10,9 @@ the earlier versions below were private and their tags are not in this repositor
   blocks even when `waf_count_only` counts everything else. Empty, the default, adds no rule, so existing stacks plan
   no change. It needs a WAF the module creates: on a shared-platform guest, or with `waf_web_acl_arn`, it's refused
   at plan time, so it can't look on while doing nothing. Set it on the platform host to cover every guest.
+- `static-site`: `allowed_countries` serves a site only to viewers in those countries, with CloudFront's free
+  geo restriction; everyone else gets a 403. Empty, the default, keeps today's "none". The static template passes
+  it from `terraform.tfvars`.
 
 ## v1.19.0
 

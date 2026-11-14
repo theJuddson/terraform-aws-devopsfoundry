@@ -207,6 +207,11 @@ bin/new-site example.com --existing-zone --config ../MySite/.devopsfoundry ...  
 Workspace MX + DKIM records (or edit `enable_google_email` / `google_dkim_key`
 in the site root's `terraform.tfvars`).
 
+`allowed_countries = ["US"]` in the site root's `terraform.tfvars` serves only those countries (ISO 3166 two-letter
+codes); CloudFront answers everyone else with a 403. It's free, and it refuses real visitors on a VPN or travelling
+too. A site root made before v1.20.0 needs the `allowed_countries` variable and module argument from
+`templates/static/` added first.
+
 #### Moving a site root out of `sites/`
 
 The state key doesn't depend on where the root lives, so a root moves without
