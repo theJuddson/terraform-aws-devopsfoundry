@@ -20,7 +20,7 @@
 # so it never appears in a command line, a log or an error message.
 
 DF_WT_ID=""; DF_WT_DONE=false; DF_WT_TOKEN=""; DF_WT_TARGET=""
-DF_WT_DEADLINE_MS=0; DF_WT_ESTIMATE=0; DF_WT_NOTE=""
+DF_WT_DEADLINE_MS=0; DF_WT_ESTIMATE=0; DF_WT_NOTE=""; DF_WT_UNSETTLED=false
 
 df_wt_configured() { [[ -n "${WATCHTOWER_URL:-}" ]]; }
 df_wt_active() { [[ -n "$DF_WT_ID" ]]; }
@@ -132,7 +132,9 @@ df_wt_ensure() {
 # Polls /settled every DF_WT_POLL_SECONDS (15) until the target is back to normal,
 # extending the window by the estimate when its deadline is under a minute away, for
 # at most WATCHTOWER_SETTLE_TIMEOUT seconds (default twice the estimate). Sets
-# DF_WT_NOTE to what happened, for df_wt_done. Never fails the deploy.
+# DF_WT_NOTE to what happened, for df_wt_done. A target that has not settled by then
+# sets DF_WT_UNSETTLED, so df_wt_done leaves the window open and Watchtower reports
+# an unusual deployment when it expires. Never fails the deploy.
 df_wt_wait_settled() {
   df_wt_active || return 0
   local est="$DF_WT_ESTIMATE" limit start elapsed reasons
@@ -155,6 +157,7 @@ df_wt_wait_settled() {
     reasons="$(jq -r '(.reasons // []) | join("; ")' <<<"$DF_WT_BODY" 2>/dev/null || true)"
     if (( elapsed >= limit )); then
       DF_WT_NOTE="not settled after $elapsed s${reasons:+: $reasons}"
+      DF_WT_UNSETTLED=true
       warn "Watchtower: $DF_WT_TARGET not settled after $elapsed s${reasons:+: $reasons}"
       return 0
     fi
@@ -169,6 +172,10 @@ df_wt_done() {
   df_wt_active || return 0
   ! $DF_WT_DONE || return 0
   DF_WT_DONE=true
+  if $DF_WT_UNSETTLED && [[ "$1" == succeeded ]]; then
+    warn "Watchtower: leaving deployment $DF_WT_ID open, since $DF_WT_TARGET has not settled; Watchtower reports an unusual deployment if it is still running in $(df_wt_minutes "$(df_wt_remaining)") min"
+    return 0
+  fi
   if df_wt_call POST "/$DF_WT_ID/done" "$(jq -cn --arg o "$1" --arg n "${2:0:500}" '{outcome: $o, note: $n}')"; then
     info "Watchtower: deployment $DF_WT_ID closed as $1"
   else

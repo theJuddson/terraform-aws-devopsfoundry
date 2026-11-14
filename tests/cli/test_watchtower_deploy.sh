@@ -136,13 +136,16 @@ t_a_long_window_is_extended_only_near_its_deadline_while_waiting() {
   assert_before "$SETTLED" "$EXTEND"
 }
 
-t_a_target_that_does_not_settle_closes_as_succeeded_and_says_why() {
+# A target that never settles is the unusual deployment Watchtower reports: the window is left
+# open to run into its deadline, not closed as succeeded, and the exit trap doesn't close it either.
+t_a_target_that_does_not_settle_is_left_open_for_watchtower_to_report() {
   wt_app "$WT_ENV"$'\nWATCHTOWER_SETTLE_TIMEOUT=0'
   echo 99 > "$TMP/unsettled"
   deploy_app || fail "deploy-app must succeed: $OUT"
   assert_count "$SETTLED" 1
   assert_contains "$OUT" "not settled after 0 s: probe home is failing"
-  assert_called '"outcome":"succeeded","note":"git-abc1234 is live; not settled after 0 s: probe home is failing"'
+  assert_contains "$OUT" "leaving deployment"
+  assert_count "$DONE" 0
 }
 
 t_a_die_closes_the_window_as_failed_with_the_error() {
