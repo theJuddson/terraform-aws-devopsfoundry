@@ -3,6 +3,23 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.18.1
+
+- `bin/new-app --existing-zone` no longer needs Namecheap credentials. The app template's Namecheap provider block
+  moves out of `main.tf` into its own `namecheap.tf`, as the static template's did in v1.18.0. An `--existing-zone`
+  root gets a `namecheap.tf` that configures the provider with placeholders: the `full-stack` module still declares
+  the provider, Terraform configures every provider a module declares even when nothing uses it, and this one
+  refused to configure without `NAMECHEAP_USER_NAME`, `NAMECHEAP_API_USER` and `NAMECHEAP_API_KEY`. The module
+  creates no Namecheap resource in that mode, so the placeholders are never sent. `new-app --existing-zone` also no
+  longer looks up a public IP for Namecheap's whitelist.
+  - An app root scaffolded with `--existing-zone` before v1.18.1: replace `provider "namecheap" {}` in its `main.tf`
+    with the block in `templates/full-stack/namecheap-existing-zone.tf.tmpl`. Roots that delegate through Namecheap
+    need no change.
+  - `tests/app-root/run.sh` (run by `bin/check-modules`) plans an `--existing-zone` root with the real Namecheap
+    provider and no Namecheap credentials.
+- CHANGELOG: the `v1.16.0` heading was missing, so v1.16.0's WAF logging and `AGENTS.md` notes read as part of
+  v1.17.0. They now sit under their own heading.
+
 ## v1.18.0
 
 - `bin/new-site --existing-zone [ZONE]`: provision a static site into a public Route53 zone that already exists, the
@@ -51,6 +68,7 @@ the earlier versions below were private and their tags are not in this repositor
   repoint the profile) and which need a real terminal (`aws configure sso`, the Agent Toolkit wizard); a lapsed
   sign-in mid-session shows as every AWS MCP tool answering "Unknown tool".
 
+## v1.16.0
 
 - `container-service` and `full-stack`: opt-in WAF request logging, `waf_logging` (#66). With `create_waf`, the web
   ACL logs to the CloudWatch log group `aws-waf-logs-<name>-alb` (the prefix WAF requires), with the Authorization
