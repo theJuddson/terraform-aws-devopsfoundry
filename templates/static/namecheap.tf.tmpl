@@ -1,6 +1,9 @@
 # Delegates the domain's nameservers at Namecheap to the Route53 zone (Phase 1).
 # bin/new-site leaves this file out with --existing-zone: that root has no
-# Namecheap provider, so it never needs Namecheap credentials.
+# Namecheap provider, so it never needs Namecheap credentials. Once the
+# delegation is live, bin/release-nameservers renames this file to
+# namecheap.tf.released, with the same effect; bin/destroy-site renames it back
+# to revert the delegation.
 # Credentials read from env: NAMECHEAP_API_USER / API_KEY / USER_NAME /
 # CLIENT_IP / USE_SANDBOX (see .env).
 provider "namecheap" {}

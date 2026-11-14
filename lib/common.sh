@@ -476,3 +476,6 @@ df_plan_summary() {
 # form until the next apply runs the moved blocks, so match both.
 DF_NS_RECORD_RE='^module\.app\.module\.namecheap_ns(\[0\])?\.namecheap_domain_records\.ns$'
 DF_ZONE_RE='^module\.app\.module\.route53_zone(\[0\])?\.aws_route53_zone\.main$'
+# The same two in a static site root (bin/new-site).
+DF_SITE_NS_RECORD_RE='^module\.namecheap_ns(\[0\])?\.namecheap_domain_records\.ns$'
+DF_SITE_ZONE_RE='^module\.route53_zone(\[0\])?\.aws_route53_zone\.main$'
