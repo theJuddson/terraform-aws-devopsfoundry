@@ -92,3 +92,20 @@ t_plan_only_after_phase_1a_plans_the_rest() {
   assert_not_called "^dig "
   assert_contains "$out" "nothing applied"
 }
+
+t_a_namecheap_app_reads_namecheap_credentials_from_the_environment() {
+  setup_new_app
+  new_app --yes >/dev/null || fail "new-app should succeed"
+  [[ "$(grep -v '^#' "$APP/namecheap.tf")" == 'provider "namecheap" {}' ]] || fail "namecheap.tf must configure the provider from the environment"
+  assert_not_contains "$(cat "$APP/main.tf")" 'provider "namecheap"'
+}
+
+t_an_existing_zone_app_needs_no_namecheap_credentials() {
+  setup_new_app
+  stub aws 'echo /hostedzone/Z0EXISTING'
+  env -u NAMECHEAP_API_KEY -u NAMECHEAP_CLIENT_IP "$DF/bin/new-app" example.com --config "$APP" --subdomain api --existing-zone example.com --yes >/dev/null 2>&1 \
+    || fail "new-app --existing-zone should succeed with no NAMECHEAP_* set"
+  assert_contains "$(cat "$APP/namecheap.tf")" 'api_key   = "unused"'
+  assert_not_contains "$(cat "$APP/main.tf")" 'provider "namecheap"'
+  assert_not_called "^curl "
+}

@@ -12,6 +12,8 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    # Configured in namecheap.tf: from the environment, or with placeholders
+    # in an --existing-zone root, which never calls Namecheap.
     namecheap = {
       source  = "namecheap/namecheap"
       version = ">= 2.1.0"
@@ -46,9 +48,6 @@ provider "aws" {
     }
   }
 }
-
-# Namecheap creds from env (NAMECHEAP_API_USER / API_KEY / USER_NAME / CLIENT_IP).
-provider "namecheap" {}
 
 module "app" {
   source = "__MODULE_SOURCE__"

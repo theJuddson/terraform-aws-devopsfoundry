@@ -58,6 +58,9 @@ if [[ $# -eq 0 ]]; then
   # The static site root bin/new-site renders, in both DNS modes (mocked providers).
   step test "templates/static"
   tests/static-root/run.sh || fail=1
+  # The app root bin/new-app --existing-zone renders, with no Namecheap credentials.
+  step test "templates/full-stack (existing zone)"
+  tests/app-root/run.sh || fail=1
   step test "bin/ scripts"
   tests/cli/run.sh || fail=1
   # The agent plugin: its manifests and skill, and its approval hook (plugins/).
