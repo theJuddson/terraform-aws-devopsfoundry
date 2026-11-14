@@ -83,7 +83,7 @@ fi
 # Namecheap env
 $SANDBOX && export NAMECHEAP_USE_SANDBOX=true
 [[ -n "$EXISTING_ZONE" || -n "${NAMECHEAP_API_KEY:-}" ]] || die "NAMECHEAP_API_KEY not set — copy .env.example to .env"
-if [[ -z "${NAMECHEAP_CLIENT_IP:-}" ]]; then
+if [[ -z "$EXISTING_ZONE" && -z "${NAMECHEAP_CLIENT_IP:-}" ]]; then
   NAMECHEAP_CLIENT_IP="$(df_detect_ip)"; export NAMECHEAP_CLIENT_IP
   [[ -n "$NAMECHEAP_CLIENT_IP" ]] || die "Could not auto-detect public IP — set NAMECHEAP_CLIENT_IP"
   info "Using detected client IP $NAMECHEAP_CLIENT_IP (must be whitelisted at Namecheap)"
@@ -125,6 +125,10 @@ else
     base="$(basename "$f")"
     case "$base" in
       gitignore.tmpl) render "$f" "$CONFIG/.gitignore" ;;
+      # One namecheap.tf: credentials from the environment, or placeholders for
+      # an --existing-zone root, which never calls Namecheap.
+      namecheap.tf.tmpl) [[ -n "$EXISTING_ZONE" ]] || render "$f" "$CONFIG/namecheap.tf" ;;
+      namecheap-existing-zone.tf.tmpl) [[ -z "$EXISTING_ZONE" ]] || render "$f" "$CONFIG/namecheap.tf" ;;
       *.tmpl)         render "$f" "$CONFIG/${base%.tmpl}" ;;
       *)              cp "$f" "$CONFIG/$base" ;;
     esac
