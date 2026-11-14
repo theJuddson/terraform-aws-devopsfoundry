@@ -375,6 +375,29 @@ variable "alarm_p99_seconds" {
   }
 }
 
+variable "waf_allowed_countries" {
+  description = <<-EOT
+    Block every request whose client IP isn't in one of these countries (ISO 3166
+    alpha-2 codes, e.g. ["US"]). Empty, the default, allows every country. The
+    rule always blocks, even with waf_count_only: it's a decision, not a rule to
+    tune. It sits after the rate rule and before the managed groups. Only with
+    create_waf; one more WAF rule at $1 a month. AWS maps IPs to countries from
+    its own database, so a few legitimate visitors (VPNs, travellers, webhooks
+    sent from abroad) are blocked too.
+  EOT
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for c in var.waf_allowed_countries : can(regex("^[A-Z]{2}$", c))])
+    error_message = "waf_allowed_countries takes two-letter upper-case country codes, e.g. [\"US\", \"CA\"]."
+  }
+  validation {
+    condition     = length(var.waf_allowed_countries) == 0 || (var.create_alb && var.create_waf)
+    error_message = "waf_allowed_countries needs a WAF this module creates (create_waf on an app with its own ALB). A shared-platform guest gets the host's WAF: set it on the host."
+  }
+}
+
 variable "waf_logging" {
   description = "Log the WAF's requests to CloudWatch Logs (aws-waf-logs-<name>-alb), with Authorization and Cookie redacted. Only with create_waf. Billed per GB ingested and stored; by default only blocked and counted requests are kept."
   type        = bool

@@ -3,6 +3,14 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.20.0
+
+- `container-service` and `full-stack`: `waf_allowed_countries` blocks requests from outside a list of countries
+  (`["US"]`, say) with a WAF geo-match rule at priority 1, after the rate limit and before the managed groups. It
+  blocks even when `waf_count_only` counts everything else. Empty, the default, adds no rule, so existing stacks plan
+  no change. It needs a WAF the module creates: on a shared-platform guest, or with `waf_web_acl_arn`, it's refused
+  at plan time, so it can't look on while doing nothing. Set it on the platform host to cover every guest.
+
 ## v1.19.0
 
 - `watchtower`: a [Watchtower](https://github.com/theJuddson/DevOpsWatchtower) collector, the self-hosted

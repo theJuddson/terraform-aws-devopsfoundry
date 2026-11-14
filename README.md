@@ -26,8 +26,8 @@ or straight from git, over HTTPS or SSH, pinned to a release tag (the newest is 
 [Releases page](https://github.com/theJuddson/terraform-aws-devopsfoundry/releases)):
 
 ```hcl
-source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.19.0"
-source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.19.0"
+source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.20.0"
+source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.20.0"
 ```
 
 Each module's README lists its inputs and outputs, and the building blocks have a runnable example under
@@ -129,7 +129,7 @@ exercise the Namecheap path against the free sandbox with no eligibility gate.
 
 ```bash
 bin/preflight                                   # check toolchain + AWS + Namecheap + IP whitelist
-bin/new-site example.com --config ../MySite/.devopsfoundry --module-ref v1.19.0 --build-dir dist
+bin/new-site example.com --config ../MySite/.devopsfoundry --module-ref v1.20.0 --build-dir dist
                                                 # scaffold + two-phase provision
 bin/deploy --config ../MySite/.devopsfoundry    # build (optional) + sync + invalidate
 bin/destroy-site --config ../MySite/.devopsfoundry   # tear down; reverts NS to default
@@ -176,9 +176,9 @@ no Namecheap settings (`bin/preflight --existing-zone` skips those checks).
 
 ```bash
 bin/new-site example.com --existing-zone example.com \
-  --config ../MySite/.devopsfoundry --module-ref v1.19.0 --build-dir dist        # apex and www
+  --config ../MySite/.devopsfoundry --module-ref v1.20.0 --build-dir dist        # apex and www
 bin/new-site blog.example.com --existing-zone example.com \
-  --config ../Blog/.devopsfoundry --module-ref v1.19.0 --build-dir dist          # a subdomain, no www
+  --config ../Blog/.devopsfoundry --module-ref v1.20.0 --build-dir dist          # a subdomain, no www
 bin/new-site example.com --existing-zone --config ../MySite/.devopsfoundry ...   # list the zones that fit; choose one
 ```
 
@@ -320,7 +320,7 @@ serving and `--enable-email` are refused in this mode, and `destroy-app` removes
 
 ```bash
 bin/new-app example.com --subdomain app --existing-zone example.com \
-  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.19.0
+  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.20.0
 ```
 
 #### App-owned state
@@ -361,6 +361,11 @@ and the log group `aws-waf-logs-<app>-alb` records which rule matched which requ
 requests, with the Authorization and Cookie headers redacted; billed per GB, kept `waf_log_retention_days`, 30 by
 default). When the counts look right, set `waf_count_only = false` to enforce, and exempt any rule that catches real
 traffic with `waf_rule_overrides`. In shared-platform mode the WAF belongs to the platform that owns the ALB.
+
+`waf_allowed_countries = ["US"]` blocks every request whose client IP AWS places outside those countries (ISO 3166
+two-letter codes). It always blocks, even with `waf_count_only`, because an allow-list is a decision rather than a
+rule to tune, and it adds one $1/month rule. Expect it to block some real visitors too: people on a VPN or travelling,
+and webhooks or uptime checks sent from abroad. On a shared platform, set it on the host: it covers every guest.
 
 #### Alarms
 

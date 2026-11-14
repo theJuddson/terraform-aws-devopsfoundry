@@ -248,3 +248,63 @@ run "waf_log_retention_must_be_one_cloudwatch_accepts" {
 
   expect_failures = [var.waf_log_retention_days]
 }
+
+run "allowed_countries_block_everyone_else_even_in_count_mode" {
+  command = plan
+
+  variables {
+    create_waf            = true
+    waf_count_only        = true
+    waf_allowed_countries = ["US"]
+  }
+
+  assert {
+    condition = (
+      length([for r in aws_wafv2_web_acl.alb[0].rule : r if r.name == "allowed-countries"]) == 1 &&
+      one([for r in aws_wafv2_web_acl.alb[0].rule : r.priority if r.name == "allowed-countries"]) == 1
+    )
+    error_message = "The country rule must exist, between the rate rule (0) and the managed groups (10+)."
+  }
+  assert {
+    condition     = length(one([for r in aws_wafv2_web_acl.alb[0].rule : r if r.name == "allowed-countries"]).action[0].block) == 1
+    error_message = "The country rule must block even when waf_count_only counts everything else."
+  }
+  assert {
+    condition     = one([for r in aws_wafv2_web_acl.alb[0].rule : r if r.name == "allowed-countries"]).statement[0].not_statement[0].statement[0].geo_match_statement[0].country_codes == tolist(["US"])
+    error_message = "The rule must block requests NOT from the allowed countries."
+  }
+}
+
+run "no_allowed_countries_adds_no_rule" {
+  command = plan
+
+  variables {
+    create_waf = true
+  }
+
+  assert {
+    condition     = length([for r in aws_wafv2_web_acl.alb[0].rule : r if r.name == "allowed-countries"]) == 0
+    error_message = "By default every country is allowed: no country rule."
+  }
+}
+
+run "allowed_countries_without_a_waf_is_refused" {
+  command = plan
+
+  variables {
+    waf_allowed_countries = ["US"]
+  }
+
+  expect_failures = [var.waf_allowed_countries]
+}
+
+run "allowed_countries_must_be_country_codes" {
+  command = plan
+
+  variables {
+    create_waf            = true
+    waf_allowed_countries = ["usa"]
+  }
+
+  expect_failures = [var.waf_allowed_countries]
+}
