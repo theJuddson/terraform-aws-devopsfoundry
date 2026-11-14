@@ -3,6 +3,18 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.20.0
+
+- Deployment windows on a Watchtower collector, the first client of its deployments API. With `WATCHTOWER_URL`
+  and `WATCHTOWER_TOKEN_PARAMETER` set in `.env`, `app.env` or `site.env`, `deploy-app`, `deploy` and
+  `rotate-secret` start a deployment after the confirmation, extend it before long waits, poll until the target
+  settles, and close it as succeeded, rolled-back or failed (an EXIT trap catches every failure). `deploy` waits
+  for the CloudFront invalidation first when a window is open. Optional: unset, nothing changes and no request is
+  made; an unreachable or erroring collector only warns. The deploy token comes from an SSM SecureString and reaches
+  curl on stdin. See the README's "Deployment windows (Watchtower)".
+- `watchtower`: a `deploy_token_command` output that mints a deploy token on the collector over SSM and stores it
+  as a SecureString from stdin. Needs a Watchtower release with deploy tokens.
+
 ## v1.19.0
 
 - `watchtower`: a [Watchtower](https://github.com/theJuddson/DevOpsWatchtower) collector, the self-hosted

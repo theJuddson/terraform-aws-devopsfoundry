@@ -5,13 +5,13 @@
   },
   "metadata": {
     "description": "DevOpsFoundry's agent plugin.",
-    "version": "1.19.0"
+    "version": "1.20.0"
   },
   "plugins": [
     {
       "name": "devopsfoundry",
       "source": "./plugins/devopsfoundry",
-      "version": "1.19.0",
+      "version": "1.20.0",
       "description": "Put apps and static sites on AWS with DevOpsFoundry, a Terraform toolkit: container services on ECS Fargate behind HTTPS with optional Postgres, Redis and SES email, or S3 and CloudFront sites, with DNS and certificates. A skill for deploying and operating with its bin/ scripts, and a hook that asks before steps that skip their plan approval.",
       "category": "cloud",
       "keywords": [

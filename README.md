@@ -26,8 +26,8 @@ or straight from git, over HTTPS or SSH, pinned to a release tag (the newest is 
 [Releases page](https://github.com/theJuddson/terraform-aws-devopsfoundry/releases)):
 
 ```hcl
-source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.19.0"
-source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.19.0"
+source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.20.0"
+source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.20.0"
 ```
 
 Each module's README lists its inputs and outputs, and the building blocks have a runnable example under
@@ -129,7 +129,7 @@ exercise the Namecheap path against the free sandbox with no eligibility gate.
 
 ```bash
 bin/preflight                                   # check toolchain + AWS + Namecheap + IP whitelist
-bin/new-site example.com --config ../MySite/.devopsfoundry --module-ref v1.19.0 --build-dir dist
+bin/new-site example.com --config ../MySite/.devopsfoundry --module-ref v1.20.0 --build-dir dist
                                                 # scaffold + two-phase provision
 bin/deploy --config ../MySite/.devopsfoundry    # build (optional) + sync + invalidate
 bin/destroy-site --config ../MySite/.devopsfoundry   # tear down; reverts NS to default
@@ -176,9 +176,9 @@ no Namecheap settings (`bin/preflight --existing-zone` skips those checks).
 
 ```bash
 bin/new-site example.com --existing-zone example.com \
-  --config ../MySite/.devopsfoundry --module-ref v1.19.0 --build-dir dist        # apex and www
+  --config ../MySite/.devopsfoundry --module-ref v1.20.0 --build-dir dist        # apex and www
 bin/new-site blog.example.com --existing-zone example.com \
-  --config ../Blog/.devopsfoundry --module-ref v1.19.0 --build-dir dist          # a subdomain, no www
+  --config ../Blog/.devopsfoundry --module-ref v1.20.0 --build-dir dist          # a subdomain, no www
 bin/new-site example.com --existing-zone --config ../MySite/.devopsfoundry ...   # list the zones that fit; choose one
 ```
 
@@ -320,7 +320,7 @@ serving and `--enable-email` are refused in this mode, and `destroy-app` removes
 
 ```bash
 bin/new-app example.com --subdomain app --existing-zone example.com \
-  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.19.0
+  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.20.0
 ```
 
 #### App-owned state
@@ -351,6 +351,36 @@ app. Fix forward, or roll back by re-tagging a previous `git-<sha>` image (every
 deploy pushes both `git-<sha>` and `latest`; the task definition pulls `latest`).
 An image built with uncommitted changes to tracked files is tagged
 `git-<sha>-dirty` instead, since it isn't exactly that commit.
+
+#### Deployment windows (Watchtower)
+
+With a [Watchtower](https://github.com/theJuddson/DevOpsWatchtower) collector (the `watchtower` module),
+`deploy-app`, `deploy` and `rotate-secret` open a deployment window around each run, so Watchtower holds the
+target's alerts while it changes and learns how long its deploys take. It is optional: without `WATCHTOWER_URL`
+nothing changes and no request is made. Set it in the checkout's `.env`, or per app or site in `app.env` /
+`site.env` (which win):
+
+```bash
+WATCHTOWER_URL="https://watch.example.com"
+WATCHTOWER_TOKEN_PARAMETER="/myapp/watchtower/deploy-token"   # SSM SecureString; the module's deploy_token_command makes it
+WATCHTOWER_TARGET="myapp"          # default: the app's name in app.tfvars, or the site's domain
+WATCHTOWER_SOURCES="web-1 web-2"   # what the window covers: sources, groups and probes,
+WATCHTOWER_GROUPS="app"            # space- or comma-separated
+WATCHTOWER_PROBES="home"
+WATCHTOWER_SETTLE_TIMEOUT=600      # seconds to wait for settled (default twice Watchtower's estimate)
+```
+
+- The window opens after the confirmation. If a deployment of the target is already running, the script warns and
+  deploys without a window rather than take over the other one.
+- `deploy-app` and `rotate-secret` extend the window before rolling the service when less than 10 minutes are left,
+  since ECS can take that long to stabilize. `deploy` waits for the CloudFront invalidation to complete.
+- After the health check or `VERIFY_SCRIPT`, the script polls Watchtower every 15 seconds until the target is back
+  to normal, extending the window by the estimate when it is about to end, then closes it as `succeeded`, saying
+  whether it settled and why not. An ECS rollback closes it as `rolled-back`; any other failure as `failed`, with
+  the error.
+- A Watchtower that can't be reached, or answers with an error, only gets a warning: a deploy never fails because
+  monitoring is down. The token is read from SSM with `ssm:GetParameter` (and `kms:Decrypt` for a customer managed
+  key) and handed to curl on stdin, never on a command line.
 
 #### WAF
 
