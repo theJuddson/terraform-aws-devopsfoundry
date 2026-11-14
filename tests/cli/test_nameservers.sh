@@ -29,6 +29,8 @@ case \"\$*\" in
   *' state rm '*)  echo \"tfvars at state rm: \$(grep -c '^manage_nameservers = false' '$APP/app.tfvars')\" >> \"\$CALLS\"
                    [[ -f '$TMP/state-rm-fails' ]] && exit 1
                    grep -vxF \"\${@: -1}\" '$TMP/state' > '$TMP/state.new'; mv '$TMP/state.new' '$TMP/state' ;;
+  *' apply '*)     echo \"namecheap.tf at apply: \$(grep -c '\"unused\"' '$APP/namecheap.tf' 2>/dev/null)\" >> \"\$CALLS\"
+                   [[ -f '$TMP/apply-fails' ]] && exit 1 ;;
   *'output -json name_servers'*) echo '$R53_NS' ;;
   *'output -raw cpu_architecture'*) echo X86_64 ;;
   *'output -raw'*) echo 'https://api.example.com' ;;
@@ -237,4 +239,68 @@ t_release_installs_modules_before_validating() {
   "$DF/bin/release-nameservers" --config "$APP" --yes || fail "release should succeed"
   assert_before " get -no-color" " validate "
   assert_not_called " init"
+}
+
+LIVE_NS=$'ns-1.awsdns-01.org.\nns-2.awsdns-02.net.'
+placeholders() { grep -q '^  api_key   = "unused"' "$APP/namecheap.tf" 2>/dev/null; }
+
+t_release_switches_the_namecheap_provider_to_placeholders() {
+  make_app true "$LIVE_NS"
+  cp "$DF/templates/full-stack/namecheap.tf.tmpl" "$APP/namecheap.tf"
+  "$DF/bin/release-nameservers" --config "$APP" --yes || fail "release should succeed"
+  placeholders || fail "a released root must need no Namecheap credentials"
+}
+
+t_release_moves_a_pre_v1_18_1_provider_block_out_of_main_tf() {
+  make_app true "$LIVE_NS"
+  printf '\n# Namecheap creds from env (NAMECHEAP_API_USER / API_KEY / USER_NAME / CLIENT_IP).\nprovider "namecheap" {}\n' >> "$APP/main.tf"
+  "$DF/bin/release-nameservers" --config "$APP" --yes || fail "release should succeed"
+  assert_not_contains "$(cat "$APP/main.tf")" 'namecheap" {}'
+  assert_not_contains "$(cat "$APP/main.tf")" 'Namecheap creds'
+  placeholders || fail "the provider must move to namecheap.tf, with placeholders"
+}
+
+t_rerunning_release_on_a_released_root_switches_its_provider() {
+  make_app false "$LIVE_NS"
+  echo 'manage_nameservers = false' >> "$APP/app.tfvars"
+  cp "$DF/templates/full-stack/namecheap.tf.tmpl" "$APP/namecheap.tf"
+  "$DF/bin/release-nameservers" --config "$APP" --yes || fail "a re-run must succeed"
+  placeholders || fail "an app released before v1.18.2 must get placeholders on a re-run"
+  assert_not_called "state rm"
+}
+
+t_release_gives_an_existing_zone_app_placeholders() {
+  make_app false "$LIVE_NS"
+  printf '' > "$TMP/state"
+  sed -i.bak 's/^existing_zone_name = ""/existing_zone_name = "example.com"/' "$APP/app.tfvars"
+  cp "$DF/templates/full-stack/namecheap.tf.tmpl" "$APP/namecheap.tf"
+  "$DF/bin/release-nameservers" --config "$APP" --yes || fail "release should succeed"
+  placeholders || fail "an existing-zone app made before v1.18.1 must get placeholders"
+}
+
+t_release_refuses_a_hand_written_provider_block_before_touching_state() {
+  make_app true "$LIVE_NS"
+  printf '\nprovider "namecheap" {\n  use_sandbox = true\n}\n' >> "$APP/main.tf"
+  local out; out=$("$DF/bin/release-nameservers" --config "$APP" --yes 2>&1) && fail "must refuse"
+  assert_contains "$out" "by hand"
+  assert_not_called "state rm"
+}
+
+t_destroy_restores_the_real_provider_to_revert_a_released_delegation() {
+  make_app false "$LIVE_NS"
+  echo 'manage_nameservers = false' >> "$APP/app.tfvars"
+  cp "$DF/templates/full-stack/namecheap-unused.tf.tmpl" "$APP/namecheap.tf"
+  "$DF/bin/destroy-app" --config "$APP" --yes || fail "destroy should succeed"
+  assert_called "namecheap.tf at apply: 0"
+}
+
+t_destroy_puts_placeholders_back_when_re_adopting_fails() {
+  make_app false "$LIVE_NS"
+  echo 'manage_nameservers = false' >> "$APP/app.tfvars"
+  cp "$DF/templates/full-stack/namecheap-unused.tf.tmpl" "$APP/namecheap.tf"
+  touch "$TMP/apply-fails"
+  local out; out=$("$DF/bin/destroy-app" --config "$APP" --yes 2>&1) && fail "destroy must stop"
+  assert_contains "$out" "--keep-ns"
+  assert_not_called " destroy "
+  placeholders || fail "a failed re-adopt must leave the placeholders in place"
 }

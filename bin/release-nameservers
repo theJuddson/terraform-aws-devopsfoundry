@@ -79,6 +79,19 @@ wire_root() {
   fi
 }
 
+# Configures the Namecheap provider with placeholders (namecheap.tf), so
+# plans and deploys need no Namecheap credentials. Nothing calls Namecheap
+# once the delegation is released.
+use_placeholder_provider() {
+  grep -q '^  user_name = "unused"' "$CONFIG/namecheap.tf" 2>/dev/null && return 0
+  df_app_namecheap_provider "$CONFIG" unused || die "Could not switch the Namecheap provider to placeholders"
+  pass "namecheap.tf now needs no Namecheap credentials (commit it, and main.tf)"
+}
+
+# A hand-written Namecheap provider block can't be switched; say so before
+# anything changes.
+df_app_namecheap_movable "$CONFIG" || die "Nothing changed."
+
 in_state=false
 STATE="$(df_tf_at "$CONFIG" state list 2>/dev/null)" || die "Could not read Terraform state in $CONFIG (run terraform init there?)"
 ADDR="$(grep -E "$DF_NS_RECORD_RE" <<<"$STATE" | head -1 || true)"
@@ -86,6 +99,7 @@ ADDR="$(grep -E "$DF_NS_RECORD_RE" <<<"$STATE" | head -1 || true)"
 
 if ! $in_state; then
   if [[ "$(app_arg)" == "false" || ( "$(app_arg)" == "var.manage_nameservers" && "$(df_tfvar "$TFVARS" manage_nameservers)" == "false" ) ]]; then
+    use_placeholder_provider
     pass "Already released: Terraform no longer manages $DOMAIN's nameservers"
     exit 0
   fi
@@ -94,10 +108,16 @@ if ! $in_state; then
     info "No Namecheap record in state; finishing the release"
     wire_root
     [[ "$(app_arg)" == "false" ]] || df_set_tfvar "$TFVARS" manage_nameservers false
+    use_placeholder_provider
     pass "Released"
     exit 0
   fi
-  pass "Nothing to release: this app doesn't manage Namecheap nameservers (existing zone, or not provisioned)"
+  if [[ -n "$(df_tfvar "$TFVARS" existing_zone_name)" ]]; then
+    use_placeholder_provider
+    pass "Nothing to release: this app uses the existing zone $(df_tfvar "$TFVARS" existing_zone_name)"
+    exit 0
+  fi
+  pass "Nothing to release: this app isn't provisioned"
   exit 0
 fi
 
@@ -128,5 +148,6 @@ if [[ "$(app_arg)" == "var.manage_nameservers" ]]; then
   step "Setting manage_nameservers = false in app.tfvars"
   df_set_tfvar "$TFVARS" manage_nameservers false
 fi
-pass "Released: plans and deploys no longer call Namecheap"
+use_placeholder_provider
+pass "Released: plans and deploys no longer call Namecheap or need its credentials"
 log "INFO" "Released Namecheap nameserver management for $DOMAIN"

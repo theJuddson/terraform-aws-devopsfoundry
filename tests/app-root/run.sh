@@ -18,7 +18,7 @@ for f in templates/full-stack/*; do
   base="$(basename "$f")"
   case "$base" in
     gitignore.tmpl | app.env.tmpl | app.tfvars.tmpl | backend.tf.tmpl | namecheap.tf.tmpl) ;;
-    namecheap-existing-zone.tf.tmpl) cp "$f" "$dir/namecheap.tf" ;;
+    namecheap-unused.tf.tmpl) cp "$f" "$dir/namecheap.tf" ;;
     *.tmpl) sed -e "s|__MODULE_SOURCE__|../../../../modules/full-stack|g" -e "s|__DOMAIN__|example.com|g" "$f" > "$dir/${base%.tmpl}" ;;
     *) cp "$f" "$dir/$base" ;;
   esac

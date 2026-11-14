@@ -37,6 +37,7 @@ fi
 if $KEEP_NS; then
   step "Dropping namecheap_ns from state (delegation persists)"
   df_tf_at "$CONFIG" state rm module.app.module.namecheap_ns 2>/dev/null || warn "namecheap_ns not in state"
+  df_app_namecheap_provider "$CONFIG" unused || die "Nothing destroyed."
 fi
 
 # An app handed off by release-nameservers has no Namecheap record in state, so
@@ -47,8 +48,13 @@ EXTRA=()
 if ! $KEEP_NS && [[ "$(df_tfvar "$CONFIG/app.tfvars" manage_nameservers)" == "false" ]] \
   && df_tf_at "$CONFIG" state list 2>/dev/null | grep -qE "$DF_ZONE_RE"; then
   step "Re-adopting the Namecheap delegation so destroy can revert it"
-  df_tf_at "$CONFIG" apply -input=false -auto-approve "${TFVARS[@]}" -var manage_nameservers=true \
-    -target=module.app.module.namecheap_ns || die "Could not re-adopt the delegation (Namecheap API access needed); use --keep-ns to destroy without reverting it"
+  # The released root's namecheap.tf has placeholders; reverting needs the real credentials.
+  df_app_namecheap_provider "$CONFIG" live || die "Nothing destroyed."
+  if ! df_tf_at "$CONFIG" apply -input=false -auto-approve "${TFVARS[@]}" -var manage_nameservers=true \
+    -target=module.app.module.namecheap_ns; then
+    df_app_namecheap_provider "$CONFIG" unused
+    die "Could not re-adopt the delegation (Namecheap API access needed); use --keep-ns to destroy without reverting it"
+  fi
   EXTRA=(-var manage_nameservers=true)
 fi
 
