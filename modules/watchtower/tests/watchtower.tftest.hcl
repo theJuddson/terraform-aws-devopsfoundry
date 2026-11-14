@@ -18,6 +18,10 @@ mock_provider "aws" {
   mock_data "aws_ssm_parameter" {
     defaults = { insecure_value = "ami-fromssm", value = "ami-fromssm" }
   }
+  mock_resource "aws_instance" {
+    override_during = plan
+    defaults        = { id = "i-0mock" }
+  }
   mock_resource "aws_eip" {
     override_during = plan
     defaults        = { public_ip = "203.0.113.10" }
@@ -38,6 +42,12 @@ run "defaults" {
   assert {
     condition     = output.url == "https://watch.example.com"
     error_message = "url must be the hostname over HTTPS."
+  }
+  assert {
+    condition = (startswith(output.deploy_token_command, "aws ssm start-session --target i-0mock --document-name AWS-StartNonInteractiveCommand ")
+      && strcontains(output.deploy_token_command, "watchtower admin --data /var/lib/watchtower/collector deploy-token <name>")
+    && endswith(output.deploy_token_command, "| aws ssm put-parameter --name <parameter> --type SecureString --value file:///dev/stdin"))
+    error_message = "deploy_token_command must mint the token over SSM and store it from stdin."
   }
   assert {
     condition = (length(aws_vpc_security_group_ingress_rule.https) == 1
