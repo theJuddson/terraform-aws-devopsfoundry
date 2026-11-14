@@ -26,8 +26,8 @@ or straight from git, over HTTPS or SSH, pinned to a release tag (the newest is 
 [Releases page](https://github.com/theJuddson/terraform-aws-devopsfoundry/releases)):
 
 ```hcl
-source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.18.3"
-source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.18.3"
+source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.19.0"
+source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.19.0"
 ```
 
 Each module's README lists its inputs and outputs, and the building blocks have a runnable example under
@@ -42,6 +42,8 @@ Each module's README lists its inputs and outputs, and the building blocks have 
 | [task-runner](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/task-runner) | Fargate and Fargate Spot cluster for one-off `RunTask` jobs, with roles, logs and a controller policy |
 | [ecr-repository](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/ecr-repository) | ECR repository with scan on push and a lifecycle policy |
 | [ec2-host](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/ec2-host) | SSM-only EC2 instance with a data volume that survives replacement, and scheduled snapshots |
+| [watchtower](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/watchtower) | A [Watchtower](https://github.com/theJuddson/DevOpsWatchtower) monitoring collector: 443 only, its own Let's Encrypt certificate, SES mail through its role, data that survives replacement |
+| [watchtower-agent](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/watchtower-agent) | User data and IAM policy that install and enroll the Watchtower agent on your hosts (Amazon Linux or Ubuntu) |
 | [budget-alarm](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/budget-alarm) | Monthly AWS Budgets alarm to email or SNS |
 | [organization](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/organization) | An AWS Organization and member accounts, one per venture that needs its own boundary |
 | [identity-center](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/identity-center) | IAM Identity Center users, groups, permission sets and account assignments: who can do what in which account |
@@ -127,7 +129,7 @@ exercise the Namecheap path against the free sandbox with no eligibility gate.
 
 ```bash
 bin/preflight                                   # check toolchain + AWS + Namecheap + IP whitelist
-bin/new-site example.com --config ../MySite/.devopsfoundry --module-ref v1.18.3 --build-dir dist
+bin/new-site example.com --config ../MySite/.devopsfoundry --module-ref v1.19.0 --build-dir dist
                                                 # scaffold + two-phase provision
 bin/deploy --config ../MySite/.devopsfoundry    # build (optional) + sync + invalidate
 bin/destroy-site --config ../MySite/.devopsfoundry   # tear down; reverts NS to default
@@ -174,9 +176,9 @@ no Namecheap settings (`bin/preflight --existing-zone` skips those checks).
 
 ```bash
 bin/new-site example.com --existing-zone example.com \
-  --config ../MySite/.devopsfoundry --module-ref v1.18.3 --build-dir dist        # apex and www
+  --config ../MySite/.devopsfoundry --module-ref v1.19.0 --build-dir dist        # apex and www
 bin/new-site blog.example.com --existing-zone example.com \
-  --config ../Blog/.devopsfoundry --module-ref v1.18.3 --build-dir dist          # a subdomain, no www
+  --config ../Blog/.devopsfoundry --module-ref v1.19.0 --build-dir dist          # a subdomain, no www
 bin/new-site example.com --existing-zone --config ../MySite/.devopsfoundry ...   # list the zones that fit; choose one
 ```
 
@@ -318,7 +320,7 @@ serving and `--enable-email` are refused in this mode, and `destroy-app` removes
 
 ```bash
 bin/new-app example.com --subdomain app --existing-zone example.com \
-  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.18.3
+  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.19.0
 ```
 
 #### App-owned state
@@ -500,7 +502,7 @@ into the agent instead.
 ```
 modules/        static:  acm-cert · route53-zone · route53-records · static-site · namecheap-ns
                 app:     networking · container-service · database · cache · email · full-stack
-                blocks:  object-store · kms-key · shared-filesystem · task-runner · ecr-repository · ec2-host · budget-alarm · route53-zone-security
+                blocks:  object-store · kms-key · shared-filesystem · task-runner · ecr-repository · ec2-host · budget-alarm · route53-zone-security · watchtower · watchtower-agent
 AGENTS.md       rules for AI agents using or changing DevOpsFoundry (CLAUDE.md imports it)
 plugins/        the agent plugin: deploying-with-devopsfoundry skill and approval hook (bin/check-plugin validates it)
 main.tf         empty root module (the Terraform Registry requires one; use the submodules)

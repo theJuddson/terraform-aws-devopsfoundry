@@ -1,0 +1,37 @@
+#!/bin/bash
+# Watchtower agent: fetch and verify the release, read the group key, install
+# and enroll. Rendered by the DevOpsFoundry watchtower-agent module.
+set -euo pipefail
+exec >> /var/log/watchtower-agent-install.log 2>&1
+
+imds() { curl -fsS --retry 5 -H "X-aws-ec2-metadata-token: $token" "http://169.254.169.254/latest/$1"; }
+token=$(curl -fsS --retry 5 -X PUT -H "X-aws-ec2-metadata-token-ttl-seconds: 300" http://169.254.169.254/latest/api/token)
+role=$(imds meta-data/iam/security-credentials/)
+creds=$(imds "meta-data/iam/security-credentials/$role")
+field() { python3 -c 'import json,sys; print(json.load(sys.stdin)[sys.argv[1]])' "$1"; }
+ak=$(field AccessKeyId <<<"$creds"); sk=$(field SecretAccessKey <<<"$creds"); st=$(field Token <<<"$creds")
+# The signing secret goes to curl on stdin (a config file), never in argv.
+signed() { # signed <service> <curl args...>
+  local svc="$1"; shift
+  printf 'user = "%s:%s"\n' "$ak" "$sk" | curl -fsS --retry 5 --config - --aws-sigv4 "aws:amz:${region}:$svc" \
+    -H "x-amz-security-token: $st" "$@"
+}
+
+work=$(mktemp -d)
+%{ if release_signed ~}
+signed s3 -o "$work/agent.tar.gz" "${release_https}"
+%{ else ~}
+curl -fsSL --retry 5 -o "$work/agent.tar.gz" "${release_https}"
+%{ endif ~}
+echo "${release_sha256}  $work/agent.tar.gz" | sha256sum -c -
+tar -xzf "$work/agent.tar.gz" -C "$work"
+
+key=$(signed ssm -X POST -H "Content-Type: application/x-amz-json-1.1" -H "X-Amz-Target: AmazonSSM.GetParameter" \
+  --data '{"Name":"${parameter}","WithDecryption":true}' "https://ssm.${region}.amazonaws.com/" |
+  python3 -c 'import json,sys; print(json.load(sys.stdin)["Parameter"]["Value"])')
+
+release=("$work"/watchtower-agent_*)
+WATCHTOWER_COLLECTOR="${collector_url}" WATCHTOWER_SOURCE="${source_name}" WATCHTOWER_GROUP_KEY="$key" \
+  "$${release[0]}/install.sh" agent
+rm -rf "$work"
+echo "watchtower agent installed"

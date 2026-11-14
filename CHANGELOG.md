@@ -3,6 +3,24 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.19.0
+
+- `watchtower`: a [Watchtower](https://github.com/theJuddson/DevOpsWatchtower) collector, the self-hosted
+  monitoring server for hosts, containers, Fargate tasks and app pushes. One `ec2-host` (`t4g.micro`, about $12 a
+  month) with 443 open and nothing else, an Elastic IP and an optional A record, and a 40 GiB data volume at
+  `/var/lib/watchtower` that survives the instance and is snapshotted daily. The user data fetches the release
+  (`https://` or `s3://`), refuses it unless its SHA-256 matches `release_sha256`, and runs its `install.sh`. The
+  collector gets its own certificate from Let's Encrypt (TLS-ALPN-01 on 443; `acme_directory` for staging) and
+  sends mail through SES with the instance role, which may read only its release object and send only as
+  `mail_from`. Outputs include `first_admin_command`, which prints the first sign-in link. Needs Watchtower
+  v0.1.0 or later.
+- `watchtower-agent`: no resources; a user data script and the policy it needs to install and enroll the agent on
+  your own hosts. It fetches with `curl --aws-sigv4` and the instance role, so it needs no AWS CLI and runs on
+  Amazon Linux and Ubuntu; the group enrollment key comes from one SSM parameter and never reaches a command line.
+- Proven by applying `watchtower` in a test account: install, a production certificate, the host's own agent
+  enrolled and pushing, an instance replacement that kept the data volume, and a destroy that left nothing but the
+  final snapshot `ec2-host` takes by design.
+
 ## v1.18.3
 
 - The app and site scripts initialize Terraform again when a root's module source changed since its last init
@@ -12,6 +30,7 @@ the earlier versions below were private and their tags are not in this repositor
   each top-level module block's `source` with the one `.terraform/modules/modules.json` recorded, and say which
   changed before initializing. Init still runs without `-upgrade`, so a provider lock that no longer fits stops
   with Terraform's own error.
+
 
 ## v1.18.2
 
