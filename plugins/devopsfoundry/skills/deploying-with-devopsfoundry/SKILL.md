@@ -37,7 +37,7 @@ outside the AWS account, or can't be undone:
 | `bin/deploy-app`, `bin/deploy` | A new version goes live |
 | `bin/destroy-app`, `bin/destroy-site` | Deletes the stack; reverts the nameservers |
 | `bin/rotate-secret` | Rolls the running service |
-| `bin/release-nameservers` | Moves the domain's delegation out of Terraform state |
+| `bin/release-nameservers` | Moves the domain's delegation out of Terraform state, for an app or a site |
 | `bin/email-status --request-production` | A request to AWS, account-wide for the region |
 | Any `terraform apply` or `destroy`, any AWS call that changes something | Real infrastructure |
 
