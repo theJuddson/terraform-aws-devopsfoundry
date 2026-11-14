@@ -26,8 +26,8 @@ or straight from git, over HTTPS or SSH, pinned to a release tag (the newest is 
 [Releases page](https://github.com/theJuddson/terraform-aws-devopsfoundry/releases)):
 
 ```hcl
-source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.18.2"
-source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.18.2"
+source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.18.3"
+source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.18.3"
 ```
 
 Each module's README lists its inputs and outputs, and the building blocks have a runnable example under
@@ -127,7 +127,7 @@ exercise the Namecheap path against the free sandbox with no eligibility gate.
 
 ```bash
 bin/preflight                                   # check toolchain + AWS + Namecheap + IP whitelist
-bin/new-site example.com --config ../MySite/.devopsfoundry --module-ref v1.18.2 --build-dir dist
+bin/new-site example.com --config ../MySite/.devopsfoundry --module-ref v1.18.3 --build-dir dist
                                                 # scaffold + two-phase provision
 bin/deploy --config ../MySite/.devopsfoundry    # build (optional) + sync + invalidate
 bin/destroy-site --config ../MySite/.devopsfoundry   # tear down; reverts NS to default
@@ -174,9 +174,9 @@ no Namecheap settings (`bin/preflight --existing-zone` skips those checks).
 
 ```bash
 bin/new-site example.com --existing-zone example.com \
-  --config ../MySite/.devopsfoundry --module-ref v1.18.2 --build-dir dist        # apex and www
+  --config ../MySite/.devopsfoundry --module-ref v1.18.3 --build-dir dist        # apex and www
 bin/new-site blog.example.com --existing-zone example.com \
-  --config ../Blog/.devopsfoundry --module-ref v1.18.2 --build-dir dist          # a subdomain, no www
+  --config ../Blog/.devopsfoundry --module-ref v1.18.3 --build-dir dist          # a subdomain, no www
 bin/new-site example.com --existing-zone --config ../MySite/.devopsfoundry ...   # list the zones that fit; choose one
 ```
 
@@ -318,7 +318,7 @@ serving and `--enable-email` are refused in this mode, and `destroy-app` removes
 
 ```bash
 bin/new-app example.com --subdomain app --existing-zone example.com \
-  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.18.2
+  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.18.3
 ```
 
 #### App-owned state
