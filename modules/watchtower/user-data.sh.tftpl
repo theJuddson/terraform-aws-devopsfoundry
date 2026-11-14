@@ -13,10 +13,11 @@ grep -q 'LABEL=watchtower' /etc/fstab || echo 'LABEL=watchtower /var/lib/watchto
 mount -a
 
 work=$(mktemp -d)
-case "${release_url}" in
-  s3://*) aws s3 cp --only-show-errors "${release_url}" "$work/release.tar.gz" ;;
-  *) curl -fsSL --retry 5 -o "$work/release.tar.gz" "${release_url}" ;;
-esac
+%{ if startswith(release_url, "s3://") ~}
+aws s3 cp --only-show-errors "${release_url}" "$work/release.tar.gz"
+%{ else ~}
+curl -fsSL --retry 5 -o "$work/release.tar.gz" "${release_url}"
+%{ endif ~}
 echo "${release_sha256}  $work/release.tar.gz" | sha256sum -c -
 tar -xzf "$work/release.tar.gz" -C "$work"
 
@@ -24,7 +25,8 @@ install -d -m 0755 /etc/watchtower
 echo "${rules_b64}" | base64 -d > /etc/watchtower/rules.yaml
 chmod 0644 /etc/watchtower/rules.yaml
 
+release=("$work"/watchtower_*)
 WATCHTOWER_FLAGS="${flags}" WATCHTOWER_COLLECTOR="${collector_url}" WATCHTOWER_SOURCE="${source}" \
-  "$work"/watchtower_*/install.sh collector
+  "$${release[0]}/install.sh" collector
 rm -rf "$work"
 echo "watchtower installed"
