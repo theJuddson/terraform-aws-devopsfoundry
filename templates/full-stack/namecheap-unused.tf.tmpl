@@ -1,0 +1,12 @@
+# This app's nameserver delegation is not managed by Terraform: it uses an
+# existing Route53 zone (--existing-zone), or bin/release-nameservers handed
+# the delegation off once it was live. The full-stack module still declares
+# the Namecheap provider and Terraform configures it even though nothing uses
+# it, so it gets placeholders instead of needing real credentials. They are
+# never sent. bin/destroy-app puts the real provider back when it reverts a
+# released delegation.
+provider "namecheap" {
+  user_name = "unused"
+  api_user  = "unused"
+  api_key   = "unused"
+}

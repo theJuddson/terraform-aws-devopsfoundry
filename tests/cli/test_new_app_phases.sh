@@ -93,11 +93,14 @@ t_plan_only_after_phase_1a_plans_the_rest() {
   assert_contains "$out" "nothing applied"
 }
 
-t_a_namecheap_app_reads_namecheap_credentials_from_the_environment() {
+t_a_namecheap_app_reads_namecheap_credentials_from_the_environment_until_released() {
   setup_new_app
-  new_app --yes >/dev/null || fail "new-app should succeed"
+  touch "$TMP/cert-missing"; new_app --plan-only >/dev/null   # scaffolds, delegates nothing
   [[ "$(grep -v '^#' "$APP/namecheap.tf")" == 'provider "namecheap" {}' ]] || fail "namecheap.tf must configure the provider from the environment"
   assert_not_contains "$(cat "$APP/main.tf")" 'provider "namecheap"'
+  rm "$TMP/cert-missing"
+  new_app --resume --yes >/dev/null || fail "new-app should succeed"
+  assert_contains "$(cat "$APP/namecheap.tf")" 'api_key   = "unused"'
 }
 
 t_an_existing_zone_app_needs_no_namecheap_credentials() {

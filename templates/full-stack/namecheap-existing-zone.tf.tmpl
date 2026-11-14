@@ -1,9 +1,0 @@
-# An --existing-zone app never calls Namecheap: the full-stack module creates
-# no delegation with existing_zone_name set. Terraform still configures every
-# provider a module declares, and this one refuses to configure without
-# credentials, so it gets placeholders instead of needing real ones.
-provider "namecheap" {
-  user_name = "unused"
-  api_user  = "unused"
-  api_key   = "unused"
-}

@@ -3,7 +3,7 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
-## v1.18.2
+## v1.18.3
 
 - The app and site scripts initialize Terraform again when a root's module source changed since its last init
   (#77). A pull that moves the module pin (`?ref=v1.2.8` to `v1.17.0`) left `.terraform` on the old module, and
@@ -12,6 +12,25 @@ the earlier versions below were private and their tags are not in this repositor
   each top-level module block's `source` with the one `.terraform/modules/modules.json` recorded, and say which
   changed before initializing. Init still runs without `-upgrade`, so a provider lock that no longer fits stops
   with Terraform's own error.
+
+## v1.18.2
+
+- Plans and deploys stop needing Namecheap credentials once a domain's delegation is live, for apps and static sites.
+  Namecheap is only needed to set the delegation up and, by default, to revert it on destroy.
+  - Apps: `bin/release-nameservers` (which `new-app` runs) now also switches the root's `namecheap.tf` to the
+    placeholder provider v1.18.1 gave `--existing-zone` apps, so `deploy-app`'s applies need no credentials. The
+    template is renamed `templates/full-stack/namecheap-unused.tf.tmpl` (was `namecheap-existing-zone.tf.tmpl`).
+    Re-run `bin/release-nameservers --config <dir>` on an app released earlier, or on an `--existing-zone` app made
+    before v1.18.1; a root whose `main.tf` still holds `provider "namecheap" {}` has it moved to `namecheap.tf`. A
+    hand-written Namecheap provider block is refused before anything changes. `destroy-app` puts the real provider
+    back to re-adopt and revert a released delegation, and the placeholders again if that fails.
+  - Static sites: `bin/release-nameservers --config <dir>` now takes a site root. Once public DNS answers only the
+    zone's Route53 nameservers, it removes the Namecheap record from state and renames `namecheap.tf` to
+    `namecheap.tf.released`; commit both. `new-site` runs it after phase 2, and a site made earlier can run it once.
+    `destroy-site` renames the file back and re-adopts the record to revert the delegation, or with `--keep-ns`
+    leaves it aside. `bin/deploy` is unchanged: it only reads outputs and never needed Namecheap.
+  - Tests: `tests/app-root` plans a released app and `tests/static-root` a released site, each with no Namecheap
+    credentials and the Namecheap provider unmocked.
 
 ## v1.18.1
 

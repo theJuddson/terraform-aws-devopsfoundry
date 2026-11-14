@@ -26,8 +26,8 @@ or straight from git, over HTTPS or SSH, pinned to a release tag (the newest is 
 [Releases page](https://github.com/theJuddson/terraform-aws-devopsfoundry/releases)):
 
 ```hcl
-source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.18.2"
-source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.18.2"
+source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.18.3"
+source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.18.3"
 ```
 
 Each module's README lists its inputs and outputs, and the building blocks have a runnable example under
@@ -94,7 +94,7 @@ anything else. (Sites can still live in this checkout's gitignored
 | `bin/email-status [--config <dir>]` | Whether SES in the app's region can send to anyone yet (or is in the sandbox), whether the app's domain is verified (DKIM, MAIL FROM), and the DMARC report record to add; `--request-production` asks AWS for production access, once the domain is ready |
 | `bin/rotate-secret --config <dir> redis\|smtp` | Rotate the app's Redis auth token or SMTP password with no failed requests: publish a new one while the old still works, roll the service, retire the old one; `bin/preflight` warns once one is over 90 days old |
 | `bin/estimate-cost --config <dir>` | The app's monthly on-demand cost from its `app.tfvars` and AWS's Price List API: tasks, load balancer, NAT gateway, public IPv4, database and cache, priced and summed line by line (usage-driven costs listed, not priced) |
-| `bin/release-nameservers --config <dir>` | Stop managing a live Namecheap delegation in Terraform, so deploys never call Namecheap (`new-app` runs it) |
+| `bin/release-nameservers --config <dir>` | Stop managing a live Namecheap delegation in Terraform, so plans and deploys never call Namecheap or need its credentials (`new-app` and `new-site` run it) |
 | `bin/destroy-app --config <dir>` | Tear down the app stack; reverts the delegation unless `--keep-ns` |
 
 Both `new-site` and `new-app` run in **two phases** to dodge the
@@ -127,7 +127,7 @@ exercise the Namecheap path against the free sandbox with no eligibility gate.
 
 ```bash
 bin/preflight                                   # check toolchain + AWS + Namecheap + IP whitelist
-bin/new-site example.com --config ../MySite/.devopsfoundry --module-ref v1.18.2 --build-dir dist
+bin/new-site example.com --config ../MySite/.devopsfoundry --module-ref v1.18.3 --build-dir dist
                                                 # scaffold + two-phase provision
 bin/deploy --config ../MySite/.devopsfoundry    # build (optional) + sync + invalidate
 bin/destroy-site --config ../MySite/.devopsfoundry   # tear down; reverts NS to default
@@ -151,6 +151,12 @@ propagation race on a fresh domain:
 If propagation is slow and step 2 times out, resume with the same command plus
 `--resume --yes`.
 
+Once the site is live, `new-site` stops managing the Namecheap record in Terraform (`bin/release-nameservers`: the
+record leaves the state, then `namecheap.tf` becomes `namecheap.tf.released`; commit both). Later plans of the root
+then need no Namecheap credentials or whitelisted IP. `bin/deploy` never needed them, since it only reads outputs.
+For a site made before v1.18.2, run `bin/release-nameservers --config <dir>` once. `destroy-site` still reverts the
+delegation: it renames the file back and re-adopts the record first.
+
 `bin/deploy` uploads `BUILD_DIR` from the site root's `site.env`. With a
 `BUILD_CMD` it builds first. Without one it uploads the directory as it is, so it
 first checks the build is at least as new as its source: `SRC_DIR` (default:
@@ -168,9 +174,9 @@ no Namecheap settings (`bin/preflight --existing-zone` skips those checks).
 
 ```bash
 bin/new-site example.com --existing-zone example.com \
-  --config ../MySite/.devopsfoundry --module-ref v1.18.2 --build-dir dist        # apex and www
+  --config ../MySite/.devopsfoundry --module-ref v1.18.3 --build-dir dist        # apex and www
 bin/new-site blog.example.com --existing-zone example.com \
-  --config ../Blog/.devopsfoundry --module-ref v1.18.2 --build-dir dist          # a subdomain, no www
+  --config ../Blog/.devopsfoundry --module-ref v1.18.3 --build-dir dist          # a subdomain, no www
 bin/new-site example.com --existing-zone --config ../MySite/.devopsfoundry ...   # list the zones that fit; choose one
 ```
 
@@ -231,9 +237,11 @@ bin/destroy-app --config ../MyApp/.devopsfoundry
 ```
 
 Once the domain is delegated, `new-app` stops managing the Namecheap record in Terraform (`bin/release-nameservers`:
-the record leaves the state, then `manage_nameservers = false`), so `deploy-app` never needs the Namecheap API or a
-whitelisted IP. For an app made before this, run `bin/release-nameservers --config <dir>` once. `destroy-app` still
-reverts the delegation; it re-adopts the record first.
+the record leaves the state, then `manage_nameservers = false`, and `namecheap.tf` configures the Namecheap provider
+with placeholders), so `deploy-app` never needs the Namecheap API, its credentials or a whitelisted IP. For an app made
+before v1.18.2, run `bin/release-nameservers --config <dir>` once; it also gives an `--existing-zone` app made before
+v1.18.1 the placeholders. `destroy-app` still reverts the delegation; it puts the real provider back and re-adopts the
+record first.
 
 **Email.** With `--enable-email`, `new-app` ends by saying whether SES in the app's region is still in the
 **sandbox**, where mail only reaches verified addresses. Production access is per account and region, so most
@@ -310,7 +318,7 @@ serving and `--enable-email` are refused in this mode, and `destroy-app` removes
 
 ```bash
 bin/new-app example.com --subdomain app --existing-zone example.com \
-  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.18.2
+  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.18.3
 ```
 
 #### App-owned state
@@ -501,7 +509,7 @@ tests/          offline compatibility and validation fixtures for bin/check-*
 templates/static/      site-root stamped into a repo's .devopsfoundry/ (or sites/<domain>/) by new-site
 templates/full-stack/  app-root stamped into a repo's .devopsfoundry/ by new-app
 sites/<domain>/        legacy, gitignored static roots (new-site without --config)
-bin/            sites: preflight · new-site · deploy · destroy-site
+bin/            sites: preflight · new-site · deploy · destroy-site · release-nameservers
                 apps:  new-app · deploy-app · destroy-app · email-status · rotate-secret · estimate-cost · release-nameservers
                 repo:  check-modules (fmt/validate/tflint/checkov) · check-compat (offline no-change proof) · check-readme-pins · check-plugin · soci-index
 lib/common.sh   shared shell helpers (logging, slug, tf wrappers)

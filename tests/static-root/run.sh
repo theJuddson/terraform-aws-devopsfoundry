@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Renders templates/static the way bin/new-site does, once as a Namecheap root
-# and once as an --existing-zone root (no namecheap.tf), and runs each mode's
-# tests against mocked providers. No AWS or Namecheap call.
+# Renders templates/static the way bin/new-site does: as a Namecheap root, as an
+# --existing-zone root (no namecheap.tf), and as a root bin/release-nameservers
+# released (namecheap.tf set aside), and runs each mode's tests against mocked
+# providers. No AWS or Namecheap call, and no Namecheap credentials.
 # Usage: tests/static-root/run.sh
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -9,6 +10,7 @@ ROOT="$PWD"
 source lib/retry.sh
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
+unset NAMECHEAP_API_USER NAMECHEAP_API_KEY NAMECHEAP_USER_NAME NAMECHEAP_CLIENT_IP NAMECHEAP_USE_SANDBOX
 
 render() { # render <template> <out>
   sed -e "s|__DOMAIN__|example.com|g" -e "s|__SITE_NAME__|example-com|g" \
@@ -18,7 +20,7 @@ render() { # render <template> <out>
 }
 
 fail=0
-for mode in namecheap existing_zone; do
+for mode in namecheap existing_zone released; do
   dir="$WORK/$mode"; mkdir -p "$dir/tests"
   for f in templates/static/*; do
     base="$(basename "$f")"

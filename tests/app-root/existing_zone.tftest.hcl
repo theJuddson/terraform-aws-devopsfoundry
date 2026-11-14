@@ -1,4 +1,5 @@
-# An app root bin/new-app scaffolds with --existing-zone plans with no
+# An app root whose delegation Terraform doesn't manage (bin/new-app
+# --existing-zone, or released by bin/release-nameservers) plans with no
 # Namecheap credentials: its namecheap.tf configures the provider with
 # placeholders, and nothing calls Namecheap. The Namecheap provider is real
 # here, not mocked, and tests/app-root/run.sh unsets NAMECHEAP_*, so a root
@@ -91,4 +92,17 @@ run "plans_without_namecheap_credentials" {
     condition     = length(module.app.name_servers) == 0
     error_message = "An existing-zone app creates no zone of its own."
   }
+}
+
+# The same placeholders serve an app whose own zone's delegation
+# bin/release-nameservers handed off: no Namecheap resource is planned.
+run "a_released_app_plans_without_namecheap_credentials" {
+  command = plan
+
+  variables {
+    existing_zone_name = ""
+    manage_nameservers = false
+  }
+
+  # The plan succeeding with the real Namecheap provider is the test.
 }
