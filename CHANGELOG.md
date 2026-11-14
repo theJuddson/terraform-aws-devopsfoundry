@@ -3,7 +3,7 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
-## v1.20.0
+## v1.21.0
 
 - Deployment windows on a Watchtower collector, the first client of its deployments API. With `WATCHTOWER_URL`
   and `WATCHTOWER_TOKEN_PARAMETER` set in `.env`, `app.env` or `site.env`, `deploy-app`, `deploy` and
