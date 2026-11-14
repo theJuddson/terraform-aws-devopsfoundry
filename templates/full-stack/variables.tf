@@ -322,8 +322,20 @@ variable "waf_logging" {
   default     = false
 }
 
+variable "waf_allowed_countries" {
+  description = "Block requests from outside these countries (ISO 3166 alpha-2, e.g. [\"US\"]); empty allows all. Always blocks, even with waf_count_only. Only with create_waf."
+  type        = list(string)
+  default     = []
+}
+
 variable "trust_policy_source_conditions" {
   description = "Limit the service roles' trust (ECS task role, flow logs, RDS Enhanced Monitoring) to this account with aws:SourceAccount and aws:SourceArn. On by default; false restores the plain trust policies."
   type        = bool
   default     = true
+}
+
+variable "waf_country_exempt_paths" {
+  description = "Paths the country rule lets through from anywhere, matched exactly (e.g. [\"/api/billing/webhook\"]), for webhooks the app authenticates itself."
+  type        = list(string)
+  default     = []
 }

@@ -314,13 +314,15 @@ module "container_service" {
   alb_access_logs_retention_days = var.alb_access_logs_retention_days
   secrets_kms_key_arns           = var.kms_key_arn == null ? [] : [var.kms_key_arn]
 
-  create_waf              = var.create_waf
-  waf_web_acl_arn         = var.waf_web_acl_arn
-  waf_count_only          = var.waf_count_only
-  waf_logging             = var.waf_logging
-  waf_rate_limit          = var.waf_rate_limit
-  waf_managed_rule_groups = var.waf_managed_rule_groups
-  waf_rule_overrides      = var.waf_rule_overrides
+  create_waf               = var.create_waf
+  waf_web_acl_arn          = var.waf_web_acl_arn
+  waf_count_only           = var.waf_count_only
+  waf_logging              = var.waf_logging
+  waf_allowed_countries    = var.waf_allowed_countries
+  waf_country_exempt_paths = var.waf_country_exempt_paths
+  waf_rate_limit           = var.waf_rate_limit
+  waf_managed_rule_groups  = var.waf_managed_rule_groups
+  waf_rule_overrides       = var.waf_rule_overrides
 
   env     = local.merged_env
   secrets = local.merged_secrets

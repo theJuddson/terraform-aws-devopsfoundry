@@ -207,6 +207,11 @@ bin/new-site example.com --existing-zone --config ../MySite/.devopsfoundry ...  
 Workspace MX + DKIM records (or edit `enable_google_email` / `google_dkim_key`
 in the site root's `terraform.tfvars`).
 
+`allowed_countries = ["US"]` in the site root's `terraform.tfvars` serves only those countries (ISO 3166 two-letter
+codes); CloudFront answers everyone else with a 403. It's free, and it refuses real visitors on a VPN or travelling
+too. A site root made before v1.20.0 needs the `allowed_countries` variable and module argument from
+`templates/static/` added first.
+
 #### Moving a site root out of `sites/`
 
 The state key doesn't depend on where the root lives, so a root moves without
@@ -391,6 +396,14 @@ and the log group `aws-waf-logs-<app>-alb` records which rule matched which requ
 requests, with the Authorization and Cookie headers redacted; billed per GB, kept `waf_log_retention_days`, 30 by
 default). When the counts look right, set `waf_count_only = false` to enforce, and exempt any rule that catches real
 traffic with `waf_rule_overrides`. In shared-platform mode the WAF belongs to the platform that owns the ALB.
+
+`waf_allowed_countries = ["US"]` blocks every request whose client IP AWS places outside those countries (ISO 3166
+two-letter codes). It always blocks, even with `waf_count_only`, because an allow-list is a decision rather than a
+rule to tune, and it adds one $1/month rule. Expect it to block some real visitors too: people on a VPN or travelling,
+and webhooks or uptime checks sent from abroad. On a shared platform, set it on the host: it covers every guest.
+`waf_country_exempt_paths = ["/api/billing/webhook"]` lets exact paths through from anywhere (the other rules still
+apply), for webhooks from senders such as Stripe that don't promise where they send from. Exempt only paths the app
+authenticates itself, with a signature or a token.
 
 #### Alarms
 

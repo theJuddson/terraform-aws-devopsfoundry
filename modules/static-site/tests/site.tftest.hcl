@@ -110,3 +110,38 @@ run "without_www_serves_only_the_domain" {
     error_message = "With include_www = false the site must serve its own name only."
   }
 }
+
+run "every_country_is_served_by_default" {
+  command = plan
+
+  assert {
+    condition     = aws_cloudfront_distribution.site.restrictions[0].geo_restriction[0].restriction_type == "none"
+    error_message = "Without allowed_countries, every country must be served."
+  }
+}
+
+run "allowed_countries_serve_only_those_countries" {
+  command = plan
+
+  variables {
+    allowed_countries = ["US"]
+  }
+
+  assert {
+    condition = (
+      aws_cloudfront_distribution.site.restrictions[0].geo_restriction[0].restriction_type == "whitelist" &&
+      aws_cloudfront_distribution.site.restrictions[0].geo_restriction[0].locations == toset(["US"])
+    )
+    error_message = "allowed_countries must become a CloudFront allow-list of exactly those countries."
+  }
+}
+
+run "allowed_countries_must_be_country_codes" {
+  command = plan
+
+  variables {
+    allowed_countries = ["usa"]
+  }
+
+  expect_failures = [var.allowed_countries]
+}
