@@ -398,6 +398,27 @@ variable "waf_allowed_countries" {
   }
 }
 
+variable "waf_country_exempt_paths" {
+  description = <<-EOT
+    Request paths the country rule lets through from anywhere, matched exactly
+    (e.g. ["/api/billing/webhook"]): webhooks from senders that don't promise
+    where they send from, such as Stripe. The other WAF rules still apply. Only
+    with waf_allowed_countries. Exempt only paths the app authenticates itself,
+    by a signature or a token.
+  EOT
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for p in var.waf_country_exempt_paths : startswith(p, "/")])
+    error_message = "waf_country_exempt_paths are request paths, starting with /."
+  }
+  validation {
+    condition     = length(var.waf_country_exempt_paths) == 0 || length(var.waf_allowed_countries) > 0
+    error_message = "waf_country_exempt_paths only has a meaning with waf_allowed_countries."
+  }
+}
+
 variable "waf_logging" {
   description = "Log the WAF's requests to CloudWatch Logs (aws-waf-logs-<name>-alb), with Authorization and Cookie redacted. Only with create_waf. Billed per GB ingested and stored; by default only blocked and counted requests are kept."
   type        = bool

@@ -333,3 +333,9 @@ variable "trust_policy_source_conditions" {
   type        = bool
   default     = true
 }
+
+variable "waf_country_exempt_paths" {
+  description = "Paths the country rule lets through from anywhere, matched exactly (e.g. [\"/api/billing/webhook\"]), for webhooks the app authenticates itself."
+  type        = list(string)
+  default     = []
+}

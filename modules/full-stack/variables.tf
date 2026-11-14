@@ -433,6 +433,12 @@ variable "waf_allowed_countries" {
   default     = []
 }
 
+variable "waf_country_exempt_paths" {
+  description = "Paths the country rule lets through from anywhere, matched exactly (e.g. [\"/api/billing/webhook\"]), for webhooks the app authenticates itself."
+  type        = list(string)
+  default     = []
+}
+
 variable "waf_logging" {
   description = "Log the WAF's blocked and counted requests to CloudWatch Logs (Authorization and Cookie redacted). Only with create_waf; billed per GB."
   type        = bool

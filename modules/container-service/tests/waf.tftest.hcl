@@ -308,3 +308,51 @@ run "allowed_countries_must_be_country_codes" {
 
   expect_failures = [var.waf_allowed_countries]
 }
+
+run "exempt_paths_get_through_the_country_rule_and_nothing_else_does" {
+  command = plan
+
+  variables {
+    create_waf               = true
+    waf_allowed_countries    = ["US"]
+    waf_country_exempt_paths = ["/api/billing/webhook", "/webhooks/plaid"]
+  }
+
+  assert {
+    condition = (
+      length(one([for r in aws_wafv2_web_acl.alb[0].rule : r if r.name == "allowed-countries"]).statement[0].and_statement[0].statement) == 3 &&
+      one([for r in aws_wafv2_web_acl.alb[0].rule : r if r.name == "allowed-countries"]).statement[0].and_statement[0].statement[0].not_statement[0].statement[0].geo_match_statement[0].country_codes == tolist(["US"])
+    )
+    error_message = "The rule must be: not from an allowed country AND not either exempt path."
+  }
+  assert {
+    condition = [
+      for st in slice(one([for r in aws_wafv2_web_acl.alb[0].rule : r if r.name == "allowed-countries"]).statement[0].and_statement[0].statement, 1, 3) :
+      [st.not_statement[0].statement[0].byte_match_statement[0].search_string, st.not_statement[0].statement[0].byte_match_statement[0].positional_constraint]
+    ] == [["/api/billing/webhook", "EXACTLY"], ["/webhooks/plaid", "EXACTLY"]]
+    error_message = "Each exempt path must match exactly, so /api/billing/webhook doesn't also exempt /api/billing/webhookX."
+  }
+}
+
+run "exempt_paths_must_be_paths" {
+  command = plan
+
+  variables {
+    create_waf               = true
+    waf_allowed_countries    = ["US"]
+    waf_country_exempt_paths = ["api/billing/webhook"]
+  }
+
+  expect_failures = [var.waf_country_exempt_paths]
+}
+
+run "exempt_paths_without_a_country_list_are_refused" {
+  command = plan
+
+  variables {
+    create_waf               = true
+    waf_country_exempt_paths = ["/api/billing/webhook"]
+  }
+
+  expect_failures = [var.waf_country_exempt_paths]
+}

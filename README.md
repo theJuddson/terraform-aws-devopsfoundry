@@ -371,6 +371,9 @@ traffic with `waf_rule_overrides`. In shared-platform mode the WAF belongs to th
 two-letter codes). It always blocks, even with `waf_count_only`, because an allow-list is a decision rather than a
 rule to tune, and it adds one $1/month rule. Expect it to block some real visitors too: people on a VPN or travelling,
 and webhooks or uptime checks sent from abroad. On a shared platform, set it on the host: it covers every guest.
+`waf_country_exempt_paths = ["/api/billing/webhook"]` lets exact paths through from anywhere (the other rules still
+apply), for webhooks from senders such as Stripe that don't promise where they send from. Exempt only paths the app
+authenticates itself, with a signature or a token.
 
 #### Alarms
 

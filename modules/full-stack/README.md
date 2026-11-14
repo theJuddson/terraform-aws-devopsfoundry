@@ -120,6 +120,7 @@ The composite behind `bin/new-app`: Route53 zone and Namecheap delegation (or an
 | vpc\_cidr | ── Networking ───────────────────────────────────────── | `string` | `"10.0.0.0/16"` | no |
 | waf\_allowed\_countries | Block requests from outside these countries (ISO 3166 alpha-2, e.g. ["US"]); empty allows all. Always blocks, even with waf\_count\_only. Only with create\_waf. | `list(string)` | `[]` | no |
 | waf\_count\_only | Count WAF matches without blocking. Start here on a live ALB, then set false to enforce. | `bool` | `false` | no |
+| waf\_country\_exempt\_paths | Paths the country rule lets through from anywhere, matched exactly (e.g. ["/api/billing/webhook"]), for webhooks the app authenticates itself. | `list(string)` | `[]` | no |
 | waf\_logging | Log the WAF's blocked and counted requests to CloudWatch Logs (Authorization and Cookie redacted). Only with create\_waf; billed per GB. | `bool` | `false` | no |
 | waf\_managed\_rule\_groups | AWS managed rule groups to apply, in order. | `list(string)` | <pre>[<br/>  "AWSManagedRulesAmazonIpReputationList",<br/>  "AWSManagedRulesCommonRuleSet",<br/>  "AWSManagedRulesKnownBadInputsRuleSet"<br/>]</pre> | no |
 | waf\_rate\_limit | Requests per client IP per 5 minutes before the rate rule blocks it, across every host on the ALB. | `number` | `2000` | no |
