@@ -16,6 +16,7 @@
 set -euo pipefail
 DF_SCRIPT_NAME="deploy"
 source "$(cd "$(dirname "$0")/.." && pwd)/lib/common.sh"
+source "$DF_ROOT/lib/watchtower.sh"
 df_load_env
 
 DOMAIN=""; CONFIG=""; YES=false; ALLOW_STALE=false
@@ -108,6 +109,12 @@ if [[ "$YES" != true ]]; then
   read -r -p "Deploy to $URL? (y/N) " c; [[ "$c" == [yY] ]] || { echo "Aborted."; exit 0; }
 fi
 
+# A Watchtower deployment window (optional, lib/watchtower.sh), closed as failed on any exit before done.
+trap 'df_wt_on_exit $?' EXIT
+VERSION="$(git -C "$SRC" rev-parse --short HEAD 2>/dev/null || true)"
+VERSION="${VERSION:+git-$VERSION}"
+df_wt_start deploy "$DOMAIN" "Deploy $BUILD_DIR to $URL" "${VERSION:-manual}"
+
 # ── Upload. A file's cache header follows its name ─────
 #   hashed assets (index-B4kq9z1x.js)  a year, immutable: the name changes with the content
 #   *.html                             never cached
@@ -155,8 +162,23 @@ pass "Old files removed"
 step "Invalidating CloudFront"
 INV=$(aws cloudfront create-invalidation --distribution-id "$DIST" --paths "/*" 2>&1) \
   || die "Invalidation failed: $INV"
-pass "Invalidation: $(echo "$INV" | jq -r '.Invalidation.Id')"
+INV_ID="$(echo "$INV" | jq -r '.Invalidation.Id')"
+pass "Invalidation: $INV_ID"
 log "INFO" "Deployed $DOMAIN"
+
+# With a Watchtower window open, close it only once CloudFront serves the new files
+# and the site's probes are back to normal.
+if df_wt_active; then
+  df_wt_ensure 600 "CloudFront invalidations take a few minutes"
+  step "Waiting for the CloudFront invalidation to complete"
+  if aws cloudfront wait invalidation-completed --distribution-id "$DIST" --id "$INV_ID"; then
+    pass "Invalidation complete"
+  else
+    warn "Could not confirm invalidation $INV_ID completed; checking whether $DOMAIN settled anyway"
+  fi
+  df_wt_wait_settled
+  df_wt_done succeeded "${VERSION:-manual} is live${DF_WT_NOTE:+; $DF_WT_NOTE}"
+fi
 
 echo ""
 echo "─────────────────────────────────────"

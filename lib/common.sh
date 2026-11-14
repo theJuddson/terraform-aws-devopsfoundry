@@ -26,6 +26,7 @@ log() {
 }
 
 die() {
+  DF_LAST_ERROR="$1"   # for an EXIT trap, e.g. df_wt_on_exit
   echo -e "${RED}✗${NC} $1" >&2
   log "ERROR" "${1//$'\n'/ }"
   exit 1
