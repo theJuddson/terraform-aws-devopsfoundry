@@ -37,3 +37,9 @@ variable "google_dkim_key" {
   type        = string
   default     = ""
 }
+
+variable "allowed_countries" {
+  description = "Serve only viewers in these countries (ISO 3166 alpha-2, e.g. [\"US\"]); everyone else gets 403. Empty serves every country."
+  type        = list(string)
+  default     = []
+}

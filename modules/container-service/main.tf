@@ -370,6 +370,76 @@ resource "aws_wafv2_web_acl" "alb" {
     }
   }
 
+  # Country allow-list (waf_allowed_countries). Always blocks, even when the
+  # rest of the ACL counts: an allow-list is a decision, not a rule to tune.
+  dynamic "rule" {
+    for_each = length(var.waf_allowed_countries) > 0 ? [1] : []
+    content {
+      name     = "allowed-countries"
+      priority = 1
+
+      action {
+        block {}
+      }
+
+      # Not from an allowed country, and (with exempt paths) not one of them.
+      dynamic "statement" {
+        for_each = length(var.waf_country_exempt_paths) == 0 ? [1] : []
+        content {
+          not_statement {
+            statement {
+              geo_match_statement {
+                country_codes = var.waf_allowed_countries
+              }
+            }
+          }
+        }
+      }
+      dynamic "statement" {
+        for_each = length(var.waf_country_exempt_paths) > 0 ? [1] : []
+        content {
+          and_statement {
+            statement {
+              not_statement {
+                statement {
+                  geo_match_statement {
+                    country_codes = var.waf_allowed_countries
+                  }
+                }
+              }
+            }
+            dynamic "statement" {
+              for_each = var.waf_country_exempt_paths
+              content {
+                not_statement {
+                  statement {
+                    byte_match_statement {
+                      search_string         = statement.value
+                      positional_constraint = "EXACTLY"
+                      field_to_match {
+                        uri_path {}
+                      }
+                      text_transformation {
+                        priority = 0
+                        type     = "NONE"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      visibility_config {
+        cloudwatch_metrics_enabled = true
+        metric_name                = "${local.waf_metric}-allowed-countries"
+        sampled_requests_enabled   = true
+      }
+    }
+  }
+
   dynamic "rule" {
     for_each = { for i, g in var.waf_managed_rule_groups : g => i }
     content {

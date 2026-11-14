@@ -134,6 +134,8 @@ module "static_site" {
   include_www     = var.include_www
   bucket_name     = local.bucket_name
   certificate_arn = aws_acm_certificate_validation.main.certificate_arn
+
+  allowed_countries = var.allowed_countries # needs the module at v1.20.0 or later
 }
 
 # 6. Point the domain (+ www) at CloudFront; optional Google Workspace email (Phase 2).

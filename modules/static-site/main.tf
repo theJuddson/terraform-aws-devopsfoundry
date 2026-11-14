@@ -92,9 +92,11 @@ resource "aws_cloudfront_distribution" "site" {
     error_caching_min_ttl = 0
   }
 
+  # allowed_countries: CloudFront answers 403 to viewers outside the list. Free.
   restrictions {
     geo_restriction {
-      restriction_type = "none"
+      restriction_type = length(var.allowed_countries) > 0 ? "whitelist" : "none"
+      locations        = var.allowed_countries
     }
   }
 
