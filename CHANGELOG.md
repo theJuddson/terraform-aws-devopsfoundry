@@ -5,6 +5,11 @@ the earlier versions below were private and their tags are not in this repositor
 
 ## v1.21.0
 
+- Fix: `watchtower`'s instance role may now send mail. SES checks `ses:SendEmail` against each recipient's identity
+  in the account as well as the sender's, so a role allowed only `ses_identity_arn` was refused for every alarm
+  email. The resource is now every identity in that identity's account and region; the `ses:FromAddress` condition
+  still limits the sender to `mail_from`. Applying it updates the role's inline policy in place.
+
 - Deployment windows on a Watchtower collector, the first client of its deployments API. With `WATCHTOWER_URL`
   and `WATCHTOWER_TOKEN_PARAMETER` set in `.env`, `app.env` or `site.env`, `deploy-app`, `deploy` and
   `rotate-secret` start a deployment after the confirmation, extend it before long waits, poll until the target

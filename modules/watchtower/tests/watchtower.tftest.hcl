@@ -93,8 +93,13 @@ run "s3_release_mail_rules_and_dns" {
   }
   assert {
     condition = (one([for s in data.aws_iam_policy_document.host.statement : s.resources if s.sid == "SendAsTheIdentity"])
-    == toset(["arn:aws:ses:us-east-1:111111111111:identity/example.com"]))
-    error_message = "The host may send only as its SES identity."
+    == toset(["arn:aws:ses:us-east-1:111111111111:identity/*"]))
+    error_message = "SES checks recipients' identities too, so the host may send to any identity in its identity's account and region."
+  }
+  assert {
+    condition = anytrue([for c in one([for s in data.aws_iam_policy_document.host.statement : s.condition if s.sid == "SendAsTheIdentity"]) :
+    c.test == "StringEquals" && c.variable == "ses:FromAddress" && contains(c.values, "watchtower@example.com")])
+    error_message = "The host may send only as mail_from."
   }
   assert {
     condition     = aws_route53_record.this[0].records == toset(["203.0.113.10"]) && aws_route53_record.this[0].name == "watch.example.com"
