@@ -21,6 +21,7 @@ locals {
     "--retention ${var.retention_hours}h",
     var.mail_from != null ? "--ses-region ${local.ses_region} --smtp-from ${var.mail_from}" : "",
     var.rules_yaml != "" ? "--rules /etc/watchtower/rules.yaml" : "",
+    join(" ", var.extra_flags),
   ]))
 
   user_data = templatefile("${path.module}/user-data.sh.tftpl", {

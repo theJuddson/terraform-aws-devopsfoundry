@@ -81,6 +81,17 @@ variable "retention_hours" {
   default     = 72
 }
 
+variable "extra_flags" {
+  description = "More collector flags, each one word such as \"--orgs\" or \"--org-max-sources=100\". They go on the collector's command line as given."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for f in var.extra_flags : can(regex("^--[a-z][a-z0-9-]*(=[A-Za-z0-9._:/@,+-]+)?$", f))])
+    error_message = "Each extra flag is --name or --name=value, with letters, digits and ._:/@,+- in the value; nothing a shell would read."
+  }
+}
+
 variable "ingress_cidr_blocks" {
   description = "IPv4 ranges allowed to reach 443. Agents on Fargate tasks and the ACME CA come from anywhere, so narrow this only if every source is known."
   type        = list(string)

@@ -3,6 +3,12 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.22.0
+
+- `watchtower`: `extra_flags` adds collector flags, each one word such as `"--orgs"` or `"--org-max-sources=100"`,
+  after the module's own. Anything a shell would read is refused at plan time. Empty, the default, plans no change.
+  Watchtower v0.12.0's organizations need `--orgs` (and `--signup` for anyone to make one).
+
 ## v1.21.0
 
 - Fix: `watchtower`'s instance role may now send mail. SES checks `ses:SendEmail` against each recipient's identity
