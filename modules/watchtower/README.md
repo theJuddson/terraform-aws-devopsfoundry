@@ -109,6 +109,7 @@ Browsers won't trust the staging certificate.
 | acme\_email | Contact address given to Let's Encrypt (optional). | `string` | `""` | no |
 | ami\_ssm\_parameter | Public SSM parameter holding the AMI. Amazon Linux 2023 is what the user data is written for. | `string` | `"/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64"` | no |
 | data\_volume\_size\_gib | Data volume for the TSDB, its rollups and the auth database. It outlives the instance. | `number` | `40` | no |
+| extra\_flags | More collector flags, each one word such as "--orgs" or "--org-max-sources=100". They go on the collector's command line as given. | `list(string)` | `[]` | no |
 | ingress\_cidr\_blocks | IPv4 ranges allowed to reach 443. Agents on Fargate tasks and the ACME CA come from anywhere, so narrow this only if every source is known. | `list(string)` | <pre>[<br/>  "0.0.0.0/0"<br/>]</pre> | no |
 | instance\_type | Instance type. The default is Graviton, so `release_url` must be the arm64 tarball. | `string` | `"t4g.micro"` | no |
 | kms\_key\_arn | Customer managed key for the volumes. Null uses the account's default EBS key. | `string` | `null` | no |

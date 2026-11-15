@@ -136,3 +136,26 @@ run "refuses_a_bad_url" {
   }
   expect_failures = [var.release_url]
 }
+
+run "extra_flags_go_on_the_command_line" {
+  command = plan
+
+  variables {
+    extra_flags = ["--orgs", "--org-max-sources=100"]
+  }
+
+  assert {
+    condition     = endswith(output.collector_flags, "--orgs --org-max-sources=100")
+    error_message = "Extra flags follow the module's own."
+  }
+}
+
+run "extra_flags_refuse_what_a_shell_would_read" {
+  command = plan
+
+  variables {
+    extra_flags = ["--orgs; curl evil"]
+  }
+
+  expect_failures = [var.extra_flags]
+}
