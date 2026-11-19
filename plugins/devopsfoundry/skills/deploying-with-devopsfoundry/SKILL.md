@@ -23,6 +23,9 @@ your tool's plugin cache, not in that checkout, so first find the checkout:
 2. Read `$DOF/AGENTS.md`. Its rules come first, before this skill and before general AWS guidance.
 3. Run `$DOF/bin/preflight` (`--existing-zone` when the domain's Route53 zone already exists). It checks tools, AWS
    sign-in, the state bucket and Namecheap access, and says how to fix each. Don't carry on past a failed hard check.
+   With `NAMECHEAP_GATEWAY` set in `.env`, Namecheap calls go through the namecheap-gateway Lambda from its fixed IP,
+   so this machine's IP doesn't matter; preflight checks the gateway instead. Don't ask the person to allowlist
+   their own IP then.
 
 Never read, print or `source` `$DOF/.env`. The scripts load it themselves.
 

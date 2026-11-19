@@ -18,6 +18,12 @@
 # terraform.tfvars) removes only its own records from that zone: the zone and
 # its nameservers stay, Namecheap is never called, and --keep-ns is refused.
 #
+# With NAMECHEAP_GATEWAY set (.env), the domain is reset to Namecheap's default
+# DNS through the namecheap-gateway Lambda (bin/namecheap) before the stack is
+# destroyed, so this machine needs no Namecheap key or allowlisted IP. A
+# delegation the provider still manages is first dropped from state (that
+# doesn't call Namecheap). NAMECHEAP_DIRECT=1 opts out.
+#
 # --purge removes the site root. With --config that is the repo's
 # .devopsfoundry/ directory, so it is only removed after the typed confirmation.
 set -euo pipefail
@@ -53,7 +59,7 @@ ZONE_ID=""
 [[ -f "$SITE_DIR/terraform.tfvars" ]] && ZONE_ID="$(df_tfvar "$SITE_DIR/terraform.tfvars" existing_zone_id)"
 if [[ -n "$ZONE_ID" ]]; then
   $KEEP_NS && die "--keep-ns doesn't apply: this site's zone $ZONE_ID existed before it, and its nameservers are never changed"
-else
+elif ! df_gateway_on; then
   # Namecheap provider needs a client IP even for destroy.
   if [[ -z "${NAMECHEAP_CLIENT_IP:-}" ]]; then
     NAMECHEAP_CLIENT_IP="$(df_detect_ip)"; export NAMECHEAP_CLIENT_IP
@@ -65,6 +71,7 @@ echo "DevOpsFoundry — DESTROY $DOMAIN"
 if [[ -n "$ZONE_ID" ]]; then
   echo "  (removing only this site's records from zone $ZONE_ID; the zone and its nameservers stay)"
 elif $KEEP_NS; then echo "  (keeping Namecheap NS delegation)"
+elif df_gateway_on; then echo "  (reverting Namecheap NS to default through the gateway $NAMECHEAP_GATEWAY)"
 else echo "  (reverting Namecheap NS to default)"; fi
 echo "─────────────────────────────────────"
 if [[ "$YES" != true ]]; then
@@ -75,6 +82,20 @@ fi
 if $KEEP_NS; then
   step "Dropping namecheap_ns from state (delegation will persist)"
   df_tf_at "$SITE_DIR" state rm module.namecheap_ns 2>/dev/null || warn "namecheap_ns not in state"
+elif [[ -z "$ZONE_ID" ]] && df_gateway_on; then
+  # The provider's record, if any, leaves state without a Namecheap call; the
+  # gateway then resets the domain, before its zone goes.
+  if [[ -f "$SITE_DIR/namecheap.tf" ]]; then
+    step "Dropping namecheap_ns from state (the gateway resets the domain instead)"
+    df_tf_at "$SITE_DIR" state rm module.namecheap_ns >/dev/null 2>&1 || info "namecheap_ns not in state"
+    mv "$SITE_DIR/namecheap.tf" "$SITE_DIR/namecheap.tf.released"
+  fi
+  if df_tf_at "$SITE_DIR" state list 2>/dev/null | grep -qE "$DF_SITE_ZONE_RE"; then
+    step "Resetting $DOMAIN to Namecheap's default DNS through the gateway"
+    df_gateway reset "$DOMAIN" --yes || die "Could not reset $DOMAIN through the gateway; nothing destroyed. Use --keep-ns to destroy without resetting it"
+  else
+    info "No Route53 zone in state, so $DOMAIN's nameservers are left as they are"
+  fi
 elif [[ -z "$ZONE_ID" && -f "$SITE_DIR/namecheap.tf.released" && ! -f "$SITE_DIR/namecheap.tf" ]]; then
   step "Re-adopting the Namecheap delegation so destroy can revert it"
   mv "$SITE_DIR/namecheap.tf.released" "$SITE_DIR/namecheap.tf"

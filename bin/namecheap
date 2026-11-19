@@ -46,8 +46,9 @@ CMD="$1"; shift
 
 confirm() {
   $YES && return 0
-  [[ -t 0 ]] || die "$1 needs a yes: run it in a terminal, or pass --yes once the change has been approved"
-  local c; read -r -p "$1 (y/N) " c
+  # read -p shows nothing when the answer is piped in, so the question goes to stderr.
+  local c; printf '%s (y/N) ' "$1" >&2
+  read -r c || c=""
   [[ "$c" =~ ^[Yy]$ ]] || die "Nothing changed."
 }
 

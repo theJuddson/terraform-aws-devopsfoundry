@@ -3,6 +3,22 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.24.0
+
+- The scripts use the Namecheap gateway when `NAMECHEAP_GATEWAY` is set in `.env`, so they need no Namecheap key or
+  allowlisted IP on this machine. Unset, nothing changes. `NAMECHEAP_DIRECT=1` keeps the Namecheap provider even when
+  it is set.
+  - `new-app` and `new-site` scaffold the root as `release-nameservers` would leave it (`manage_nameservers = false`
+    and a placeholder provider; `namecheap.tf.released`). Phase 1b creates only the zone; `bin/namecheap set` then
+    delegates the domain to it. `new-app` asks first unless `--yes`, and `--plan-only` says what it would set.
+    `--sandbox` is refused with the gateway. Resuming a root whose delegation the provider manages stops and names
+    `release-nameservers`; one that hadn't applied it yet switches over.
+  - `destroy-app` and `destroy-site` reset the domain to Namecheap's default DNS through the gateway before
+    destroying, instead of re-adopting the record with the provider. A record still in state is dropped from it
+    first, which doesn't call Namecheap. If the reset fails nothing is destroyed. `--keep-ns` never calls the gateway.
+  - `preflight` skips the key and client IP checks, and a gateway that doesn't answer is a hard failure.
+- `bin/namecheap set` and `reset` read their yes from stdin when it's piped, like `new-app`'s questions.
+
 ## v1.23.0
 
 - `namecheap-gateway`: a Lambda that makes Namecheap's nameserver calls from a fixed address. It runs in private

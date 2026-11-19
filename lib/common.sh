@@ -418,6 +418,31 @@ df_app_namecheap_movable() { # df_app_namecheap_movable <dir>
 
 df_tf_at() { local c="$1"; shift; terraform -chdir="$c" "$@"; }
 
+# ── Namecheap gateway (v1.24.0) ────────────────────────
+# With NAMECHEAP_GATEWAY set (the namecheap-gateway function), new-app, new-site,
+# destroy-app and destroy-site delegate and reset a domain through it, with
+# bin/namecheap, instead of through Terraform's Namecheap provider. The calls
+# leave from the gateway's fixed IP, so this machine needs no Namecheap key or
+# allowlisted address. A root made this way never has the Namecheap record in
+# state: it starts out as bin/release-nameservers leaves a root. NAMECHEAP_DIRECT=1
+# uses the provider even when NAMECHEAP_GATEWAY is set.
+df_gateway_on() { [[ -n "${NAMECHEAP_GATEWAY:-}" && "${NAMECHEAP_DIRECT:-}" != 1 ]]; }
+
+# Runs bin/namecheap. Usage: df_gateway <command> <args...>
+df_gateway() { "$DF_ROOT/bin/namecheap" "$@"; }
+
+# Delegates <domain> to the nameservers a root's name_servers output lists.
+# Asks first unless <yes> is true. Usage: df_gateway_delegate <dir> <domain> <yes>
+df_gateway_delegate() {
+  local ns=() line yes=()
+  while IFS= read -r line; do [[ -n "$line" ]] && ns+=("$line"); done \
+    < <(df_tf_at "$1" output -json name_servers | jq -r '.[]')
+  [[ ${#ns[@]} -ge 2 ]] || die "No name_servers output to delegate $2 to"
+  [[ "$3" == true ]] && yes=(--yes)
+  step "Delegating $2 at Namecheap through the gateway ($NAMECHEAP_GATEWAY)"
+  df_gateway set "$2" "${ns[@]}" ${yes[@]+"${yes[@]}"} || die "Could not delegate $2 through the gateway"
+}
+
 # terraform init that survives a registry or GitHub blip. Usage: df_tf_init <dir> <init args...>
 # Retries (after DF_RETRY_DELAYS seconds, default "10 30") only when the error
 # looks like a network failure; a configuration error fails at once.
