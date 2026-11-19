@@ -26,8 +26,8 @@ or straight from git, over HTTPS or SSH, pinned to a release tag (the newest is 
 [Releases page](https://github.com/theJuddson/terraform-aws-devopsfoundry/releases)):
 
 ```hcl
-source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.22.0"
-source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.22.0"
+source = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.23.0"
+source = "git::ssh://git@github.com/theJuddson/terraform-aws-devopsfoundry//modules/object-store?ref=v1.23.0"
 ```
 
 Each module's README lists its inputs and outputs, and the building blocks have a runnable example under
@@ -63,6 +63,8 @@ Each module's README lists its inputs and outputs, and the building blocks have 
 | [static-site](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/static-site) | Private S3 bucket behind CloudFront with Origin Access Control |
 | [route53-records](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/route53-records) | CloudFront aliases and optional Google Workspace mail records |
 | [namecheap-ns](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/namecheap-ns) | Points a Namecheap domain's nameservers at Route53 |
+| [namecheap-gateway](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/namecheap-gateway) | A Lambda that makes Namecheap nameserver calls from a NAT's fixed IP, with the API key in SSM |
+| [namecheap-ns-gateway](https://github.com/theJuddson/terraform-aws-devopsfoundry/tree/main/modules/namecheap-ns-gateway) | `namecheap-ns` through the gateway: no Namecheap credentials or allowlisted IP where Terraform runs |
 
 ## The CLI: clone and run
 
@@ -98,6 +100,7 @@ anything else. (Sites can still live in this checkout's gitignored
 | `bin/estimate-cost --config <dir>` | The app's monthly on-demand cost from its `app.tfvars` and AWS's Price List API: tasks, load balancer, NAT gateway, public IPv4, database and cache, priced and summed line by line (usage-driven costs listed, not priced) |
 | `bin/release-nameservers --config <dir>` | Stop managing a live Namecheap delegation in Terraform, so plans and deploys never call Namecheap or need its credentials (`new-app` and `new-site` run it) |
 | `bin/destroy-app --config <dir>` | Tear down the app stack; reverts the delegation unless `--keep-ns` |
+| `bin/namecheap check\|get\|set\|reset\|put-key` | Namecheap nameserver calls through the `namecheap-gateway` Lambda, from its fixed IP; `put-key` stores the API key as its SSM SecureString |
 
 Both `new-site` and `new-app` run in **two phases** to dodge the
 cert-validation-vs-NS-propagation race — delegate first, poll `dig` until it
@@ -125,11 +128,37 @@ Local tooling: `terraform` (>=1.7), `aws` CLI (authenticated to the account that
 No production account yet? Set `NAMECHEAP_USE_SANDBOX=true` (or `--sandbox`) to
 exercise the Namecheap path against the free sandbox with no eligibility gate.
 
+**No static IP? The Namecheap gateway** (optional). The allowlist needs a fixed address, and a laptop on carrier or
+hotel networks doesn't have one. The `namecheap-gateway` module runs a small Lambda in private subnets whose route out
+is a NAT gateway with an Elastic IP, so every call leaves from that one address. The API key lives in an SSM
+SecureString that Terraform never sees; the function can only check access, read a domain's nameservers, set them, or
+reset the domain to Namecheap's default DNS.
+
+1. `bin/namecheap put-key` stores `NAMECHEAP_API_KEY` from `.env` as `/devopsfoundry/namecheap/api-key` (or pipe the
+   key in: `... | bin/namecheap put-key -`). The key reaches `aws` on stdin only.
+2. Apply a root with the module, in a VPC that already has a NAT gateway:
+
+   ```hcl
+   module "namecheap_gateway" {
+     source     = "git::https://github.com/theJuddson/terraform-aws-devopsfoundry.git//modules/namecheap-gateway?ref=v1.23.0"
+     subnet_ids = ["subnet-private-a", "subnet-private-b"] # routed through the NAT
+     client_ip  = "203.0.113.10"                           # the NAT's Elastic IP
+     api_user   = "your_namecheap_username"
+   }
+   ```
+
+3. Allowlist `client_ip` at Namecheap, set `NAMECHEAP_GATEWAY=devopsfoundry-namecheap` in `.env`, and run
+   `bin/namecheap check` (`bin/preflight` runs it too).
+
+Then `bin/namecheap get|set|reset <domain>` works from anywhere, and a root can delegate with `namecheap-ns-gateway`
+instead of `namecheap-ns`: same inputs, the AWS provider instead of Namecheap's, and destroying it resets the domain
+to Namecheap's default DNS. The function costs nothing at rest; the NAT is whatever the VPC already pays for.
+
 ### Usage
 
 ```bash
 bin/preflight                                   # check toolchain + AWS + Namecheap + IP whitelist
-bin/new-site example.com --config ../MySite/.devopsfoundry --module-ref v1.22.0 --build-dir dist
+bin/new-site example.com --config ../MySite/.devopsfoundry --module-ref v1.23.0 --build-dir dist
                                                 # scaffold + two-phase provision
 bin/deploy --config ../MySite/.devopsfoundry    # build (optional) + sync + invalidate
 bin/destroy-site --config ../MySite/.devopsfoundry   # tear down; reverts NS to default
@@ -176,9 +205,9 @@ no Namecheap settings (`bin/preflight --existing-zone` skips those checks).
 
 ```bash
 bin/new-site example.com --existing-zone example.com \
-  --config ../MySite/.devopsfoundry --module-ref v1.22.0 --build-dir dist        # apex and www
+  --config ../MySite/.devopsfoundry --module-ref v1.23.0 --build-dir dist        # apex and www
 bin/new-site blog.example.com --existing-zone example.com \
-  --config ../Blog/.devopsfoundry --module-ref v1.22.0 --build-dir dist          # a subdomain, no www
+  --config ../Blog/.devopsfoundry --module-ref v1.23.0 --build-dir dist          # a subdomain, no www
 bin/new-site example.com --existing-zone --config ../MySite/.devopsfoundry ...   # list the zones that fit; choose one
 ```
 
@@ -325,7 +354,7 @@ serving and `--enable-email` are refused in this mode, and `destroy-app` removes
 
 ```bash
 bin/new-app example.com --subdomain app --existing-zone example.com \
-  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.22.0
+  --config ../MyApp/.devopsfoundry --enable-db --shared-platform other-app-com --module-ref v1.23.0
 ```
 
 #### App-owned state
