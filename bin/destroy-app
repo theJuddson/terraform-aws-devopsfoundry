@@ -3,6 +3,12 @@
 #               Namecheap nameserver delegation. Mirror of destroy-site.
 #
 # Usage: bin/destroy-app --config <dir> [--keep-ns] [--yes]
+#
+# With NAMECHEAP_GATEWAY set (.env), the domain is reset to Namecheap's default
+# DNS through the namecheap-gateway Lambda (bin/namecheap) before the stack is
+# destroyed, so this machine needs no Namecheap key or allowlisted IP. A
+# delegation the provider still manages is first dropped from state (that
+# doesn't call Namecheap). NAMECHEAP_DIRECT=1 opts out.
 set -euo pipefail
 DF_SCRIPT_NAME="destroy-app"
 source "$(cd "$(dirname "$0")/.." && pwd)/lib/common.sh"
@@ -21,14 +27,16 @@ CONFIG="$(df_resolve_config "$CONFIG")"
 df_ensure_app_init "$CONFIG"
 TFVARS=(-var-file=app.tfvars)
 
-if [[ -z "${NAMECHEAP_CLIENT_IP:-}" ]]; then
+if ! df_gateway_on && [[ -z "${NAMECHEAP_CLIENT_IP:-}" ]]; then
   NAMECHEAP_CLIENT_IP="$(df_detect_ip)"; export NAMECHEAP_CLIENT_IP
 fi
 
 DOMAIN=$(df_tf_at "$CONFIG" output -raw service_url 2>/dev/null | sed 's|https://[^.]*\.||' || echo "this app")
 echo ""
 echo "DevOpsFoundry — DESTROY app ($CONFIG)"
-$KEEP_NS && echo "  (keeping Namecheap NS delegation)" || echo "  (reverting Namecheap NS to default)"
+if $KEEP_NS; then echo "  (keeping Namecheap NS delegation)"
+elif df_gateway_on; then echo "  (reverting Namecheap NS to default through the gateway $NAMECHEAP_GATEWAY)"
+else echo "  (reverting Namecheap NS to default)"; fi
 echo "─────────────────────────────────────"
 if [[ "$YES" != true ]]; then
   read -r -p "Type DESTROY to confirm: " c; [[ "$c" == "DESTROY" ]] || { echo "Aborted."; exit 0; }
@@ -45,7 +53,24 @@ fi
 # Re-adopt the record first (it rewrites the same nameservers, a no-op at
 # Namecheap); destroying it then reverts the delegation as before.
 EXTRA=()
-if ! $KEEP_NS && [[ "$(df_tfvar "$CONFIG/app.tfvars" manage_nameservers)" == "false" ]] \
+if ! $KEEP_NS && df_gateway_on; then
+  STATE="$(df_tf_at "$CONFIG" state list 2>/dev/null)" || die "Could not read Terraform state in $CONFIG"
+  ADDR="$(grep -E "$DF_NS_RECORD_RE" <<<"$STATE" | head -1 || true)"
+  if [[ -n "$ADDR" ]]; then
+    # Out of state without a Namecheap call; the gateway resets the domain instead.
+    step "Dropping the Namecheap record from state (the gateway resets the domain instead)"
+    df_tf_at "$CONFIG" state rm "$ADDR" >/dev/null || die "terraform state rm failed; nothing destroyed"
+    df_app_namecheap_provider "$CONFIG" unused || die "Nothing destroyed."
+  fi
+  if grep -qE "$DF_ZONE_RE" <<<"$STATE"; then
+    APP_DOMAIN="$(df_tfvar "$CONFIG/app.tfvars" domain_name)"
+    [[ -n "$APP_DOMAIN" ]] || die "No domain_name in $CONFIG/app.tfvars; nothing destroyed"
+    step "Resetting $APP_DOMAIN to Namecheap's default DNS through the gateway"
+    df_gateway reset "$APP_DOMAIN" --yes || die "Could not reset $APP_DOMAIN through the gateway; nothing destroyed. Use --keep-ns to destroy without resetting it"
+  else
+    info "No Route53 zone of this app's in state, so its domain's nameservers are left as they are"
+  fi
+elif ! $KEEP_NS && [[ "$(df_tfvar "$CONFIG/app.tfvars" manage_nameservers)" == "false" ]] \
   && df_tf_at "$CONFIG" state list 2>/dev/null | grep -qE "$DF_ZONE_RE"; then
   step "Re-adopting the Namecheap delegation so destroy can revert it"
   # The released root's namecheap.tf has placeholders; reverting needs the real credentials.

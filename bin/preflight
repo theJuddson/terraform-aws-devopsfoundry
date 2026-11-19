@@ -91,6 +91,8 @@ fi
 # ── Namecheap ──────────────────────────────────────────
 if $EXISTING_ZONE; then
   info "Namecheap not checked: an existing zone (--existing-zone) never calls it"
+elif df_gateway_on; then
+  info "Namecheap calls go through the gateway $NAMECHEAP_GATEWAY; this machine's key and IP aren't used"
 else
   nc_ok=true
   for v in NAMECHEAP_USER_NAME NAMECHEAP_API_USER NAMECHEAP_API_KEY; do
@@ -127,6 +129,8 @@ if [[ -n "${NAMECHEAP_GATEWAY:-}" ]] && ! $EXISTING_ZONE; then
     pass "Namecheap gateway: $gw_out"
   else
     warn "Namecheap gateway $NAMECHEAP_GATEWAY: $gw_out"
+    # The scripts depend on it unless NAMECHEAP_DIRECT=1.
+    df_gateway_on && fails=$((fails + 1))
   fi
 fi
 

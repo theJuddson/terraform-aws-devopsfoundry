@@ -25,6 +25,10 @@
 #     app.example.com where example.com already serves a site and mail). No zone
 #     is created and Namecheap is never called; the cert covers only the app's
 #     hostname. Apex serving and --enable-email are refused in this mode.
+#   With NAMECHEAP_GATEWAY set (.env), the domain is delegated through the
+#     namecheap-gateway Lambda (bin/namecheap) instead of the Namecheap
+#     provider, so this machine needs no Namecheap key or allowlisted IP; the
+#     root never manages the delegation in Terraform. NAMECHEAP_DIRECT=1 opts out.
 #   --backend-config keeps this app's Terraform state in its own bucket instead of
 #     the shared DevOpsFoundry one (copied to <config>/backend.tfvars, which wins
 #     on every later init).
@@ -80,10 +84,15 @@ if [[ -n "$EXISTING_ZONE" ]]; then
     || die "No public Route53 zone named $EXISTING_ZONE in this account"
 fi
 
-# Namecheap env
+# Namecheap env: the gateway, or the provider's credentials and this machine's IP.
+GATEWAY=false
+if [[ -z "$EXISTING_ZONE" ]] && df_gateway_on; then
+  GATEWAY=true
+  $SANDBOX && die "--sandbox uses the Namecheap provider; the gateway's sandbox is its module's sandbox input. Set NAMECHEAP_DIRECT=1 to use --sandbox."
+fi
 $SANDBOX && export NAMECHEAP_USE_SANDBOX=true
-[[ -n "$EXISTING_ZONE" || -n "${NAMECHEAP_API_KEY:-}" ]] || die "NAMECHEAP_API_KEY not set — copy .env.example to .env"
-if [[ -z "$EXISTING_ZONE" && -z "${NAMECHEAP_CLIENT_IP:-}" ]]; then
+[[ -n "$EXISTING_ZONE" ]] || $GATEWAY || [[ -n "${NAMECHEAP_API_KEY:-}" ]] || die "NAMECHEAP_API_KEY not set — copy .env.example to .env"
+if [[ -z "$EXISTING_ZONE" ]] && ! $GATEWAY && [[ -z "${NAMECHEAP_CLIENT_IP:-}" ]]; then
   NAMECHEAP_CLIENT_IP="$(df_detect_ip)"; export NAMECHEAP_CLIENT_IP
   [[ -n "$NAMECHEAP_CLIENT_IP" ]] || die "Could not auto-detect public IP — set NAMECHEAP_CLIENT_IP"
   info "Using detected client IP $NAMECHEAP_CLIENT_IP (must be whitelisted at Namecheap)"
@@ -97,6 +106,7 @@ echo "  config dir:  $CONFIG"
 echo "  module src:  $MODULE_SOURCE"
 echo "  toggles:     db=$EN_DB cache=$EN_CACHE email=$EN_EMAIL"
 [[ -n "$EXISTING_ZONE" ]] && echo "  DNS:         records in EXISTING zone $EXISTING_ZONE (no zone created, registrar untouched)"
+$GATEWAY && echo "  Namecheap:   delegated through the gateway $NAMECHEAP_GATEWAY (not managed by Terraform)"
 $SANDBOX && echo "  MODE:        SANDBOX (NS delegation only; AWS provisioning skipped)"
 echo "─────────────────────────────────────"
 
@@ -132,7 +142,10 @@ else
   done
   # Credentials from the environment, or placeholders for an --existing-zone
   # root, which never calls Namecheap.
-  if [[ -n "$EXISTING_ZONE" ]]; then df_app_namecheap_provider "$CONFIG" unused; else df_app_namecheap_provider "$CONFIG" live; fi
+  if [[ -n "$EXISTING_ZONE" ]] || $GATEWAY; then df_app_namecheap_provider "$CONFIG" unused; else df_app_namecheap_provider "$CONFIG" live; fi
+  # Through the gateway, Terraform never manages the delegation: the root starts
+  # out as release-nameservers would leave it.
+  $GATEWAY && df_set_tfvar "$CONFIG/app.tfvars" manage_nameservers false
   pass "Scaffolded (edit $CONFIG/app.tfvars for app config)"
 fi
 
@@ -150,6 +163,19 @@ info "State backend: $BACKEND_FILE"
 step "terraform init"
 df_tf_init "$CONFIG" -input=false -backend-config="$BACKEND_FILE" || die "terraform init failed"
 pass "Initialized"
+
+# Resuming a root made without the gateway: the provider may already hold the
+# delegation, and the next apply would need it. Release it first.
+if $GATEWAY && $RESUME; then
+  if df_tf_at "$CONFIG" state list 2>/dev/null | grep -qE "$DF_NS_RECORD_RE"; then
+    die "Terraform's Namecheap provider manages this app's delegation. Finish it without the gateway (NAMECHEAP_DIRECT=1), or once it is live run: bin/release-nameservers --config $CONFIG"
+  fi
+  if [[ "$(df_tfvar "$CONFIG/app.tfvars" manage_nameservers)" != false ]]; then
+    df_app_namecheap_provider "$CONFIG" unused || die "Could not switch the Namecheap provider to placeholders"
+    df_set_tfvar "$CONFIG/app.tfvars" manage_nameservers false
+    info "Switched this root to the gateway: manage_nameservers = false (commit app.tfvars and namecheap.tf)"
+  fi
+fi
 
 # Plan a phase, show what it changes, ask (unless --yes), then apply exactly
 # that plan. With --plan-only, stop after showing it.
@@ -197,8 +223,13 @@ if [[ -n "$EXISTING_ZONE" ]]; then
   exit 0
 fi
 
-phase "Phase 1b — Route53 zone + Namecheap nameserver delegation" "${TFVARS[@]}" \
-  -target=module.app.module.route53_zone -target=module.app.module.namecheap_ns
+if $GATEWAY; then
+  phase "Phase 1b — Route53 zone (the gateway delegates it next)" "${TFVARS[@]}" -target=module.app.module.route53_zone
+  $PLAN_ONLY && info "Then: bin/namecheap set $DOMAIN <the zone's nameservers>, through $NAMECHEAP_GATEWAY"
+else
+  phase "Phase 1b — Route53 zone + Namecheap nameserver delegation" "${TFVARS[@]}" \
+    -target=module.app.module.route53_zone -target=module.app.module.namecheap_ns
+fi
 if $PLAN_ONLY; then
   # Phase 2 is the whole stack; planned now, it also covers what 1b would create.
   phase "Phase 2 — validate cert, build VPC + service (desired_count=0)" "${TFVARS[@]}" -var desired_count=0
@@ -211,6 +242,7 @@ NS=()
 while IFS= read -r ns_line; do NS+=("$ns_line"); done \
   < <(df_tf_at "$CONFIG" output -json name_servers | jq -r '.[]')
 echo "  Route53 nameservers:"; printf '    %s\n' "${NS[@]}"
+$GATEWAY && df_gateway_delegate "$CONFIG" "$DOMAIN" "$YES"
 
 if $SANDBOX; then
   warn "Sandbox mode: NS call exercised; skipping propagation wait + AWS provisioning."
@@ -243,9 +275,11 @@ log "INFO" "Phase 2 applied for app $DOMAIN (desired_count=0)"
 
 # The certificate validated, so the delegation is live: stop managing it, so
 # later deploys never need the Namecheap API (or a whitelisted IP).
+if ! $GATEWAY; then
 step "Handing off Namecheap (the delegation stays; Terraform stops managing it)"
 "$DF_ROOT/bin/release-nameservers" --config "$CONFIG" --yes \
   || warn "Could not release yet; deploys will need Namecheap access until you run: bin/release-nameservers --config $CONFIG"
+fi
 
 echo ""
 echo "─────────────────────────────────────"

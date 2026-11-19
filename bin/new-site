@@ -23,6 +23,11 @@
 #     the flag, new-site still refuses to create a second zone where one
 #     already serves the domain: it offers those zones instead. With --yes it
 #     never chooses a zone for you.
+#   With NAMECHEAP_GATEWAY set (.env), the domain is delegated through the
+#     namecheap-gateway Lambda (bin/namecheap) instead of the Namecheap
+#     provider, so this machine needs no Namecheap key or allowlisted IP. The
+#     root is scaffolded already released (namecheap.tf.released), so Terraform
+#     never manages the delegation. NAMECHEAP_DIRECT=1 opts out.
 set -euo pipefail
 DF_SCRIPT_NAME="new-site"
 source "$(cd "$(dirname "$0")/.." && pwd)/lib/common.sh"
@@ -153,6 +158,9 @@ if [[ -n "$ZONE_ID" ]]; then
   ZONE_LINE="$(awk -v id="$ZONE_ID" '$2 == id' <<<"$CANDIDATES")"
   if [[ -n "$ZONE_LINE" ]]; then RESUME_CMD="$RESUME_CMD $(df_zone_flag "$ZONE_LINE" "$CANDIDATES")"
   else RESUME_CMD="$RESUME_CMD --existing-zone $ZONE_ID"; fi
+elif df_gateway_on; then
+  INCLUDE_WWW=true
+  $SANDBOX && die "--sandbox uses the Namecheap provider; the gateway's sandbox is its module's sandbox input. Set NAMECHEAP_DIRECT=1 to use --sandbox."
 else
   INCLUDE_WWW=true
   # ── Namecheap env ──────────────────────────────────────
@@ -177,6 +185,8 @@ $SANDBOX && echo "  MODE:       SANDBOX (NS delegation only; AWS provisioning sk
 if [[ -n "$ZONE_ID" ]]; then
   echo "  DNS:        records in EXISTING zone $ZONE_NAME ($ZONE_ID); no zone created, Namecheap not called"
   $INCLUDE_WWW && echo "  serves:     $DOMAIN and www.$DOMAIN" || echo "  serves:     $DOMAIN (no www)"
+elif df_gateway_on; then
+  echo "  Namecheap:  delegated through the gateway $NAMECHEAP_GATEWAY (not managed by Terraform)"
 fi
 echo "─────────────────────────────────────"
 
@@ -224,7 +234,11 @@ else
     base="$(basename "$f")"
     case "$base" in
       gitignore.tmpl) if [[ -n "$CONFIG" ]]; then render "$f" "$SITE_DIR/.gitignore"; fi ;;
-      namecheap.tf.tmpl) if [[ -z "$ZONE_ID" ]]; then render "$f" "$SITE_DIR/namecheap.tf"; fi ;;
+      # Through the gateway the root starts out released: destroy-site reads
+      # namecheap.tf.released as "this site's delegation is at Namecheap".
+      namecheap.tf.tmpl)
+        if [[ -z "$ZONE_ID" ]] && df_gateway_on; then render "$f" "$SITE_DIR/namecheap.tf.released"
+        elif [[ -z "$ZONE_ID" ]]; then render "$f" "$SITE_DIR/namecheap.tf"; fi ;;
       *.tmpl)         render "$f" "$SITE_DIR/${base%.tmpl}" ;;
       *)              cp "$f" "$SITE_DIR/$base" ;;
     esac
@@ -242,6 +256,15 @@ fi
 step "terraform init"
 df_tf_init "$SITE_DIR" -input=false -backend-config="$(df_app_backend_file "$SITE_DIR")" || die "terraform init failed"
 pass "Initialized"
+
+# Resuming a site made without the gateway: the provider may hold the delegation.
+if [[ -z "$ZONE_ID" ]] && df_gateway_on && [[ -f "$SITE_DIR/namecheap.tf" ]]; then
+  if df_tf_at "$SITE_DIR" state list 2>/dev/null | grep -qE "$DF_SITE_NS_RECORD_RE"; then
+    die "Terraform's Namecheap provider manages this site's delegation. Finish it without the gateway (NAMECHEAP_DIRECT=1), or once it is live run: bin/release-nameservers --config $SITE_DIR"
+  fi
+  mv "$SITE_DIR/namecheap.tf" "$SITE_DIR/namecheap.tf.released"
+  info "Switched this site to the gateway: namecheap.tf is now namecheap.tf.released (commit it)"
+fi
 
 if [[ "$YES" != true ]]; then
   read -r -p "Provision $DOMAIN now? (y/N) " c; [[ "$c" == [yY] ]] || { echo "Aborted."; exit 0; }
@@ -262,15 +285,22 @@ else
 step "Phase 1a — create ACM certificate"
 df_tf_at "$SITE_DIR" apply -input=false -auto-approve -target=module.acm_cert
 # 1b: now the validation-record names are known -> create zone + delegate NS.
-step "Phase 1b — Route53 zone + Namecheap nameserver delegation"
-df_tf_at "$SITE_DIR" apply -input=false -auto-approve \
-  -target=module.route53_zone -target=module.namecheap_ns
+if df_gateway_on; then
+  step "Phase 1b — Route53 zone (the gateway delegates it next)"
+  df_tf_at "$SITE_DIR" apply -input=false -auto-approve -target=module.route53_zone
+else
+  step "Phase 1b — Route53 zone + Namecheap nameserver delegation"
+  df_tf_at "$SITE_DIR" apply -input=false -auto-approve \
+    -target=module.route53_zone -target=module.namecheap_ns
+fi
 log "INFO" "Phase 1 applied for $DOMAIN"
 
 NS=()
 while IFS= read -r ns_line; do NS+=("$ns_line"); done \
   < <(df_tf_at "$SITE_DIR" output -json name_servers | jq -r '.[]')
 echo "  Route53 nameservers:"; printf '    %s\n' "${NS[@]}"
+# "Provision $DOMAIN now?" was answered (or --yes given), so this asks no more.
+if df_gateway_on; then df_gateway_delegate "$SITE_DIR" "$DOMAIN" true; fi
 
 if $SANDBOX; then
   warn "Sandbox mode: skipping NS-propagation wait + AWS provisioning."
@@ -306,9 +336,12 @@ step "Phase 2 — validate cert, build CloudFront, add DNS records"
 df_tf_at "$SITE_DIR" apply -input=false -auto-approve
 log "INFO" "Phase 2 applied for $DOMAIN"
 
-# Live now: hand the delegation off, so later plans never call Namecheap.
-"$DF_ROOT/bin/release-nameservers" --config "$SITE_DIR" --yes \
-  || warn "Could not release yet; plans of this site will need Namecheap access until you run: bin/release-nameservers --config $SITE_DIR"
+# Live now: hand the delegation off, so later plans never call Namecheap. (A
+# gateway root never had it.)
+if ! df_gateway_on; then
+  "$DF_ROOT/bin/release-nameservers" --config "$SITE_DIR" --yes \
+    || warn "Could not release yet; plans of this site will need Namecheap access until you run: bin/release-nameservers --config $SITE_DIR"
+fi
 fi
 
 echo ""
