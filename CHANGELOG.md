@@ -3,6 +3,23 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.23.0
+
+- `namecheap-gateway`: a Lambda that makes Namecheap's nameserver calls from a fixed address. It runs in private
+  subnets behind a NAT gateway, so every call leaves from the NAT's Elastic IP and one allowlist entry works from any
+  network. The API key is an SSM SecureString created outside Terraform, read at run time and sent to Namecheap in a
+  POST body; it is never in state, the function's environment, a log or a result. The function does four things only:
+  check access, read a domain's nameservers, set them, reset the domain to Namecheap's default DNS. `allowed_domains`
+  narrows which domains it may touch. HTTPS out only, nothing in.
+- `namecheap-ns-gateway`: `namecheap-ns` through the gateway, as an `aws_lambda_invocation` with lifecycle scope CRUD.
+  Create and update set the nameservers; destroy resets the domain to Namecheap's default DNS. A separate module, so
+  roots on `namecheap-ns` keep their state addresses and plan no change.
+- `bin/namecheap check|get|set|reset|put-key` calls the gateway (`NAMECHEAP_GATEWAY`, default
+  `devopsfoundry-namecheap`). `set` and `reset` show the change and ask first. `put-key` stores the key from `.env` or
+  stdin, passing it to `aws` on stdin. `bin/preflight` checks the gateway when `NAMECHEAP_GATEWAY` is set.
+- The scripts that delegate (`new-app`, `new-site`, `destroy-*`, `release-nameservers`) still use the Namecheap
+  provider directly; moving them to the gateway is a later release.
+
 ## v1.22.0
 
 - `watchtower`: `extra_flags` adds collector flags, each one word such as `"--orgs"` or `"--org-max-sources=100"`,

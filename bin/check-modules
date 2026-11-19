@@ -67,6 +67,9 @@ if [[ $# -eq 0 ]]; then
   step check "agent plugin"
   bin/check-plugin || fail=1
   python3 -m unittest discover -s tests/plugin || fail=1
+  # The namecheap-gateway Lambda's handler, with Namecheap and SSM stubbed.
+  step test "namecheap-gateway handler"
+  python3 -m unittest discover -s tests/namecheap-gateway || fail=1
 fi
 
 # .checkov.baseline holds the findings the v1.1.0 modules already had (see

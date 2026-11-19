@@ -117,6 +117,19 @@ else
   fi
 fi
 
+# ── Namecheap gateway (optional) ───────────────────────
+# A namecheap-gateway Lambda makes the calls from a fixed IP; bin/namecheap uses it.
+if [[ -n "${NAMECHEAP_GATEWAY:-}" ]] && ! $EXISTING_ZONE; then
+  gw_ok=true
+  gw_out="$("$DF_ROOT/bin/namecheap" check 2>&1)" || gw_ok=false
+  gw_out="$(printf '%s' "$gw_out" | sed $'s/\033\\[[0-9;]*m//g; s/^[✓✗] //')"
+  if $gw_ok; then
+    pass "Namecheap gateway: $gw_out"
+  else
+    warn "Namecheap gateway $NAMECHEAP_GATEWAY: $gw_out"
+  fi
+fi
+
 echo "─────────────────────────────────────"
 if [[ "$fails" -eq 0 ]]; then
   pass "Preflight OK"
