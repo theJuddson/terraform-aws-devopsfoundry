@@ -28,6 +28,45 @@ mount -a
 # top folders, so hand everything under them to the collector's user.
 find /var/lib/watchtower \( ! -user watchtower -o ! -group watchtower \) -exec chown -h watchtower:watchtower {} +
 
+%{ if health_check ~}
+# Every minute: 1 when the collector answers /healthz on 443 with a certificate
+# for its name, else 0, as a CloudWatch metric. It starts before the install, so
+# an install that never brings the collector up reports 0 too, and an alarm on
+# the metric treats missing data (no instance, no network) as down.
+cat > /usr/local/sbin/watchtower-health <<'EOF'
+#!/bin/bash
+set -uo pipefail
+v=0
+curl -fsS %{ if curl_insecure }--insecure %{ endif }--max-time 10 --resolve "${hostname}:443:127.0.0.1" \
+  "https://${hostname}/healthz" >/dev/null && v=1
+aws cloudwatch put-metric-data --region "${region}" --namespace Watchtower \
+  --metric-name CollectorHealthy --dimensions "Collector=${source}" --value "$v"
+EOF
+chmod 0755 /usr/local/sbin/watchtower-health
+cat > /etc/systemd/system/watchtower-health.service <<'EOF'
+[Unit]
+Description=Watchtower collector health metric
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/watchtower-health
+EOF
+cat > /etc/systemd/system/watchtower-health.timer <<'EOF'
+[Unit]
+Description=Watchtower collector health metric, every minute
+
+[Timer]
+OnCalendar=minutely
+
+[Install]
+WantedBy=timers.target
+EOF
+systemctl daemon-reload
+systemctl enable --now watchtower-health.timer
+
+%{ endif ~}
 work=$(mktemp -d)
 %{ if startswith(release_url, "s3://") ~}
 aws s3 cp --only-show-errors "${release_url}" "$work/release.tar.gz"

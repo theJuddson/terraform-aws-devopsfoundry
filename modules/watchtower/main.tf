@@ -24,7 +24,8 @@ locals {
     join(" ", var.extra_flags),
   ]))
 
-  region = lookup(data.aws_region.current, "region", lookup(data.aws_region.current, "name", null))
+  health_check = length(var.health_alarm_actions) > 0 && !var.rules_in_user_data
+  region       = lookup(data.aws_region.current, "region", lookup(data.aws_region.current, "name", null))
 
   user_data = var.rules_in_user_data ? templatefile("${path.module}/user-data-legacy.sh.tftpl", {
     release_url    = var.release_url
@@ -43,6 +44,9 @@ locals {
     source          = var.name
     # Fixed, so the kept data volume's owners match on every instance. Outside
     # Amazon Linux's system range (counted down from 999) and its users' (from 1000).
+    health_check  = local.health_check
+    hostname      = var.hostname
+    curl_insecure = var.acme_directory != ""
     collector_uid = 61001
     agent_uid     = 61002
   })
@@ -65,6 +69,19 @@ resource "aws_ssm_parameter" "rules" {
 }
 
 data "aws_iam_policy_document" "host" {
+  dynamic "statement" {
+    for_each = local.health_check ? [1] : []
+    content {
+      sid       = "PutTheHealthMetric"
+      actions   = ["cloudwatch:PutMetricData"]
+      resources = ["*"] # PutMetricData takes no resource; the namespace condition limits it.
+      condition {
+        test     = "StringEquals"
+        variable = "cloudwatch:namespace"
+        values   = ["Watchtower"]
+      }
+    }
+  }
   dynamic "statement" {
     for_each = local.release_s3 == null ? [] : [1]
     content {
@@ -106,7 +123,7 @@ module "host" {
   # A new release or settings replace the instance; the data volume is kept.
   # Rules don't (see aws_ssm_parameter.rules), unless rules_in_user_data.
   user_data_replace_on_change = true
-  inline_policy_jsons = (local.release_s3 == null && var.mail_from == null ? {} :
+  inline_policy_jsons = (local.release_s3 == null && var.mail_from == null && !local.health_check ? {} :
   { "${var.name}-watchtower" = data.aws_iam_policy_document.host.json })
   tags = var.tags
 }
@@ -150,4 +167,25 @@ resource "aws_route53_record" "this" {
   type    = "A"
   ttl     = 300
   records = [aws_eip.this.public_ip]
+}
+
+# Down while its instance passes status checks: the host's watchtower-health
+# timer reports 1 or 0 each minute, and no data (no instance, user data that
+# never got that far, no network) counts as down too.
+resource "aws_cloudwatch_metric_alarm" "health" {
+  count               = local.health_check ? 1 : 0
+  alarm_name          = "${var.name}-collector-health"
+  alarm_description   = "Watchtower collector ${var.hostname} has not answered /healthz for 5 minutes"
+  namespace           = "Watchtower"
+  metric_name         = "CollectorHealthy"
+  dimensions          = { Collector = var.name }
+  statistic           = "Maximum"
+  period              = 60
+  evaluation_periods  = 5
+  comparison_operator = "LessThanThreshold"
+  threshold           = 1
+  treat_missing_data  = "breaching"
+  alarm_actions       = var.health_alarm_actions
+  ok_actions          = var.health_alarm_actions
+  tags                = var.tags
 }

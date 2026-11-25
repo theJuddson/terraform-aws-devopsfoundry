@@ -16,6 +16,10 @@ the earlier versions below were private and their tags are not in this repositor
   - **Upgrading replaces the collector's instance once**, because its user data changes. The new instance re-owns
     the kept volume, so this replacement is the safe kind; expect a few minutes down. `rules_in_user_data = true`
     keeps the old user data and plans no change, with the old behavior.
+  - `health_alarm_actions` (SNS topic ARNs, off by default): a `watchtower-health` timer on the host checks its own
+    `/healthz` every minute and reports a `Watchtower/CollectorHealthy` metric, and a CloudWatch alarm notifies the
+    topics after 5 minutes down, missing data included. It catches a collector that's down while its instance passes
+    status checks. Billed; turning it on replaces the instance once, so set it with the upgrade.
 
 ## v1.24.0
 

@@ -31,8 +31,10 @@ module "watchtower" {
   `zone_id`, an A record for `hostname`; without it, point the name at the `public_ip` output yourself before
   the first boot finishes, or the certificate request fails until it does.
 - An SSM parameter holding the rules, when there are any.
+- With `health_alarm_actions`, a CloudWatch alarm on the collector's own health check.
 - An instance role with SSM, plus `s3:GetObject` on the one release object when `release_url` is `s3://`, and
-  `ses:SendEmail` as `mail_from` only, on `ses_identity_arn`, when mail is on. No SMTP password exists anywhere.
+  `ses:SendEmail` as `mail_from` only, on `ses_identity_arn`, when mail is on, and `cloudwatch:PutMetricData`
+  in the `Watchtower` namespace only, with the health alarm. No SMTP password exists anywhere.
 
 ## The release
 
@@ -54,6 +56,19 @@ apply and never replaces the instance. The timer's log is `journalctl -u watchto
 some, or back, changes the collector's flags, so that does replace the instance.
 
 `rules_in_user_data = true` keeps the pre-v1.25.0 user data, for an upgrade that must plan no change.
+
+## Health alarm
+
+The collector that would alert on an outage is the one that's down, and an EC2 status check passes while the
+collector restarts in a loop. With `health_alarm_actions` (SNS topic ARNs), a `watchtower-health` timer on the host
+checks `https://<hostname>/healthz` on its own port 443 every minute, against the real certificate, and puts 1 or 0
+in the `Watchtower` namespace's `CollectorHealthy` metric. A CloudWatch alarm (`health_alarm_arn`) notifies the
+topics after 5 minutes below 1, and again when it recovers. No data counts as down: no instance, or user data that
+never got far enough. The timer starts before the install, so an install that never brings the collector up reports
+0 too.
+
+It checks from the host, so it doesn't see a security group or DNS that keeps others out. The metric and the alarm are
+billed. Turning it on or off changes user data and replaces the instance once, so set it when you upgrade.
 
 A private Watchtower repository can't be downloaded anonymously, so copy the tarball to a bucket the account owns
 and use an `s3://` URL.
@@ -103,6 +118,7 @@ Browsers won't trust the staging certificate.
 
 | Name | Type |
 | ---- | ---- |
+| [aws_cloudwatch_metric_alarm.health](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm) | resource |
 | [aws_eip.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/eip) | resource |
 | [aws_eip_association.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/eip_association) | resource |
 | [aws_route53_record.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
@@ -126,6 +142,7 @@ Browsers won't trust the staging certificate.
 | ami\_ssm\_parameter | Public SSM parameter holding the AMI. Amazon Linux 2023 is what the user data is written for. | `string` | `"/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64"` | no |
 | data\_volume\_size\_gib | Data volume for the TSDB, its rollups and the auth database. It outlives the instance. | `number` | `40` | no |
 | extra\_flags | More collector flags, each one word such as "--orgs" or "--org-max-sources=100". They go on the collector's command line as given. | `list(string)` | `[]` | no |
+| health\_alarm\_actions | SNS topic ARNs to notify when the collector stops answering `/healthz` for 5 minutes, and when it recovers. Non-empty turns on a per-minute health metric from the host and a CloudWatch alarm on it (both billed). Turning it on or off changes user data, so it replaces the instance once. Ignored with `rules_in_user_data`. | `list(string)` | `[]` | no |
 | ingress\_cidr\_blocks | IPv4 ranges allowed to reach 443. Agents on Fargate tasks and the ACME CA come from anywhere, so narrow this only if every source is known. | `list(string)` | <pre>[<br/>  "0.0.0.0/0"<br/>]</pre> | no |
 | instance\_type | Instance type. The default is Graviton, so `release_url` must be the arm64 tarball. | `string` | `"t4g.micro"` | no |
 | kms\_key\_arn | Customer managed key for the volumes. Null uses the account's default EBS key. | `string` | `null` | no |
@@ -147,6 +164,7 @@ Browsers won't trust the staging certificate.
 | data\_volume\_id | The data volume that outlives the instance. |
 | deploy\_token\_command | Run on your machine to mint a deploy token on the collector (over SSM) and store it as a SecureString, for `WATCHTOWER_TOKEN_PARAMETER`. Replace `<name>` and `<parameter>`; the token never reaches a command line or the terminal. |
 | first\_admin\_command | Run in an SSM session on the collector to print a one-time sign-in link for the first admin. |
+| health\_alarm\_arn | The collector health alarm, when `health_alarm_actions` is set. |
 | instance\_id | The collector's instance. |
 | public\_ip | The fixed public address. Point `hostname` at it when `zone_id` is null. |
 | role\_name | The instance role, to attach more policies to. |

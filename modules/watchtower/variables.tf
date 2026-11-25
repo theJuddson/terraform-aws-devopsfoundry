@@ -54,6 +54,12 @@ variable "rules_yaml" {
   }
 }
 
+variable "health_alarm_actions" {
+  description = "SNS topic ARNs to notify when the collector stops answering `/healthz` for 5 minutes, and when it recovers. Non-empty turns on a per-minute health metric from the host and a CloudWatch alarm on it (both billed). Turning it on or off changes user data, so it replaces the instance once. Ignored with `rules_in_user_data`."
+  type        = list(string)
+  default     = []
+}
+
 variable "rules_in_user_data" {
   description = "Puts the rules in user data as before v1.25.0, so every rules change replaces the instance, and leaves the users' ids to chance. Only for an upgrade that must plan no change; the one replacement the default makes moves to the fixed ids."
   type        = bool

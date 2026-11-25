@@ -249,3 +249,70 @@ run "refuses_rules_too_big_for_the_parameter" {
   }
   expect_failures = [var.rules_yaml]
 }
+
+# #87: the collector was down for good while its instance passed status checks.
+run "health_alarm_is_off_by_default" {
+  command = plan
+
+  assert {
+    condition     = length(aws_cloudwatch_metric_alarm.health) == 0 && !strcontains(local.user_data, "watchtower-health")
+    error_message = "Without health_alarm_actions there is no metric timer and no alarm (both are billed)."
+  }
+}
+
+run "health_alarm_watches_the_collector_not_the_instance" {
+  command = plan
+
+  variables {
+    health_alarm_actions = ["arn:aws:sns:us-east-1:111111111111:ops"]
+  }
+
+  assert {
+    condition = (aws_cloudwatch_metric_alarm.health[0].namespace == "Watchtower"
+      && aws_cloudwatch_metric_alarm.health[0].metric_name == "CollectorHealthy"
+      && aws_cloudwatch_metric_alarm.health[0].dimensions["Collector"] == "demo-watchtower"
+      && aws_cloudwatch_metric_alarm.health[0].comparison_operator == "LessThanThreshold"
+      && aws_cloudwatch_metric_alarm.health[0].threshold == 1
+    && aws_cloudwatch_metric_alarm.health[0].evaluation_periods == 5)
+    error_message = "The alarm fires after 5 minutes of the host's health metric below 1."
+  }
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.health[0].treat_missing_data == "breaching"
+    error_message = "No data (no instance, user data that never got far) must count as down."
+  }
+  assert {
+    condition = (aws_cloudwatch_metric_alarm.health[0].alarm_actions == toset(["arn:aws:sns:us-east-1:111111111111:ops"])
+    && aws_cloudwatch_metric_alarm.health[0].ok_actions == toset(["arn:aws:sns:us-east-1:111111111111:ops"]))
+    error_message = "The topics hear of both the outage and the recovery."
+  }
+  assert {
+    condition = (strcontains(local.user_data, "--resolve \"watch.example.com:443:127.0.0.1\"")
+      && strcontains(local.user_data, "--dimensions \"Collector=demo-watchtower\"")
+      && !strcontains(local.user_data, "--insecure")
+    && strcontains(local.user_data, "systemctl enable --now watchtower-health.timer"))
+    error_message = "The host checks its own /healthz with the real certificate and reports every minute."
+  }
+  assert {
+    condition     = strcontains(local.user_data, "watchtower-health.timer\n\nwork=$(mktemp -d)")
+    error_message = "The health timer starts before the install, so a failed install reports 0."
+  }
+  assert {
+    condition = anytrue([for c in one([for s in data.aws_iam_policy_document.host.statement : s.condition if s.sid == "PutTheHealthMetric"]) :
+    c.variable == "cloudwatch:namespace" && contains(c.values, "Watchtower")])
+    error_message = "The host may put metrics in the Watchtower namespace only."
+  }
+}
+
+run "health_check_accepts_the_staging_certificate" {
+  command = plan
+
+  variables {
+    health_alarm_actions = ["arn:aws:sns:us-east-1:111111111111:ops"]
+    acme_directory       = "https://acme-staging-v02.api.letsencrypt.org/directory"
+  }
+
+  assert {
+    condition     = strcontains(local.user_data, "curl -fsS --insecure --max-time 10")
+    error_message = "A test deployment's staging certificate isn't trusted, so its check skips verification."
+  }
+}
