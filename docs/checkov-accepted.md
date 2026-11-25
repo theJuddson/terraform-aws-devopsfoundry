@@ -65,6 +65,7 @@ The defaults still match v1.1.0, so checkov keeps reporting these for the defaul
 | ecr-repository | CKV_AWS_51 | Tags are immutable by default; `container-service` keeps `MUTABLE` for its `:latest` deploy flow |
 | container-service | CKV2_AWS_31 | The opt-in WAF logs requests only when asked (`waf_logging`, v1.16.0; billed per GB); CloudWatch metrics and sampled requests are always on |
 | container-service | CKV_AWS_338 (inline skip) | WAF request logs kept under a year | `waf_log_retention_days` (30 by default): a year of request logs is costly and rarely needed for tuning |
+| watchtower | CKV2_AWS_34 (inline skip) | The rules parameter is a String: alarm rules are configuration, not a secret, and Terraform state holds them in the clear either way |
 | container-service | CKV_AWS_192, CKV2_AWS_76 | The WAF's managed rule groups are a variable; the default list includes `AWSManagedRulesKnownBadInputsRuleSet`, which blocks Log4j lookups |
 
 ## tflint

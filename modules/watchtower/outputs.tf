@@ -47,3 +47,8 @@ output "deploy_token_command" {
   description = "Run on your machine to mint a deploy token on the collector (over SSM) and store it as a SecureString, for `WATCHTOWER_TOKEN_PARAMETER`. Replace `<name>` and `<parameter>`; the token never reaches a command line or the terminal."
   value       = "aws ssm start-session --target ${module.host.instance_id} --document-name AWS-StartNonInteractiveCommand --parameters '{\"command\":[\"sudo -u watchtower /usr/local/bin/watchtower admin --data /var/lib/watchtower/collector deploy-token <name>\"]}' | tr -d '\\r' | grep -o 'wtd_[A-Za-z0-9_-]*' | head -1 | tr -d '\\n' | aws ssm put-parameter --name <parameter> --type SecureString --value file:///dev/stdin"
 }
+
+output "health_alarm_arn" {
+  description = "The collector health alarm, when `health_alarm_actions` is set."
+  value       = one(aws_cloudwatch_metric_alarm.health[*].arn)
+}

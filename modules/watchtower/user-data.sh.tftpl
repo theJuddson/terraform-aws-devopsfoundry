@@ -1,8 +1,19 @@
 #!/bin/bash
 # Watchtower collector: mount the data volume, fetch and verify the release,
-# install it. Rendered by the DevOpsFoundry watchtower module.
+# install it. Rendered by the DevOpsFoundry watchtower module. The alarm rules
+# are not in here: a timer keeps them in step with an SSM parameter, so a rules
+# change restarts the collector instead of replacing the instance.
 set -euo pipefail
 exec > >(tee -a /var/log/watchtower-install.log) 2>&1
+
+# Fixed ids, so the kept data volume's files belong to the same users on every
+# instance. install.sh makes these users only when they are missing.
+getent group watchtower >/dev/null || groupadd --system --gid ${collector_uid} watchtower
+id watchtower >/dev/null 2>&1 || useradd --system --uid ${collector_uid} --gid watchtower \
+  --home-dir /var/lib/watchtower --no-create-home --shell /usr/sbin/nologin watchtower
+getent group watchtower-agent >/dev/null || groupadd --system --gid ${agent_uid} watchtower-agent
+id watchtower-agent >/dev/null 2>&1 || useradd --system --uid ${agent_uid} --gid watchtower-agent \
+  --home-dir /var/lib/watchtower-agent --no-create-home --shell /usr/sbin/nologin watchtower-agent
 
 # The data volume is attached after boot; wait for it (it appears as /dev/sdf).
 for _ in $(seq 1 120); do [ -e /dev/sdf ] && break; sleep 5; done
@@ -12,6 +23,50 @@ mkdir -p /var/lib/watchtower
 grep -q 'LABEL=watchtower' /etc/fstab || echo 'LABEL=watchtower /var/lib/watchtower xfs defaults,nofail 0 2' >> /etc/fstab
 mount -a
 
+# A volume an earlier instance wrote may carry that instance's ids (before the
+# ids were fixed, each instance got whatever was free). install.sh owns only the
+# top folders, so hand everything under them to the collector's user.
+find /var/lib/watchtower \( ! -user watchtower -o ! -group watchtower \) -exec chown -h watchtower:watchtower {} +
+
+%{ if health_check ~}
+# Every minute: 1 when the collector answers /healthz on 443 with a certificate
+# for its name, else 0, as a CloudWatch metric. It starts before the install, so
+# an install that never brings the collector up reports 0 too, and an alarm on
+# the metric treats missing data (no instance, no network) as down.
+cat > /usr/local/sbin/watchtower-health <<'EOF'
+#!/bin/bash
+set -uo pipefail
+v=0
+curl -fsS %{ if curl_insecure }--insecure %{ endif }--max-time 10 --resolve "${hostname}:443:127.0.0.1" \
+  "https://${hostname}/healthz" >/dev/null && v=1
+aws cloudwatch put-metric-data --region "${region}" --namespace Watchtower \
+  --metric-name CollectorHealthy --dimensions "Collector=${source}" --value "$v"
+EOF
+chmod 0755 /usr/local/sbin/watchtower-health
+cat > /etc/systemd/system/watchtower-health.service <<'EOF'
+[Unit]
+Description=Watchtower collector health metric
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/watchtower-health
+EOF
+cat > /etc/systemd/system/watchtower-health.timer <<'EOF'
+[Unit]
+Description=Watchtower collector health metric, every minute
+
+[Timer]
+OnCalendar=minutely
+
+[Install]
+WantedBy=timers.target
+EOF
+systemctl daemon-reload
+systemctl enable --now watchtower-health.timer
+
+%{ endif ~}
 work=$(mktemp -d)
 %{ if startswith(release_url, "s3://") ~}
 aws s3 cp --only-show-errors "${release_url}" "$work/release.tar.gz"
@@ -22,8 +77,51 @@ echo "${release_sha256}  $work/release.tar.gz" | sha256sum -c -
 tar -xzf "$work/release.tar.gz" -C "$work"
 
 install -d -m 0755 /etc/watchtower
-echo "${rules_b64}" | base64 -d > /etc/watchtower/rules.yaml
-chmod 0644 /etc/watchtower/rules.yaml
+%{ if rules_parameter != "" ~}
+# The rules: fetched now, before the collector first starts, then every minute.
+# A change is written and the collector restarted; an unchanged one does nothing.
+cat > /usr/local/sbin/watchtower-rules <<'EOF'
+#!/bin/bash
+set -euo pipefail
+new=$(mktemp)
+trap 'rm -f "$new"' EXIT
+aws ssm get-parameter --region "${region}" --name "${rules_parameter}" \
+  --query Parameter.Value --output text | base64 -d | gunzip > "$new"
+cmp -s "$new" /etc/watchtower/rules.yaml && exit 0
+install -m 0644 "$new" /etc/watchtower/rules.yaml
+echo "watchtower rules changed: $(sha256sum < /etc/watchtower/rules.yaml | cut -c1-12)"
+if systemctl is-enabled --quiet watchtower.service; then systemctl restart watchtower.service; fi
+EOF
+chmod 0755 /usr/local/sbin/watchtower-rules
+cat > /etc/systemd/system/watchtower-rules.service <<'EOF'
+[Unit]
+Description=Watchtower alarm rules from SSM
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/watchtower-rules
+EOF
+cat > /etc/systemd/system/watchtower-rules.timer <<'EOF'
+[Unit]
+Description=Watchtower alarm rules from SSM, every minute
+
+[Timer]
+OnCalendar=minutely
+
+[Install]
+WantedBy=timers.target
+EOF
+n=0
+until /usr/local/sbin/watchtower-rules; do
+  n=$((n + 1))
+  [ "$n" -lt 20 ] || { echo "could not read ${rules_parameter}" >&2; exit 1; }
+  sleep 5
+done
+systemctl daemon-reload
+systemctl enable --now watchtower-rules.timer
+%{ endif ~}
 
 release=("$work"/watchtower_*)
 WATCHTOWER_FLAGS="${flags}" WATCHTOWER_COLLECTOR="${collector_url}" WATCHTOWER_SOURCE="${source}" \

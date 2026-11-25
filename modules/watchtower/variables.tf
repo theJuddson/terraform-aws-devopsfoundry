@@ -40,9 +40,30 @@ variable "release_sha256" {
 }
 
 variable "rules_yaml" {
-  description = "Alarm rules and probes, as Watchtower's YAML. Empty for none."
+  description = "Alarm rules and probes, as Watchtower's YAML. Empty for none. They reach the host through an SSM parameter, and a change restarts the collector within a minute; it doesn't replace the instance. Gzipped, they must fit 4 KB."
   type        = string
   default     = ""
+
+  validation {
+    condition     = var.rules_yaml == "" || can(yamldecode(var.rules_yaml))
+    error_message = "rules_yaml must be YAML; the collector would not start with these rules."
+  }
+  validation {
+    condition     = length(base64gzip(var.rules_yaml)) <= 4096
+    error_message = "rules_yaml, gzipped and base64-encoded, must fit a Standard SSM parameter's 4096 characters."
+  }
+}
+
+variable "health_alarm_actions" {
+  description = "SNS topic ARNs to notify when the collector stops answering `/healthz` for 5 minutes, and when it recovers. Non-empty turns on a per-minute health metric from the host and a CloudWatch alarm on it (both billed). Turning it on or off changes user data, so it replaces the instance once. Ignored with `rules_in_user_data`."
+  type        = list(string)
+  default     = []
+}
+
+variable "rules_in_user_data" {
+  description = "Puts the rules in user data as before v1.25.0, so every rules change replaces the instance, and leaves the users' ids to chance. Only for an upgrade that must plan no change; the one replacement the default makes moves to the fixed ids."
+  type        = bool
+  default     = false
 }
 
 variable "mail_from" {

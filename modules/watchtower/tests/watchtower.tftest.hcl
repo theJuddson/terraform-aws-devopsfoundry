@@ -159,3 +159,160 @@ run "extra_flags_refuse_what_a_shell_would_read" {
 
   expect_failures = [var.extra_flags]
 }
+
+# #87: a rules change replaced the instance, and the new one couldn't read the
+# kept volume, whose files the old instance's users owned under other ids.
+run "rules_reach_the_host_through_ssm_not_user_data" {
+  command = plan
+
+  variables {
+    rules_yaml = "rules:\n  - name: disk-full\n    expr: disk_used_pct > 90\n"
+  }
+
+  assert {
+    condition = (aws_ssm_parameter.rules[0].name == "/watchtower/demo-watchtower/rules"
+      && aws_ssm_parameter.rules[0].tier == "Standard"
+    && aws_ssm_parameter.rules[0].value == base64gzip(var.rules_yaml))
+    error_message = "The rules go to a Standard SSM parameter, gzipped and base64-encoded."
+  }
+  assert {
+    condition = (!strcontains(local.user_data, base64encode(var.rules_yaml))
+      && !strcontains(local.user_data, base64gzip(var.rules_yaml))
+    && !strcontains(local.user_data, "disk-full"))
+    error_message = "The rules must not be in user data, or changing them replaces the instance."
+  }
+  assert {
+    condition = (strcontains(local.user_data, "--name \"/watchtower/demo-watchtower/rules\"")
+      && strcontains(local.user_data, "--region \"us-east-1\"")
+      && strcontains(local.user_data, "OnCalendar=minutely")
+    && strcontains(local.user_data, "systemctl enable --now watchtower-rules.timer"))
+    error_message = "The host fetches the rules at boot and then every minute."
+  }
+  assert {
+    condition     = strcontains(output.collector_flags, "--rules /etc/watchtower/rules.yaml")
+    error_message = "The collector still reads the rules file the timer writes."
+  }
+}
+
+run "the_kept_volume_belongs_to_the_same_ids_on_every_instance" {
+  command = plan
+
+  assert {
+    condition = (strcontains(local.user_data, "groupadd --system --gid 61001 watchtower")
+      && strcontains(local.user_data, "useradd --system --uid 61001 --gid watchtower")
+      && strcontains(local.user_data, "groupadd --system --gid 61002 watchtower-agent")
+    && strcontains(local.user_data, "useradd --system --uid 61002 --gid watchtower-agent"))
+    error_message = "The collector's and agent's users get fixed ids before install.sh makes them."
+  }
+  assert {
+    condition     = strcontains(local.user_data, "find /var/lib/watchtower \\( ! -user watchtower -o ! -group watchtower \\) -exec chown -h watchtower:watchtower {} +")
+    error_message = "Files an earlier instance left under other ids are handed to the collector's user."
+  }
+  assert {
+    condition     = strcontains(local.user_data, "mount -a\n\n# A volume") && !strcontains(local.user_data, "watchtower-rules")
+    error_message = "The ownership fix runs after the mount; with no rules there is no rules timer."
+  }
+  assert {
+    condition     = length(aws_ssm_parameter.rules) == 0
+    error_message = "No rules, no parameter."
+  }
+}
+
+run "rules_in_user_data_keeps_the_old_user_data" {
+  command = plan
+
+  variables {
+    rules_yaml         = "rules: []\n"
+    rules_in_user_data = true
+  }
+
+  assert {
+    condition = (length(aws_ssm_parameter.rules) == 0
+      && strcontains(local.user_data, "echo \"${base64encode("rules: []\n")}\" | base64 -d > /etc/watchtower/rules.yaml")
+    && !strcontains(local.user_data, "61001"))
+    error_message = "rules_in_user_data renders the pre-v1.25.0 user data."
+  }
+}
+
+run "refuses_rules_that_are_not_yaml" {
+  command = plan
+  variables {
+    rules_yaml = "rules: [unclosed\n"
+  }
+  expect_failures = [var.rules_yaml]
+}
+
+run "refuses_rules_too_big_for_the_parameter" {
+  command = plan
+  variables {
+    rules_yaml = join("\n", [for i in range(200) : "# ${sha256(tostring(i))}"])
+  }
+  expect_failures = [var.rules_yaml]
+}
+
+# #87: the collector was down for good while its instance passed status checks.
+run "health_alarm_is_off_by_default" {
+  command = plan
+
+  assert {
+    condition     = length(aws_cloudwatch_metric_alarm.health) == 0 && !strcontains(local.user_data, "watchtower-health")
+    error_message = "Without health_alarm_actions there is no metric timer and no alarm (both are billed)."
+  }
+}
+
+run "health_alarm_watches_the_collector_not_the_instance" {
+  command = plan
+
+  variables {
+    health_alarm_actions = ["arn:aws:sns:us-east-1:111111111111:ops"]
+  }
+
+  assert {
+    condition = (aws_cloudwatch_metric_alarm.health[0].namespace == "Watchtower"
+      && aws_cloudwatch_metric_alarm.health[0].metric_name == "CollectorHealthy"
+      && aws_cloudwatch_metric_alarm.health[0].dimensions["Collector"] == "demo-watchtower"
+      && aws_cloudwatch_metric_alarm.health[0].comparison_operator == "LessThanThreshold"
+      && aws_cloudwatch_metric_alarm.health[0].threshold == 1
+    && aws_cloudwatch_metric_alarm.health[0].evaluation_periods == 5)
+    error_message = "The alarm fires after 5 minutes of the host's health metric below 1."
+  }
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.health[0].treat_missing_data == "breaching"
+    error_message = "No data (no instance, user data that never got far) must count as down."
+  }
+  assert {
+    condition = (aws_cloudwatch_metric_alarm.health[0].alarm_actions == toset(["arn:aws:sns:us-east-1:111111111111:ops"])
+    && aws_cloudwatch_metric_alarm.health[0].ok_actions == toset(["arn:aws:sns:us-east-1:111111111111:ops"]))
+    error_message = "The topics hear of both the outage and the recovery."
+  }
+  assert {
+    condition = (strcontains(local.user_data, "--resolve \"watch.example.com:443:127.0.0.1\"")
+      && strcontains(local.user_data, "--dimensions \"Collector=demo-watchtower\"")
+      && !strcontains(local.user_data, "--insecure")
+    && strcontains(local.user_data, "systemctl enable --now watchtower-health.timer"))
+    error_message = "The host checks its own /healthz with the real certificate and reports every minute."
+  }
+  assert {
+    condition     = strcontains(local.user_data, "watchtower-health.timer\n\nwork=$(mktemp -d)")
+    error_message = "The health timer starts before the install, so a failed install reports 0."
+  }
+  assert {
+    condition = anytrue([for c in one([for s in data.aws_iam_policy_document.host.statement : s.condition if s.sid == "PutTheHealthMetric"]) :
+    c.variable == "cloudwatch:namespace" && contains(c.values, "Watchtower")])
+    error_message = "The host may put metrics in the Watchtower namespace only."
+  }
+}
+
+run "health_check_accepts_the_staging_certificate" {
+  command = plan
+
+  variables {
+    health_alarm_actions = ["arn:aws:sns:us-east-1:111111111111:ops"]
+    acme_directory       = "https://acme-staging-v02.api.letsencrypt.org/directory"
+  }
+
+  assert {
+    condition     = strcontains(local.user_data, "curl -fsS --insecure --max-time 10")
+    error_message = "A test deployment's staging certificate isn't trusted, so its check skips verification."
+  }
+}

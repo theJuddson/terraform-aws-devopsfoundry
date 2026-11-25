@@ -3,6 +3,24 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.25.0
+
+- `watchtower`: a rules change no longer replaces the collector's instance, and a replaced instance can read the kept
+  data volume (#87). On one replacement the new instance made the `watchtower` user with a different uid from the
+  old one, so the collector couldn't write its own database and never came up.
+  - `rules_yaml` goes to an SSM parameter (`/watchtower/<name>/rules`, gzipped, Standard tier) instead of user
+    data. A `watchtower-rules` timer on the host reads it every minute and restarts the collector when it changed.
+    `rules_yaml` must be YAML and fit the parameter gzipped (4096 characters).
+  - The user data makes `watchtower` and `watchtower-agent` with fixed ids (61001, 61002) before `install.sh` runs,
+    and hands any file under `/var/lib/watchtower` that another id owns to `watchtower`.
+  - **Upgrading replaces the collector's instance once**, because its user data changes. The new instance re-owns
+    the kept volume, so this replacement is the safe kind; expect a few minutes down. `rules_in_user_data = true`
+    keeps the old user data and plans no change, with the old behavior.
+  - `health_alarm_actions` (SNS topic ARNs, off by default): a `watchtower-health` timer on the host checks its own
+    `/healthz` every minute and reports a `Watchtower/CollectorHealthy` metric, and a CloudWatch alarm notifies the
+    topics after 5 minutes down, missing data included. It catches a collector that's down while its instance passes
+    status checks. Billed; turning it on replaces the instance once, so set it with the upgrade.
+
 ## v1.24.0
 
 - The scripts use the Namecheap gateway when `NAMECHEAP_GATEWAY` is set in `.env`, so they need no Namecheap key or
