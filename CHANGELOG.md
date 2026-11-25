@@ -8,6 +8,9 @@ the earlier versions below were private and their tags are not in this repositor
 - CI runs its checks as parallel jobs: the module checks in 3 shards, the `bin/` script tests in 6, and the
   repository-wide checks and the upgrade check alongside. The `terraform` check, which the main branch requires,
   passes only when all of them do. The one job took about 24 minutes, 16 of them on the script tests.
+- `new-site` and `new-app` stop at once when the zone's `name_servers` output is empty after phase 1, instead of
+  polling public DNS for 15 minutes for nothing (on bash 4 and later; macOS's bash 3.2 stopped with "unbound
+  variable"). A CLI test hit exactly this on Linux, and was 15 of CI's 24 minutes; its stub now returns nameservers.
 - `bin/check-modules --part <name>` runs one part (`fmt`, `modules`, `templates`, `cli`, `plugin`, `checkov`;
   repeatable), and `--shard K/N` every Nth module directory and script test. With neither it runs everything, as
   before. `tests/cli/run.sh` takes the shard from `CLI_SHARD=K/N`.
