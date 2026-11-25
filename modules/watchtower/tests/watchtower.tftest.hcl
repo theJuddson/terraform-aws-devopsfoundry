@@ -159,3 +159,93 @@ run "extra_flags_refuse_what_a_shell_would_read" {
 
   expect_failures = [var.extra_flags]
 }
+
+# #87: a rules change replaced the instance, and the new one couldn't read the
+# kept volume, whose files the old instance's users owned under other ids.
+run "rules_reach_the_host_through_ssm_not_user_data" {
+  command = plan
+
+  variables {
+    rules_yaml = "rules:\n  - name: disk-full\n    expr: disk_used_pct > 90\n"
+  }
+
+  assert {
+    condition = (aws_ssm_parameter.rules[0].name == "/watchtower/demo-watchtower/rules"
+      && aws_ssm_parameter.rules[0].tier == "Standard"
+    && aws_ssm_parameter.rules[0].value == base64gzip(var.rules_yaml))
+    error_message = "The rules go to a Standard SSM parameter, gzipped and base64-encoded."
+  }
+  assert {
+    condition = (!strcontains(local.user_data, base64encode(var.rules_yaml))
+      && !strcontains(local.user_data, base64gzip(var.rules_yaml))
+    && !strcontains(local.user_data, "disk-full"))
+    error_message = "The rules must not be in user data, or changing them replaces the instance."
+  }
+  assert {
+    condition = (strcontains(local.user_data, "--name \"/watchtower/demo-watchtower/rules\"")
+      && strcontains(local.user_data, "--region \"us-east-1\"")
+      && strcontains(local.user_data, "OnCalendar=minutely")
+    && strcontains(local.user_data, "systemctl enable --now watchtower-rules.timer"))
+    error_message = "The host fetches the rules at boot and then every minute."
+  }
+  assert {
+    condition     = strcontains(output.collector_flags, "--rules /etc/watchtower/rules.yaml")
+    error_message = "The collector still reads the rules file the timer writes."
+  }
+}
+
+run "the_kept_volume_belongs_to_the_same_ids_on_every_instance" {
+  command = plan
+
+  assert {
+    condition = (strcontains(local.user_data, "groupadd --system --gid 61001 watchtower")
+      && strcontains(local.user_data, "useradd --system --uid 61001 --gid watchtower")
+      && strcontains(local.user_data, "groupadd --system --gid 61002 watchtower-agent")
+    && strcontains(local.user_data, "useradd --system --uid 61002 --gid watchtower-agent"))
+    error_message = "The collector's and agent's users get fixed ids before install.sh makes them."
+  }
+  assert {
+    condition     = strcontains(local.user_data, "find /var/lib/watchtower \\( ! -user watchtower -o ! -group watchtower \\) -exec chown -h watchtower:watchtower {} +")
+    error_message = "Files an earlier instance left under other ids are handed to the collector's user."
+  }
+  assert {
+    condition     = strcontains(local.user_data, "mount -a\n\n# A volume") && !strcontains(local.user_data, "watchtower-rules")
+    error_message = "The ownership fix runs after the mount; with no rules there is no rules timer."
+  }
+  assert {
+    condition     = length(aws_ssm_parameter.rules) == 0
+    error_message = "No rules, no parameter."
+  }
+}
+
+run "rules_in_user_data_keeps_the_old_user_data" {
+  command = plan
+
+  variables {
+    rules_yaml         = "rules: []\n"
+    rules_in_user_data = true
+  }
+
+  assert {
+    condition = (length(aws_ssm_parameter.rules) == 0
+      && strcontains(local.user_data, "echo \"${base64encode("rules: []\n")}\" | base64 -d > /etc/watchtower/rules.yaml")
+    && !strcontains(local.user_data, "61001"))
+    error_message = "rules_in_user_data renders the pre-v1.25.0 user data."
+  }
+}
+
+run "refuses_rules_that_are_not_yaml" {
+  command = plan
+  variables {
+    rules_yaml = "rules: [unclosed\n"
+  }
+  expect_failures = [var.rules_yaml]
+}
+
+run "refuses_rules_too_big_for_the_parameter" {
+  command = plan
+  variables {
+    rules_yaml = join("\n", [for i in range(200) : "# ${sha256(tostring(i))}"])
+  }
+  expect_failures = [var.rules_yaml]
+}

@@ -9,7 +9,7 @@ data "aws_partition" "current" {}
 
 locals {
   url        = "https://${var.hostname}"
-  ses_region = coalesce(var.ses_region, lookup(data.aws_region.current, "region", lookup(data.aws_region.current, "name", null)))
+  ses_region = coalesce(var.ses_region, local.region)
   # s3://bucket/key -> the one object the host may read.
   release_s3 = startswith(var.release_url, "s3://") ? regex("^s3://([^/]+)/(.+)$", var.release_url) : null
 
@@ -24,14 +24,44 @@ locals {
     join(" ", var.extra_flags),
   ]))
 
-  user_data = templatefile("${path.module}/user-data.sh.tftpl", {
+  region = lookup(data.aws_region.current, "region", lookup(data.aws_region.current, "name", null))
+
+  user_data = var.rules_in_user_data ? templatefile("${path.module}/user-data-legacy.sh.tftpl", {
     release_url    = var.release_url
     release_sha256 = var.release_sha256
     rules_b64      = base64encode(var.rules_yaml)
     flags          = local.flags
     collector_url  = local.url
     source         = var.name
+    }) : templatefile("${path.module}/user-data.sh.tftpl", {
+    release_url     = var.release_url
+    release_sha256  = var.release_sha256
+    rules_parameter = try(aws_ssm_parameter.rules[0].name, "")
+    region          = local.region
+    flags           = local.flags
+    collector_url   = local.url
+    source          = var.name
+    # Fixed, so the kept data volume's owners match on every instance. Outside
+    # Amazon Linux's system range (counted down from 999) and its users' (from 1000).
+    collector_uid = 61001
+    agent_uid     = 61002
   })
+}
+
+# The alarm rules, outside user data: the host's watchtower-rules timer reads
+# this every minute and restarts the collector when it changed, so a rules
+# change never replaces the instance. Gzipped, so a Standard parameter's 4 KB
+# holds well over 4 KB of YAML. The host's AmazonSSMManagedInstanceCore policy
+# already allows ssm:GetParameter.
+resource "aws_ssm_parameter" "rules" {
+  #checkov:skip=CKV2_AWS_34:Alarm rules are configuration, not a secret, and are in Terraform state in the clear anyway
+  count       = var.rules_yaml != "" && !var.rules_in_user_data ? 1 : 0
+  name        = "/watchtower/${var.name}/rules"
+  description = "Watchtower alarm rules for ${var.name}, gzipped and base64-encoded"
+  type        = "String"
+  tier        = "Standard"
+  value       = base64gzip(var.rules_yaml)
+  tags        = var.tags
 }
 
 data "aws_iam_policy_document" "host" {
@@ -74,6 +104,7 @@ module "host" {
   kms_key_arn                 = var.kms_key_arn
   user_data                   = local.user_data
   # A new release or settings replace the instance; the data volume is kept.
+  # Rules don't (see aws_ssm_parameter.rules), unless rules_in_user_data.
   user_data_replace_on_change = true
   inline_policy_jsons = (local.release_s3 == null && var.mail_from == null ? {} :
   { "${var.name}-watchtower" = data.aws_iam_policy_document.host.json })
