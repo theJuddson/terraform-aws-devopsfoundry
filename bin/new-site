@@ -298,6 +298,8 @@ log "INFO" "Phase 1 applied for $DOMAIN"
 NS=()
 while IFS= read -r ns_line; do NS+=("$ns_line"); done \
   < <(df_tf_at "$SITE_DIR" output -json name_servers | jq -r '.[]')
+# None would leave nothing for public DNS to match: a 15-minute wait for nothing.
+[[ ${#NS[@]} -gt 0 ]] || die "The zone's name_servers output is empty after phase 1; check terraform output -json name_servers in $SITE_DIR"
 echo "  Route53 nameservers:"; printf '    %s\n' "${NS[@]}"
 # "Provision $DOMAIN now?" was answered (or --yes given), so this asks no more.
 if df_gateway_on; then df_gateway_delegate "$SITE_DIR" "$DOMAIN" true; fi

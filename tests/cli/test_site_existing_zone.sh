@@ -22,7 +22,7 @@ zones() {
   *'sts get-caller-identity'*) echo 123456789012 ;;
 esac; exit 0"
   dig_answers "ns-2.awsdns-02.com." "ns-1.awsdns-01.org."
-  stub terraform "case \"\$*\" in *'output -raw url'*) echo https://example.com ;; *'output -raw'*) echo x ;; esac; exit 0"
+  stub terraform "case \"\$*\" in *'output -json name_servers'*) echo '[\"ns-1.awsdns-01.org\",\"ns-2.awsdns-02.com\"]' ;; *'output -raw url'*) echo https://example.com ;; *'output -raw'*) echo x ;; esac; exit 0"
 }
 # dig_answers <ns>...: the NS records public DNS gives for the zone's name.
 dig_answers() { printf '%s\n' "$@" > "$TMP/dig.out"; stub dig "case \"\$*\" in *'NS '*) cat '$TMP/dig.out' ;; esac; exit 0"; }
@@ -187,9 +187,19 @@ t_without_the_flag_yes_refuses_and_names_the_flag() {
 t_without_the_flag_and_no_zone_creates_one_and_delegates() {
   zones example.org:Z8:4
   new_site_nc --yes >/dev/null || true
+  assert_called "^dig \+short NS example\.com @8\.8\.8\.8"
   [[ -e "$(CFG_DIR)/namecheap.tf" ]] || fail "a new zone is delegated at Namecheap (namecheap.tf)"
   [[ -z "$(tfvar existing_zone_id)" ]] || fail "no existing zone recorded"
   assert_called "apply .*-target=module\.route53_zone -target=module\.namecheap_ns"
+}
+
+# With no nameservers there is nothing for public DNS to match: stop, don't poll for 15 minutes.
+t_no_zone_nameservers_stops_before_the_propagation_wait() {
+  zones example.org:Z8:4
+  stub terraform "exit 0"
+  local out; out="$(new_site_nc --yes)" && fail "new-site must stop without nameservers"
+  assert_contains "$out" "name_servers output is empty"
+  assert_not_called "^dig "
 }
 
 # ── Resume, deploy, destroy ──

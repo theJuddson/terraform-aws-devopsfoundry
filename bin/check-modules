@@ -5,7 +5,12 @@
 # against mocks). Used by CI.
 #
 #   bin/check-modules                 # everything
-#   bin/check-modules modules/kms-key # one or more directories
+#   bin/check-modules modules/kms-key # one or more directories (plus fmt and checkov)
+#   bin/check-modules --part cli --shard 2/6   # one part, one shard of it (CI runs them in parallel)
+#
+# --part (repeatable): fmt, modules (validate, tflint, test), templates (the static and app roots),
+# cli (bin/ script tests), plugin (the agent plugin and the namecheap-gateway handler), checkov.
+# --shard K/N keeps every Nth module directory and CLI test, starting at K (0-based).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
@@ -13,19 +18,53 @@ source lib/retry.sh
 export TF_PLUGIN_CACHE_DIR="${TF_PLUGIN_CACHE_DIR:-$HOME/.terraform.d/plugin-cache}"
 mkdir -p "$TF_PLUGIN_CACHE_DIR"
 
+parts=" "
+shard=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --part)
+      case "${2:-}" in fmt | modules | templates | cli | plugin | checkov) parts="$parts$2 " ;;
+        *) echo "unknown --part '${2:-}': fmt, modules, templates, cli, plugin or checkov" >&2; exit 2 ;; esac
+      shift 2 ;;
+    --shard)
+      if ! [[ "${2:-}" =~ ^[0-9]+/[1-9][0-9]*$ ]] || (( ${2%/*} >= ${2#*/} )); then
+        echo "--shard takes K/N with 0 <= K < N" >&2; exit 2
+      fi
+      shard="$2"; shift 2 ;;
+    --) shift; break ;;
+    -*) echo "unknown option $1" >&2; exit 2 ;;
+    *) break ;;
+  esac
+done
+
 if [[ $# -gt 0 ]]; then
   dirs=("$@")
+  [[ "$parts" != " " ]] || parts=" fmt modules checkov "
 else
   dirs=()
   dirs+=(".")   # the empty root module the Terraform Registry requires
   for d in modules/*/ examples/*/; do [[ -d "$d" ]] && dirs+=("${d%/}"); done
+  [[ "$parts" != " " ]] || parts=" fmt modules templates cli plugin checkov "
+fi
+part() { [[ "$parts" == *" $1 "* ]]; }
+
+if [[ -n "$shard" ]]; then
+  kept=()
+  for i in "${!dirs[@]}"; do
+    if (( i % ${shard#*/} == ${shard%/*} )); then kept+=("${dirs[$i]}"); fi
+  done
+  dirs=("${kept[@]+"${kept[@]}"}")
 fi
 
 fail=0
 step() { printf '\n== %s: %s\n' "$1" "$2"; }
 
-terraform fmt -check -recursive modules examples tests || { echo "terraform fmt -check failed (run: terraform fmt -recursive modules examples tests)"; fail=1; }
+if part fmt; then
+  terraform fmt -check -recursive modules examples tests || { echo "terraform fmt -check failed (run: terraform fmt -recursive modules examples tests)"; fail=1; }
+fi
 
+if part modules && [[ ${#dirs[@]} -gt 0 ]]; then
+# (the module loops below are inside this if)
 retry tflint --init --config "$ROOT/.tflint.hcl" >/dev/null
 
 for d in "${dirs[@]}"; do
@@ -52,17 +91,24 @@ for d in "${dirs[@]}"; do
     fail=1
   fi
 done
+fi
 
-# The bin/ scripts, against stub aws/terraform/docker commands (tests/cli).
-if [[ $# -eq 0 ]]; then
+if part templates; then
   # The static site root bin/new-site renders, in both DNS modes (mocked providers).
   step test "templates/static"
   tests/static-root/run.sh || fail=1
   # The app root bin/new-app --existing-zone renders, with no Namecheap credentials.
   step test "templates/full-stack (existing zone)"
   tests/app-root/run.sh || fail=1
-  step test "bin/ scripts"
-  tests/cli/run.sh || fail=1
+fi
+
+# The bin/ scripts, against stub aws/terraform/docker commands (tests/cli).
+if part cli; then
+  step test "bin/ scripts${shard:+ (shard $shard)}"
+  CLI_SHARD="$shard" tests/cli/run.sh || fail=1
+fi
+
+if part plugin; then
   # The agent plugin: its manifests and skill, and its approval hook (plugins/).
   step check "agent plugin"
   bin/check-plugin || fail=1
@@ -74,7 +120,9 @@ fi
 
 # .checkov.baseline holds the findings the v1.1.0 modules already had (see
 # docs/checkov-accepted.md). Anything not in it fails.
-step checkov "whole repository"
-checkov --quiet --compact -d . --framework terraform --skip-path tests --baseline .checkov.baseline || fail=1
+if part checkov; then
+  step checkov "whole repository"
+  checkov --quiet --compact -d . --framework terraform --skip-path tests --baseline .checkov.baseline || fail=1
+fi
 
 exit $fail
