@@ -3,6 +3,15 @@
 All notable changes. Versions are git tags; pin modules with `?ref=<tag>`. v1.2.0 is the first public release;
 the earlier versions below were private and their tags are not in this repository.
 
+## v1.25.1
+
+- CI runs its checks as parallel jobs: the module checks in 3 shards, the `bin/` script tests in 6, and the
+  repository-wide checks and the upgrade check alongside. The `terraform` check, which the main branch requires,
+  passes only when all of them do. The one job took about 24 minutes, 16 of them on the script tests.
+- `bin/check-modules --part <name>` runs one part (`fmt`, `modules`, `templates`, `cli`, `plugin`, `checkov`;
+  repeatable), and `--shard K/N` every Nth module directory and script test. With neither it runs everything, as
+  before. `tests/cli/run.sh` takes the shard from `CLI_SHARD=K/N`.
+
 ## v1.25.0
 
 - `watchtower`: a rules change no longer replaces the collector's instance, and a replaced instance can read the kept

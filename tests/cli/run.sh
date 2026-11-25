@@ -2,11 +2,14 @@
 # Runs every t_* function in tests/cli/test_*.sh, each in its own subshell with a
 # fresh setup and stdin closed, so a script waiting for an answer fails, not hangs.
 # Usage: tests/cli/run.sh [file-pattern]
+# CLI_SHARD=K/N runs every Nth test across all files, starting at K (0-based), for CI's parallel jobs.
 set -uo pipefail
 cd "$(dirname "$0")"
-pass=0; failed=0
+pass=0; failed=0; i=0
 for f in test_*${1:-}*.sh; do
   for t in $(bash -c "source ./lib.sh; source ./$f; declare -F" | awk '$3 ~ /^t_/ {print $3}'); do
+    i=$((i + 1))
+    if [[ -n "${CLI_SHARD:-}" ]] && (( (i - 1) % ${CLI_SHARD#*/} != ${CLI_SHARD%/*} )); then continue; fi
     if ( set -euo pipefail; source ./lib.sh; source "./$f"; setup; trap teardown EXIT; "$t" ) </dev/null >/dev/null 2>"$f.$t.err"; then
       pass=$((pass + 1)); rm -f "$f.$t.err"
     else
